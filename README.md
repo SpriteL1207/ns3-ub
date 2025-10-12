@@ -20,10 +20,6 @@
 
 本项目可支撑的**典型仿真功能**如下表所示。
 
-<!-- > 下划线部分</u>表示目前demo版本中暂未实现，仅完成框架性功能，需要合作老师贡献，在10.20发布时完成。
-> 合作老师后续还将实现协议未指明的更多创新算法实现，作为''参考实现''发布。 -->
-
-
 <table>
   <thead>
     <tr>
@@ -160,7 +156,7 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 
 #### 网元建模组件
 <p align="center">
-<img src="ns-allinone-3.44/ns-3.44/src/unified-bus/doc/figures/arch2-light.D3-LpLKH.png" alt="UB Domain系统组成" width="70%">
+<img src="src/unified-bus/doc/figures/arch2-light.D3-LpLKH.png.png" alt="UB Domain系统组成" width="70%">
 <br>
 <em>UB Domain 系统组成架构图。</em><em>来源：www.unifiedbus.com</em><br>
 </p>
