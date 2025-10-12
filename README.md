@@ -127,25 +127,19 @@
 
 ```
 ├── README.md                   # 项目说明文档
-├── toolchain/                  # 仿真工具链
-│   ├── net_sim_builder.py      # 仿真配置：ns-3 网络图生成
-│   ├── user_topo_*.py          # 仿真配置：用户拓扑定义文件
-│   ├── xccl_rdma_maker.py      # 仿真配置：XCCL 集合通信流量生成工具
-│   ├── cal_throughput.py       # 仿真输出：吞吐量计算工具
-│   ├── parse_trace.py          # 仿真输出：跟踪文件解析器
-│   └── task_statistics.py      # 仿真输出：任务统计分析
+├── scratch/                    # 仿真示例和测试用例
+│   ├── ub-quick-example.cc     # 主要仿真程序
+│   ├── test_CLOS/              # CLOS拓扑测试用例
+│   ├── 2dfm4_4*/               # 2D FullMesh 4x4 测试用例集
 │
-├── ns-allinone-3.44/           
-│   └── ns-3.44/                # ns-3 代码框架
-│       └── src/unified-bus/    # 基于灵衢基础规范的仿真组件
-│           ├── model/          
-│           │   ├── protocol/ub-* # 协议栈相关建模组件
-│           │   └── ub-*        # 拓展算法及网元组件
-│           │
-│           ├── examples/       # 示例和测试用例
-│           ├── test/           # 单元测试
-│           └── doc/            # 文档
-└── ...
+└── src/unified-bus/            # 基于灵衢基础规范的仿真组件
+    ├── model/                  
+    │   ├── protocol/
+    │   │   └── ub-*            # 协议栈相关建模组件
+    │   └── ub-*                # 网元和算法组件
+    ├── test/                   # 单元测试
+    └── doc/                    # 文档和图表
+
 ```
 
 ## 核心组件
@@ -233,11 +227,14 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
     - pandas
 - **ns3**: 3.44
 
-### 2. 添加ub代码到ns3中
+### 2. 项目结构说明
+本项目已包含完整的ns-3框架和UB模块，主要文件结构：
 ```bash
-# 进入 ns-3 目录
-# 拷贝ub代码
-cp -r unified-bus ns3/src/
+ns-3-ub/
+├── src/unified-bus/        # UB模块源代码
+└── scratch/                # 仿真示例程序  
+    ├── ub-quick-example.cc # 主要仿真程序
+    └── test_*/             # 测试用例配置
 ```
 
 ### 3. 编译构建
@@ -255,122 +252,104 @@ cd ./ns3
 
 ### 4. 运行示例
 
+#### 运行示例
 ```bash
-# 运行 UB 快速示例
-./ns3 run src/unified-bus/examples/ub-quick-example.cc
+# 运行 UB 快速示例（使用默认配置）
+./ns3 run 'scratch/ub-quick-example'
 
-# 查看运行结果
-ls ./src/unified-bus/examples/cases/urma_clos/output
-ls ./src/unified-bus/examples/cases/urma_clos/runlog
-
-# 使用指定配置文件运行
-./ns3 run src/unified-bus/examples/ub-quick-example.cc -- {casepath}
+# 使用指定配置文件夹运行
+./ns3 run 'scratch/ub-quick-example --CaseDir=scratch/test_CLOS'
+./ns3 run 'scratch/ub-quick-example --CaseDir=scratch/2dfm4_4'
 ```
 
-### 5. 使用 ub-toolchain 脚本生成自定义用例
-
 ```bash
-# 进入脚本目录
-cd ub-toolchain
+# 查询类属性信息
+./ns3 run 'scratch/ub-quick-example --ClassName=ns3::UbPort'
+./ns3 run 'scratch/ub-quick-example --ClassName=ns3::UbApiLdstThread --AttributeName=LoadOutstanding'
 
-# 生成拓扑，此处以4x4 2DFullMesh为例
-python user_topo_4x4_2DFM.py
-
-# 生成 All-to-All-V 流量
-python all2allv_maker.py
+# 指定trace输出目录
+./ns3 run 'scratch/ub-quick-example --CaseDir=scratch/test_CLOS --TraceDir=/tmp/trace'
 ```
 
-## 配置文件说明
+#### 配置文件说明
+参考现有配置文件中的示例格式：
+- `network_attribute.txt` - 网络全局参数
+- `node.csv` - 节点定义
+- `topology.csv` - 拓扑连接
+- `routing_table.csv` - 路由表
+- `transport_channel.csv` - 传输通道
+- `traffic.csv` - 流量定义
 
-仿真配置通过 CSV 文件定义：
 
-### 网络配置文件
-- **network_attribute.txt** - 网络全局属性
-- **node.csv** - 节点定义（交换机、端设备）
-- **topology.csv** - 网络拓扑连接关系
-- **router_table.csv** - 路由表配置
-- **transport_channel.csv** - 传输通道配置
-- **traffic.csv** - 流量配置
-
-### 示例配置
+#### 示例配置
 ```bash
 # 查看示例配置
-ls src/unified-bus/examples/case/urma_clos/
-ls src/unified-bus/examples/case/mte_2dfm4_4_all2allv_cbfc/
+ls scratch/test_CLOS/
+ls scratch/2dfm4_4/
+ls scratch/2dfm4_4-multipath_a2a/
+
+# 配置文件示例结构
+scratch/test_CLOS/
+├── network_attribute.txt
+├── node.csv
+├── topology.csv  
+├── routing_table.csv
+├── transport_channel.csv
+└── traffic.csv
 ```
 
-## 仿真结果分析
+#### 程序执行过程监控
+```bash
+# 运行时会显示实时进度信息
+[23:54:11]:Run case: scratch/test_CLOS
+[23:54:11]:Set component attributes
+[23:54:11]:Create node.
+[23:54:11]:Start Client.
+[23:54:11]:Simulator Start!
+[23:54:11]:Check Example Process... (2) | Sim Time: 100.00 us
+[23:54:11]:Simulator finished!
+[23:54:11]:程序运行时间: 812 毫秒
+```
 
-### 输出文件结构
+#### 输出文件结构
 ```
 output/
-├── task_statistics.csv    # 流量分析统计
+├── task_statistics.csv    # 流量分析统计  
 └── throughput.csv         # 吞吐量统计
 runlog/
 ├── PortTrace*.tr          # 端口吞吐统计
-├── PakcetTrace*.tr        # 精简收发包统计
+├── PacketTrace*.tr        # 精简收发包统计
 ├── AllPacketTrace*.tr     # 所有包路径统计
 └── TaskTrace*.tr          # 流量任务统计
 ```
 
-### 性能指标
-- **吞吐量**：链路和端到端吞吐量统计
-- **延迟**：数据包传输延迟分布
-- **丢包率**：网络拥塞导致的丢包统计
-- **缓冲区利用率**：交换机缓冲区使用情况
-- **流量分布**：网络负载均衡分析
-
-## 扩展开发
-
-### 添加新的网络组件
-
-1. 在 `src/unified-bus/model/` 目录下创建新的 `.h` 和 `.cc` 文件
-2. 更新 `src/unified-bus/CMakeLists.txt` 文件添加新文件到构建系统
-3. 实现 ns-3 对象接口（继承 `Object` 或相关基类）
-4. 添加对应的测试用例
-
-### 自定义拓扑
-```python
-# 在 ub-toolchain/ 目录下创建新的拓扑文件
-# 参考现有的 user_topo_*.py 实现自定义拓扑
-```
-
-### 新增流量模式
-```python
-# 参考 xccl_rdma_maker.py 实现新的流量生成器
-# 生成符合格式的 traffic.csv 文件
-```
-
-## 调试和日志
-
-### 启用日志输出
+#### 启用日志输出
 ```cpp
-// 在仿真代码中启用特定组件日志
+// 在 scratch/ub-quick-example.cc 中找到日志配置部分，取消注释相应行：
 LogComponentEnable("UbSwitch", LOG_LEVEL_INFO);
-LogComponentEnable("UbPort", LOG_LEVEL_DEBUG);
+LogComponentEnable("UbPort", LOG_LEVEL_DEBUG);  
 LogComponentEnable("UbFlowControl", LOG_LEVEL_ALL);
-LogComponentEnableAll(LOG_PREFIX_TIME);
+LogComponentEnable("UbApiLdstThread", LOG_LEVEL_ALL);
+LogComponentEnableAll(LOG_PREFIX_TIME); 
 ```
 
-### 常用调试选项
+#### 运行时查看调试信息
+```bash
+# 运行程序查看完整日志输出
+./ns3 run 'scratch/ub-quick-example' 2>&1 | less
+
+# 过滤特定组件的日志
+./ns3 run 'scratch/ub-quick-example' 2>&1 | grep "LoadOutstanding"
+./ns3 run 'scratch/ub-quick-example' 2>&1 | grep "StoreOutstanding"
+```
+
+#### 常用调试选项
 - `LOG_LEVEL_ERROR`  - 仅错误信息
 - `LOG_LEVEL_WARN`   - 警告和错误
 - `LOG_LEVEL_INFO`   - 一般信息
 - `LOG_LEVEL_DEBUG`  - 调试信息
 - `LOG_LEVEL_ALL`    - 所有日志
 - `LOG_PREFIX_TIME`  - 添加仿真时间前缀
-
-### 内存管理
-- UB 模块使用 ns-3 智能指针（`Ptr<>`）进行内存管理
-- 避免在仿真循环中创建大量临时对象
-- 合理设置仿真停止条件
-
-## 贡献指南
-
-1. **代码规范**：遵循 ns-3 编码规范
-2. **文档**：为新功能添加完整的文档注释
-3. **测试**：确保新代码通过所有测试用例
-4. **性能**：验证修改不会显著影响仿真性能
 
 ## 许可证
 
@@ -384,8 +363,7 @@ LogComponentEnableAll(LOG_PREFIX_TIME);
 
 **当前版本**：v0.9
 **适配平台**：ns-3.44  
-**发布状态**：Demo框架
 
 ---
 
-*文档最后更新：2025年9月*
+*文档最后更新：2025年10月*
