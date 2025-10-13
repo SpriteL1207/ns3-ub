@@ -150,7 +150,7 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 
 #### 网元建模组件
 <p align="center">
-<img src="src/unified-bus/doc/figures/arch2-light.D3-LpLKH.png.png" alt="UB Domain系统组成" width="70%">
+<img src="src/unified-bus/doc/figures/arch2-light.D3-LpLKH.png.png" alt="UB Domain系统组成" width="85%">
 <br>
 <em>UB Domain 系统组成架构图。</em><em>来源：www.unifiedbus.com</em><br>
 </p>
