@@ -171,7 +171,7 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 
 #### 网络算法组件
 - **TP Connection Manager** (`ub-tp-connection-manager.h`) - TP Channel管理器，方便用户查找各节点TP Channel信息
-- **Switch Allocator** (`ub-allocator.*`) - **UbSwitch**的关键组件，建模了交换机为数据包分配出端口的过程
+- **Switch Allocator** (`ub-allocator.*`) - 建模了交换机为数据包分配出端口的过程
 - **Queue Manager** (`ub-buffer-manager.*`) - 缓冲区管理模块，影响负载均衡、流量控制、排队、丢包等行为
 - **Routing Process** (`ub-routing-process.*`) - 路由表模块，实现了路由表的管理与查询功能
 - **Congestion Control** (`ub-congestion-control.*`) - 拥塞控制算法框架模块
@@ -355,15 +355,13 @@ LogComponentEnableAll(LOG_PREFIX_TIME);
 
 本项目遵循 ns-3 许可证协议，GPL v2。详见 `LICENSE` 文件。
 
-## 技术支持
-
-如有技术问题或功能请求，请通过项目 Issues 进行反馈。
-
-## 版本信息
-
-**当前版本**：v0.9
-**适配平台**：ns-3.44  
-
----
-
-*文档最后更新：2025年10月*
+## Citation
+```bibtex
+@software{UBNetworkSimulator,
+  month = {10},
+  title = {{ns-3-UB: Unified-Bus Network Simulation Framework}},
+  url = {https://gitcode.com/open-usim/ns-3-ub},
+  version = {1.0.0},
+  year = {2025}
+}
+```
