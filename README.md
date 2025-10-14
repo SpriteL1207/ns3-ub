@@ -171,7 +171,7 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 
 #### 网络算法组件
 - **TP Connection Manager** (`ub-tp-connection-manager.h`) - TP Channel管理器，方便用户查找各节点TP Channel信息
-- **Switch Allocator** (`ub-allocator.*`) - **UbSwitch**的关键组件，建模了交换机为数据包分配出端口的过程
+- **Switch Allocator** (`ub-allocator.*`) - 建模了交换机为数据包分配出端口的过程
 - **Queue Manager** (`ub-buffer-manager.*`) - 缓冲区管理模块，影响负载均衡、流量控制、排队、丢包等行为
 - **Routing Process** (`ub-routing-process.*`) - 路由表模块，实现了路由表的管理与查询功能
 - **Congestion Control** (`ub-congestion-control.*`) - 拥塞控制算法框架模块
