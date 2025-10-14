@@ -355,15 +355,13 @@ LogComponentEnableAll(LOG_PREFIX_TIME);
 
 本项目遵循 ns-3 许可证协议，GPL v2。详见 `LICENSE` 文件。
 
-## 技术支持
-
-如有技术问题或功能请求，请通过项目 Issues 进行反馈。
-
-## 版本信息
-
-**当前版本**：v0.9
-**适配平台**：ns-3.44  
-
----
-
-*文档最后更新：2025年10月*
+## Citation
+```bibtex
+@software{UBNetworkSimulator,
+  month = {10},
+  title = {{ns-3-UB: Unified-Bus Network Simulation Framework}},
+  url = {https://gitcode.com/open-usim/ns-3-ub},
+  version = {1.0.0},
+  year = {2025}
+}
+```
