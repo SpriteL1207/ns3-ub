@@ -161,7 +161,7 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 - **UB Link** (`ub-link.*`) - 节点间的点到点连接
 
 #### 协议栈组件
-- **编程接口实例** (`ub-api-ldst*`, `ub-api-urma*`) - Load/Store 与 URMA 编程接口实例，对接功能层编程模型
+- **编程接口实例** (`ub-api-ldst*`, `ub-app.*`) - Load/Store 与 URMA 编程接口实例，对接功能层编程模型
 - **UB Function** (`ub-function.*`) - 功能层协议框架实现，支持Load/Store，URMA编程模型
 - **UB Transaction** (`ub-transaction.*`) - 事务层协议框架实现
 - **UB Transport** (`ub-transport.*`) - 传输层协议框架实现
@@ -170,6 +170,7 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 
 
 #### 网络算法组件
+- **流量注入组件** (`ub-traffic-gen.*`) - 读取用户流量配置，为仿真节点按串并行关系注入流量
 - **TP Connection Manager** (`ub-tp-connection-manager.h`) - TP Channel管理器，方便用户查找各节点TP Channel信息
 - **Switch Allocator** (`ub-allocator.*`) - 建模了交换机为数据包分配出端口的过程
 - **Queue Manager** (`ub-buffer-manager.*`) - 缓冲区管理模块，影响负载均衡、流量控制、排队、丢包等行为
