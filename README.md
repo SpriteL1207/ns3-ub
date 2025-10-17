@@ -228,48 +228,77 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
     - pandas
 - **ns3**: 3.44
 
-### 2. 项目结构说明
+### 2. 项目获取和初始化
+
+```bash
+# 克隆项目
+git clone git@gitcode.com:open-usim/ns-3-ub.git
+cd ns-3-ub
+
+# 初始化并更新子模块（包含Python分析工具）
+git submodule update --init --recursive
+
+# 验证子模块状态
+git submodule status
+```
+
+### 3. 项目结构说明
 本项目已包含完整的ns-3框架和UB模块，主要文件结构：
 ```bash
 ns-3-ub/
 ├── src/unified-bus/        # UB模块源代码
-└── scratch/                # 仿真示例程序  
-    ├── ub-quick-example.cc # 主要仿真程序
-    └── test_*/             # 测试用例配置
+├── scratch/                # 仿真示例程序  
+│   ├── ub-quick-example.cc # 主要仿真程序
+│   ├── ns-3-ub-tools/      # Python分析工具（子模块）
+│   └── test_*/             # 测试用例配置
+└── ...                     # 其他ns-3核心文件
 ```
 
-### 3. 编译构建
+### 4. 编译构建
 
 ```bash
-# 进入 ns-3 目录
-cd ./ns3
-
 # 配置构建环境
 ./ns3 configure --enable-tests --enable-examples
 
-# 编译项目(可选)
+# 编译项目
 ./ns3 build
+
+# 运行测试验证构建
+./ns3 run test-runner -- --suite=unified-bus
 ```
 
-### 4. 运行示例
+### 5. 运行示例
 
-#### 运行示例
+#### 快速验证
 ```bash
 # 运行 UB 快速示例（使用默认配置）
 ./ns3 run 'scratch/ub-quick-example'
 
 # 使用指定配置文件夹运行
-./ns3 run 'scratch/ub-quick-example --CaseDir=scratch/test_CLOS'
-./ns3 run 'scratch/ub-quick-example --CaseDir=scratch/2dfm4_4'
+./ns3 run 'scratch/ub-quick-example scratch/2dfm4_4-multipath_a2a'
+./ns3 run 'scratch/ub-quick-example scratch/2dfm4_4'
 ```
 
+#### 完整工作流程验证
 ```bash
-# 查询类属性信息
-./ns3 run 'scratch/ub-quick-example --ClassName=ns3::UbPort'
-./ns3 run 'scratch/ub-quick-example --ClassName=ns3::UbApiLdstThread --AttributeName=LoadOutstanding'
+# 运行完整示例，包含Python后处理
+./ns3 run 'scratch/ub-quick-example scratch/2dfm4_4-multipath_a2a'
 
-# 指定trace输出目录
-./ns3 run 'scratch/ub-quick-example --CaseDir=scratch/test_CLOS --TraceDir=/tmp/trace'
+# 预期输出：
+[01:23:37]:Run case: scratch/2dfm4_4-multipath_a2a
+[01:23:37]:Set component attributes
+[01:23:37]:Create node.
+[01:23:37]:Start Client.
+[01:23:37]:Simulator finished!
+[01:23:37]:Start Parse Trace File.
+所有依赖已满足，开始执行脚本...
+处理完成，结果已保存到 scratch/2dfm4_4-multipath_a2a/output/task_statistics.csv
+处理完成，结果已保存到 scratch/2dfm4_4-multipath_a2a/output/throughput.csv
+[01:23:37]:Program finished.
+
+# 查看生成的结果文件
+ls scratch/2dfm4_4-multipath_a2a/output/
+# task_statistics.csv  throughput.csv
 ```
 
 #### 配置文件说明
