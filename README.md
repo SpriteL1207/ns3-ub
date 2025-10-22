@@ -262,9 +262,6 @@ ns-3-ub/
 
 # 编译项目
 ./ns3 build
-
-# 运行测试验证构建
-./ns3 run test-runner -- --suite=unified-bus
 ```
 
 ### 5. 运行示例
