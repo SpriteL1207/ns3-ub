@@ -236,6 +236,8 @@ git clone git@gitcode.com:open-usim/ns-3-ub.git
 cd ns-3-ub
 
 # 初始化并更新子模块（包含Python分析工具）
+# network_attribute.txt 中应配置该工具的路径，以实现trace文件的分析：
+# global UB_PYTHON_SCRIPT_PATH "scratch/ns-3-ub-tools/trace_analysis/parse_trace.py"
 git submodule update --init --recursive
 
 # 验证子模块状态
