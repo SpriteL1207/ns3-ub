@@ -1,10 +1,12 @@
 # ns-3-UB: Unified-Bus Network Simulation Framework
 
+[快速开始（Quick Start）](QUICK_START.md)
+
 ## 项目概述
 
 `ns-3-UB` 是基于[灵衢基础规范](https://www.unifiedbus.com/zh)构建的 ns-3 仿真模块，实现了灵衢基础规范中功能层、事务层、传输层、网络层和数据链路层的协议框架与配套算法。本项目旨在为协议创新，网络架构探索，以及拥塞控制、流量控制、负载均衡、路由算法等网络算法研究提供仿真平台。
 
-> 虽然我们力求尽可能贴近灵衢基础规范，但两者间仍存在差异。**用户应以灵衢基础规范作为权威指南。**
+> 虽尽力贴近灵衢基础规范，但两者间仍存在差异。请以灵衢基础规范为权威指南。
 
 `ns-3-UB` 可用于研究基于 UB 协议的：
 - 流量模式亲和，低成本，高可靠的创新拓扑架构。
@@ -13,9 +15,9 @@
 - 面向超节点网络的新内存语义传输控制技术。
 - 创新自适应路由、负载均衡、拥塞控制和 QoS 优化算法。
 
-> 本项目对**规范未指明**的策略/算法（如交换机建模方式、路由选择、拥塞标记、缓冲与仲裁策略等）提供可插拔的''参考实现''。这些实现**不属于** 灵衢基础规范的一部分，仅作示例/基线，可替换或关闭。
+> 本项目针对规范未指明的策略/算法（如交换机建模方式、路由选择、拥塞标记、缓冲与仲裁策略等）提供可插拔的“参考实现”。这些实现不属于灵衢基础规范的一部分，仅作示例/基线，可替换或关闭。
 >
-> 本项目**不包含**的功能包括但不限于：硬件内部细节建模、物理层、性能参数、控制面行为（如初始化行为、异常事件处理等）、内存管理、安全策略等。
+> 本项目不包含的功能包括但不限于：硬件内部细节建模、物理层、性能参数、控制面行为（如初始化行为、异常事件处理等）、内存管理、安全策略等。
 
 
 本项目可支撑的**典型仿真功能**如下表所示。
@@ -214,100 +216,7 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 - **性能分析工具**：吞吐量计算、延迟分析、CDF 绘制
 - **格式化结果输出**：自动生成流完成时间、带宽等基础结果信息表格，可选生成报文粒度网内逐跳信息。
 
-## 快速开始
 
-### 1. 环境要求
-
-- **操作系统** Ubuntu 20.04
-- **编译器**：gcc 11.4.0 +
-- **构建工具**：CMake 3.12+
-- **Python**：3.10+
-- **依赖库**：
-  - python 
-    - matplotlib
-    - pandas
-- **ns3**: 3.44
-
-### 2. 项目获取和初始化
-
-```bash
-# 克隆项目
-git clone git@gitcode.com:open-usim/ns-3-ub.git
-cd ns-3-ub
-
-# 初始化并更新子模块（包含Python分析工具），工具依赖："glob", "pandas", "re", "csv"
-# network_attribute.txt 中应配置该工具的路径，以实现trace文件的分析，如：
-# global UB_PYTHON_SCRIPT_PATH "scratch/ns-3-ub-tools/trace_analysis/parse_trace.py"
-git submodule update --init --recursive
-
-# 验证子模块状态
-git submodule status
-```
-
-### 3. 项目结构说明
-本项目已包含完整的ns-3框架和UB模块，主要文件结构：
-```bash
-ns-3-ub/
-├── src/unified-bus/        # UB模块源代码
-├── scratch/                # 仿真示例程序  
-│   ├── ub-quick-example.cc # 主要仿真程序
-│   ├── ns-3-ub-tools/      # Python分析工具（子模块）
-│   └── test_*/             # 测试用例配置
-└── ...                     # 其他ns-3核心文件
-```
-
-### 4. 编译构建
-
-```bash
-# 配置构建环境
-./ns3 configure
-
-# 编译项目
-./ns3 build
-```
-
-### 5. 运行示例
-
-#### 快速验证
-```bash
-# 运行 UB 快速示例（使用默认配置）
-./ns3 run 'scratch/ub-quick-example'
-
-# 使用指定配置文件夹运行
-./ns3 run 'scratch/ub-quick-example scratch/2dfm4_4-multipath_a2a'
-./ns3 run 'scratch/ub-quick-example scratch/2dfm4_4'
-```
-
-#### 完整工作流程验证
-```bash
-# 运行完整示例，包含Python后处理
-./ns3 run 'scratch/ub-quick-example scratch/2dfm4_4-multipath_a2a'
-
-# 预期输出：
-[01:23:37]:Run case: scratch/2dfm4_4-multipath_a2a
-[01:23:37]:Set component attributes
-[01:23:37]:Create node.
-[01:23:37]:Start Client.
-[01:23:37]:Simulator finished!
-[01:23:37]:Start Parse Trace File.
-所有依赖已满足，开始执行脚本...
-处理完成，结果已保存到 scratch/2dfm4_4-multipath_a2a/output/task_statistics.csv
-处理完成，结果已保存到 scratch/2dfm4_4-multipath_a2a/output/throughput.csv
-[01:23:37]:Program finished.
-
-# 查看生成的结果文件
-ls scratch/2dfm4_4-multipath_a2a/output/
-# task_statistics.csv  throughput.csv
-```
-
-#### 配置文件说明
-参考现有配置文件中的示例格式：
-- `network_attribute.txt` - 网络全局参数
-- `node.csv` - 节点定义
-- `topology.csv` - 拓扑连接
-- `routing_table.csv` - 路由表
-- `transport_channel.csv` - 传输通道
-- `traffic.csv` - 流量定义
 
 ## 许可证
 
