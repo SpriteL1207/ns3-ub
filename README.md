@@ -235,8 +235,8 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 git clone git@gitcode.com:open-usim/ns-3-ub.git
 cd ns-3-ub
 
-# 初始化并更新子模块（包含Python分析工具）
-# network_attribute.txt 中应配置该工具的路径，以实现trace文件的分析：
+# 初始化并更新子模块（包含Python分析工具），工具依赖："glob", "pandas", "re", "csv"
+# network_attribute.txt 中应配置该工具的路径，以实现trace文件的分析，如：
 # global UB_PYTHON_SCRIPT_PATH "scratch/ns-3-ub-tools/trace_analysis/parse_trace.py"
 git submodule update --init --recursive
 
