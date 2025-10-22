@@ -258,7 +258,7 @@ ns-3-ub/
 
 ```bash
 # 配置构建环境
-./ns3 configure --enable-tests --enable-examples
+./ns3 configure
 
 # 编译项目
 ./ns3 build
