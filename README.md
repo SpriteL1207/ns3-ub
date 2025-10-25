@@ -1,5 +1,7 @@
 # ns-3-UB: Unified-Bus Network Simulation Framework
 
+**语言**: [English](README_en.md) | [中文](README.md)
+
 [快速开始（Quick Start）](QUICK_START.md)
 
 ## 项目概述
