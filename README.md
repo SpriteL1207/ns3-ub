@@ -133,8 +133,9 @@
 ├── README.md                   # 项目说明文档
 ├── scratch/                    # 仿真示例和测试用例
 │   ├── ub-quick-example.cc     # 主要仿真程序
-│   ├── test_CLOS/              # CLOS拓扑测试用例
-│   ├── 2dfm4_4*/               # 2D FullMesh 4x4 测试用例集
+│   ├── 2nodes*/             	# 简单双端点拓扑测试用例
+│   ├── clos*/                  # CLOS拓扑测试用例
+│   └── 2dfm4x4*/               # 2D FullMesh 4x4 测试用例
 │
 └── src/unified-bus/            # 基于灵衢基础规范的仿真组件
     ├── model/                  
