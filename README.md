@@ -6,16 +6,16 @@
 
 ## 项目概述
 
-`ns-3-UB` 是基于[灵衢基础规范](https://www.unifiedbus.com/zh)构建的 ns-3 仿真模块，实现了灵衢基础规范中功能层、事务层、传输层、网络层和数据链路层的协议框架与配套算法。本项目旨在为协议创新，网络架构探索，以及拥塞控制、流量控制、负载均衡、路由算法等网络算法研究提供仿真平台。
+`ns-3-UB` 是基于[灵衢基础规范](https://www.unifiedbus.com/zh)构建的 ns-3 仿真模块，实现了灵衢基础规范中功能层、事务层、传输层、网络层和数据链路层的协议框架与配套算法。本项目旨在为协议创新、网络架构探索以及拥塞控制、流量控制、负载均衡、路由算法等网络算法研究提供仿真平台。
 
 > 虽尽力贴近灵衢基础规范，但两者间仍存在差异。请以灵衢基础规范为权威指南。
 
 `ns-3-UB` 可用于研究基于 UB 协议的：
-- 流量模式亲和，低成本，高可靠的创新拓扑架构。
-- 集合通信算子、流量编排算法优化技术。
-- 总线内存事务成网场景下，新的事务层序与可靠技术。
+- 面向流量模式亲和、低成本、高可靠的创新拓扑架构。
+- 集合通信算子与流量编排算法的优化技术。
+- 在总线内存事务成网的场景下，新的事务层保序与可靠性技术。
 - 面向超节点网络的新内存语义传输控制技术。
-- 创新自适应路由、负载均衡、拥塞控制和 QoS 优化算法。
+- 创新的自适应路由、负载均衡、拥塞控制和 QoS 优化算法。
 
 > 本项目针对规范未指明的策略/算法（如交换机建模方式、路由选择、拥塞标记、缓冲与仲裁策略等）提供可插拔的“参考实现”。这些实现不属于灵衢基础规范的一部分，仅作示例/基线，可替换或关闭。
 >
@@ -53,7 +53,7 @@
     </tr>
     <tr>
       <td>事务序</td>
-      <td>NO / RO / SO 等效功能实现</td>
+      <td>NO / RO / SO</td>
       <td>—</td>
     </tr>
     <tr>
@@ -79,7 +79,7 @@
     </tr>
     <tr>
       <td>负载均衡</td>
-      <td>RTP 负载均衡：TPG 机制、逐 TP / 逐包 负载均衡、乱序接收</td>
+      <td>RTP 负载均衡：TPG 机制、逐 TP / 逐包负载均衡、乱序接收</td>
       <td>CTP 负载均衡</td>
     </tr>
     <tr>
@@ -95,7 +95,7 @@
     </tr>
     <tr>
       <td>路由查找</td>
-      <td>基于目的地址 + 包头 RT 域段的基础路由策略、基于路径 Cost 的路由策略、基于 Hash 的 ECMP、基于负载均衡因子的逐流 / 逐包 Hash</td>
+  <td>基于目的地址 + 包头 RT 域段的基础路由策略、基于路径 Cost 的路由策略、基于 Hash 的 ECMP、基于负载均衡因子的逐流/逐包 Hash</td>
       <td>用户可自定义自适应路由等策略</td>
     </tr>
     <tr>
@@ -133,8 +133,8 @@
 ├── README.md                   # 项目说明文档
 ├── scratch/                    # 仿真示例和测试用例
 │   ├── ub-quick-example.cc     # 主要仿真程序
-│   ├── 2nodes*/             	# 简单双端点拓扑测试用例
-│   ├── clos*/                  # CLOS拓扑测试用例
+│   ├── 2nodes*/             	# 简单双节点拓扑测试用例
+│   ├── clos*/                  # CLOS 拓扑测试用例
 │   └── 2dfm4x4*/               # 2D FullMesh 4x4 测试用例
 │
 └── src/unified-bus/            # 基于灵衢基础规范的仿真组件
@@ -155,7 +155,7 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 
 #### 网元建模组件
 <p align="center">
-<img src="src/unified-bus/doc/figures/arch2-light.D3-LpLKH.png.png" alt="UB Domain 系统组成" width="85%">
+<img src="src/unified-bus/doc/figures/arch2-light.D3-LpLKH.png" alt="UB Domain 系统组成" width="85%">
 <br>
 <em>UB Domain 系统组成架构图。</em><em>来源：www.unifiedbus.com</em><br>
 </p>
@@ -167,7 +167,7 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 
 #### 协议栈组件
 - **编程接口实例** (`ub-api-ldst*`, `ub-app.*`) - Load/Store 与 URMA 编程接口实例，对接功能层编程模型
-- **UB Function** (`ub-function.*`) - 功能层协议框架实现，支持 Load/Store、URMA 编程模型
+- **UB Function** (`ub-function.*`) - 功能层协议框架实现，支持 Load/Store 与 URMA 编程模型
 - **UB Transaction** (`ub-transaction.*`) - 事务层协议框架实现
 - **UB Transport** (`ub-transport.*`) - 传输层协议框架实现
 - **UB Network** (由 `ub-routing-table.*`、`ub-congestion-control.*`、`ub-switch.*` 组成) - 网络层协议框架实现
@@ -183,12 +183,12 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 - **Congestion Control** (`ub-congestion-control.*`) - 拥塞控制算法框架模块
 - **C-AQM 算法** (`ub-caqm.*`) - C-AQM 拥塞控制算法实现
 - **Flow Control** (`ub-flow-control.*`) - 流量控制框架模块
-- **故障注入模块** (`ub-fault.*`) - 故障注入，帮助用户在特定流量进行过程中注入丢包率、高时延、拥塞程度、错包、闪断、降 lane 等故障。
+- **故障注入模块** (`ub-fault.*`) - 用于在特定流量过程中注入丢包率、高时延、拥塞程度、错包、闪断、降 lane 等故障参数。
 
 #### 数据类型和工具
 - **Datatype** (`ub-datatype.*`) - UB 数据类型定义
 - **Header** (`ub-header.*`) - UB 协议包头定义和解析
-- **Network Address** (`ub-network-address.h`) - 网络地址相关工具函数，包含了地址转换、掩码匹配等功能
+- **Network Address** (`ub-network-address.h`) - 网络地址相关工具函数，包含地址转换、掩码匹配等功能
 
 ### 2. 核心仿真特性
 
@@ -201,7 +201,7 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 - **UB 协议栈**：支持从物理层到应用层的完整协议栈建模
 - **内存语义**：实现基于 Load/Store 的内存语义行为建模
 - **消息语义**：实现基于 URMA 的消息语义行为建模
-- **原生多路径**：实现 TP/TP Group 协议机制实现原生多路径支持
+- **原生多路径**：通过 TP/TP Group 协议机制实现原生多路径支持
 
 #### 协议算法支持
 - **流量控制**：实现基于信用的流量控制机制框架，兼容 PFC
