@@ -1,4 +1,4 @@
-# ns-3-UB: Unified-Bus Network Simulation Framework
+# ns-3-UB: UnifiedBus™ Network Simulation Framework
 
 **语言**: [English](README_en.md) | [中文](README.md)
 
@@ -6,7 +6,7 @@
 
 ## 项目概述
 
-`ns-3-UB` 是基于[灵衢基础规范](https://www.unifiedbus.com/zh)构建的 ns-3 仿真模块，实现了灵衢基础规范中功能层、事务层、传输层、网络层和数据链路层的协议框架与配套算法。本项目旨在为协议创新，网络架构探索，以及拥塞控制、流量控制、负载均衡、路由算法等网络算法研究提供仿真平台。
+`ns-3-UB` 是基于[灵衢®基础规范](https://www.unifiedbus.com/zh)构建的 ns-3 仿真模块，实现了灵衢基础规范中功能层、事务层、传输层、网络层和数据链路层的协议框架与配套算法。本项目旨在为协议创新，网络架构探索，以及拥塞控制、流量控制、负载均衡、路由算法等网络算法研究提供仿真平台。
 
 > 虽尽力贴近灵衢基础规范，但两者间仍存在差异。请以灵衢基础规范为权威指南。
 
@@ -37,7 +37,7 @@
     <tr>
       <td align="center" rowspan="2">功能层</td>
       <td>功能类型</td>
-      <td>Ld/St 接口、URMA 接口</td>
+  <td>Load/Store 接口、URMA 接口</td>
       <td>URPC、Entity 相关高级功能</td>
     </tr>
     <tr>
@@ -74,7 +74,7 @@
     </tr>
     <tr>
       <td>拥塞控制</td>
-      <td>RTP 拥塞控制机制、CAQM</td>
+  <td>RTP 拥塞控制机制、C-AQM</td>
       <td>LDCP、DCQCN 算法、CTP 拥塞控制机制</td>
     </tr>
     <tr>
@@ -105,7 +105,7 @@
     </tr>
     <tr>
       <td>拥塞标记</td>
-      <td>基于包头 CC 域段的 CAQM 标记模式</td>
+  <td>基于包头 CC 域段的 C-AQM 标记模式</td>
       <td>FECN / FECN_RTT 标记模式</td>
     </tr>
     <tr>
@@ -121,8 +121,8 @@
     </tr>
     <tr>
       <td>信用流控</td>
-      <td>信用证独占模式、CBFC、适配 PFC</td>
-      <td>控制面的信用证初始化行为、信用证共享模式</td>
+  <td>信用独占模式、CBFC、适配 PFC</td>
+  <td>控制面的信用初始化行为、信用共享模式</td>
     </tr>
   </tbody>
 </table>
@@ -148,41 +148,41 @@
 
 ## 核心组件
 
-### 1. Unified Bus (UB) 模块
+### 1. UnifiedBus (UB) 模块
 
 UB 模块是基于灵衢基础规范实现的仿真组件：
 
 #### 网元建模组件
 <p align="center">
-<img src="src/unified-bus/doc/figures/arch2-light.D3-LpLKH.png.png" alt="UB Domain系统组成" width="85%">
+<img src="src/unified-bus/doc/figures/arch2-light.D3-LpLKH.png.png" alt="UB Domain 系统组成" width="85%">
 <br>
 <em>UB Domain 系统组成架构图。</em><em>来源：www.unifiedbus.com</em><br>
 </p>
 
-- **UB Controller** (`ub-controller.*`) - 执行UB 协议栈的关键组件，同时为用户提供接口
-- **UB Switch** (`ub-switch.*`) - 用于UB 端口间数据转发
+- **UB Controller** (`ub-controller.*`) - 执行 UB 协议栈的关键组件，同时为用户提供接口
+- **UB Switch** (`ub-switch.*`) - 用于 UB 端口间数据转发
 - **UB Port** (`ub-port.*`) - 端口抽象，处理数据包输入输出
 - **UB Link** (`ub-link.*`) - 节点间的点到点连接
 
 #### 协议栈组件
 - **编程接口实例** (`ub-api-ldst*`, `ub-app.*`) - Load/Store 与 URMA 编程接口实例，对接功能层编程模型
-- **UB Function** (`ub-function.*`) - 功能层协议框架实现，支持Load/Store，URMA编程模型
+- **UB Function** (`ub-function.*`) - 功能层协议框架实现，支持 Load/Store、URMA 编程模型
 - **UB Transaction** (`ub-transaction.*`) - 事务层协议框架实现
 - **UB Transport** (`ub-transport.*`) - 传输层协议框架实现
-- **UB Network** (由`ub-routing-table.*`，`ub-congestion-ctrl.*`，`ub-switch.*`功能组成) - 网络层协议框架实现
+- **UB Network** (由 `ub-routing-table.*`、`ub-congestion-control.*`、`ub-switch.*` 组成) - 网络层协议框架实现
 - **UB Datalink** (`ub-datalink.*`) - 数据链路层协议框架实现
 
 
 #### 网络算法组件
 - **流量注入组件** (`ub-traffic-gen.*`) - 读取用户流量配置，为仿真节点按串并行关系注入流量
-- **TP Connection Manager** (`ub-tp-connection-manager.h`) - TP Channel管理器，方便用户查找各节点TP Channel信息
+- **TP Connection Manager** (`ub-tp-connection-manager.h`) - TP Channel 管理器，方便用户查找各节点 TP Channel 信息
 - **Switch Allocator** (`ub-allocator.*`) - 建模了交换机为数据包分配出端口的过程
 - **Queue Manager** (`ub-buffer-manager.*`) - 缓冲区管理模块，影响负载均衡、流量控制、排队、丢包等行为
 - **Routing Process** (`ub-routing-process.*`) - 路由表模块，实现了路由表的管理与查询功能
 - **Congestion Control** (`ub-congestion-control.*`) - 拥塞控制算法框架模块
-- **CAQM算法** (`ub-caqm.*`) - C-AQM拥塞控制算法实现
+- **C-AQM 算法** (`ub-caqm.*`) - C-AQM 拥塞控制算法实现
 - **Flow Control** (`ub-flow-control.*`) - 流量控制框架模块
-- **故障注入模块** (`ub-fault.*`) - 故障注入，帮助用户在特定流量进行过程中注入丢包率，高时延， 拥塞程度，错包，闪断，降lane等故障。
+- **故障注入模块** (`ub-fault.*`) - 故障注入，帮助用户在特定流量进行过程中注入丢包率、高时延、拥塞程度、错包、闪断、降 lane 等故障。
 
 #### 数据类型和工具
 - **Datatype** (`ub-datatype.*`) - UB 数据类型定义
@@ -207,7 +207,7 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 - **拥塞控制**：实现拥塞控制算法常用的网侧标记、接收端回复、发送端响应框架，支持 C-AQM 算法
 - **路由策略**：支持最短路由、绕路策略，支持包喷洒、ECMP 等负载均衡策略
 - **QoS 支持**：提供端到端 QoS 支持，当前支持 SP 策略
-- **交换仲裁**：模块化实现 UbSwitch 的交换仲裁机制建模，当前支持基于优先级的 SP 调度
+- **交换仲裁**：模块化实现 UB Switch 的交换仲裁机制建模，当前支持基于优先级的 SP 调度
 
 ### 3. 脚本工具集
 
@@ -228,7 +228,7 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 ```bibtex
 @software{UBNetworkSimulator,
   month = {10},
-  title = {{ns-3-UB: Unified-Bus Network Simulation Framework}},
+  title = {{ns-3-UB: UnifiedBus Network Simulation Framework}},
   url = {https://gitcode.com/open-usim/ns-3-ub},
   version = {1.0.0},
   year = {2025}
