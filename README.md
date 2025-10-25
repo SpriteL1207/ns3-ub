@@ -1,4 +1,4 @@
-# ns-3-UB: UnifiedBus™ Network Simulation Framework
+# ns-3-UB: UnifiedBus Network Simulation Framework
 
 **语言**: [English](README_en.md) | [中文](README.md)
 
@@ -6,7 +6,7 @@
 
 ## 项目概述
 
-`ns-3-UB` 是基于[灵衢®基础规范](https://www.unifiedbus.com/zh)构建的 ns-3 仿真模块，实现了灵衢基础规范中功能层、事务层、传输层、网络层和数据链路层的协议框架与配套算法。本项目旨在为协议创新，网络架构探索，以及拥塞控制、流量控制、负载均衡、路由算法等网络算法研究提供仿真平台。
+`ns-3-UB` 是基于[灵衢基础规范](https://www.unifiedbus.com/zh)构建的 ns-3 仿真模块，实现了灵衢基础规范中功能层、事务层、传输层、网络层和数据链路层的协议框架与配套算法。本项目旨在为协议创新，网络架构探索，以及拥塞控制、流量控制、负载均衡、路由算法等网络算法研究提供仿真平台。
 
 > 虽尽力贴近灵衢基础规范，但两者间仍存在差异。请以灵衢基础规范为权威指南。
 
