@@ -166,7 +166,7 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 - **UB Link** (`ub-link.*`) - 节点间的点到点连接
 
 #### 协议栈组件
-- **编程接口实例** (`ub-api-ldst*`, `ub-app.*`) - Load/Store 与 URMA 编程接口实例，对接功能层编程模型
+- **编程接口实例** (`ub-ldst-instance*`, `ub-ldst-thread*`, `ub-ldst-api*`) - Load/Store 编程接口实例，用于对接功能层编程模型
 - **UB Function** (`ub-function.*`) - 功能层协议框架实现，支持 Load/Store 与 URMA 编程模型
 - **UB Transaction** (`ub-transaction.*`) - 事务层协议框架实现
 - **UB Transport** (`ub-transport.*`) - 传输层协议框架实现
