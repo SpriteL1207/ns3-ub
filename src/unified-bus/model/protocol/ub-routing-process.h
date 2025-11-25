@@ -33,6 +33,7 @@ public:
     UbRoutingProcess();
     ~UbRoutingProcess() {}
     static TypeId GetTypeId(void);
+    void SetNodeId(uint32_t nodeId) {m_nodeId = nodeId;}
 
     // 添加路由条目
     void AddShortestRoute(const uint32_t destIP, const std::vector<uint16_t>& outPorts);
@@ -43,10 +44,13 @@ public:
     const std::vector<uint16_t> GetAllOutPorts(const uint32_t destIP);
     
     // 获取指定目的IP的出端口
+    const std::vector<uint16_t> GetCandidatePorts(uint32_t &dip, bool useShortestPath, uint16_t inPortId);
     int GetOutPort(RoutingKey &rtKey, uint16_t inPort = UINT16_MAX);
-    int GetOutPort(Ptr<Packet> packet, Ptr<UbQueueManager> queueManager, Ptr<UbController> ctrl);
     int SelectOutPort(uint32_t sip, uint32_t dip, uint16_t sport, uint16_t dport,
         uint8_t priority, bool rp, bool lbm, uint16_t inPort = UINT16_MAX);
+    // 用户可自定义自适应路由策略
+    int SelectAdaptiveOutPort(uint32_t sip, uint32_t dip, uint16_t sport, uint16_t dport,
+        uint8_t priority, bool useShortestPath, bool usePacketSpray, uint16_t inPortId, Ptr<UbQueueManager> queueManager);
     // 删除路由条目
     bool RemoveShortestRoute(const uint32_t destIP);
     bool RemoveOtherRoute(const uint32_t destIP);
@@ -64,6 +68,7 @@ private:
         }
     };
 
+    uint32_t m_nodeId;
     bool m_selectShortestPaths = false;
     uint64_t CalcHash(uint32_t sip, uint32_t dip, uint16_t sport, uint16_t dport, uint8_t priority);
 

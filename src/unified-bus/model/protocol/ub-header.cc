@@ -1127,6 +1127,11 @@ void UbTransactionHeader::SetTcETahEn(bool enable)
     m_mtEn = enable;
 }
 
+void UbTransactionHeader::SetExclusive(bool exclusive)
+{
+    m_exclusive = exclusive;
+}
+
 void UbTransactionHeader::SetIniRcType(IniRcType type)
 {
     m_iniRcIdType = static_cast<uint8_t>(type);
@@ -1156,6 +1161,11 @@ uint16_t UbTransactionHeader::GetIniTaSsn() const
 uint8_t UbTransactionHeader::GetOrder() const
 {
     return m_order;
+}
+
+bool UbTransactionHeader::GetExclusive() const
+{
+    return m_exclusive;
 }
 
 uint8_t UbTransactionHeader::GetIniRcType() const
@@ -1561,6 +1571,294 @@ bool UbCna16NetworkHeader::IsValidMode() const
     }
 }
 
+/*
+ ***************************************************
+ * UbCna24NetworkHeader implementation
+ ***************************************************
+ */
+UbCna24NetworkHeader::UbCna24NetworkHeader() = default;
+UbCna24NetworkHeader::~UbCna24NetworkHeader() = default;
+
+TypeId UbCna24NetworkHeader::GetTypeId()
+{
+    static TypeId tid =
+        TypeId("ns3::UbCna24NetworkHeader").SetParent<Header>().AddConstructor<UbCna24NetworkHeader>();
+    return tid;
+}
+
+TypeId UbCna24NetworkHeader::GetInstanceTypeId() const
+{
+    return GetTypeId();
+}
+
+uint32_t UbCna24NetworkHeader::GetSerializedSize() const
+{
+    return totalHeaderSize;
+}
+
+void UbCna24NetworkHeader::Print(std::ostream& os) const
+{
+    os << "SCNA=" << m_scna << " DCNA=" << m_dcna << " Mode=" << unsigned(m_mode);
+    switch (m_mode) {
+        case 0b000:
+            os << " Loc=" << m_ccFields.mode0.location << " En=" <<
+            m_ccFields.mode0.enable << " C=" << m_ccFields.mode0.c <<
+            " I=" << m_ccFields.mode0.i << " Hint=" << unsigned(m_ccFields.mode0.hint);
+            break;
+        case 0b010:
+            os << " Loc=" << m_ccFields.mode2.location << " TS=" <<
+            m_ccFields.mode2.timestamp << " FECN=" << unsigned(m_ccFields.mode2.fecn);
+            break;
+        case 0b100:
+            os << " Loc=" << m_ccFields.mode4.location <<
+            " FECN=" << unsigned(m_ccFields.mode4.fecn);
+            break;
+        default:
+            os << " raw13=0x" << std::hex << m_ccFields.raw13 << std::dec;
+            break;
+    }
+    os << " LB=" << unsigned(m_lb) << " SL=" <<
+    unsigned(m_serviceLevel) << " NLP=" << unsigned(m_nlp);
+}
+
+void UbCna24NetworkHeader::Serialize(Buffer::Iterator i) const
+{
+    // Byte0-2: SCNA (24 bits, 3 bytes)
+    i.WriteU8((m_scna >> 16) & 0xFF);
+    i.WriteU8((m_scna >> 8) & 0xFF);
+    i.WriteU8(m_scna & 0xFF);
+    
+    // Byte3-5: DCNA (24 bits, 3 bytes)
+    i.WriteU8((m_dcna >> 16) & 0xFF);
+    i.WriteU8((m_dcna >> 8) & 0xFF);
+    i.WriteU8(m_dcna & 0xFF);
+    
+    // Byte6-7: Congestion Control (16 bits)
+    uint16_t ccField = ((m_mode & 0x7) << 13) | (m_ccFields.raw13 & 0x1FFF);
+    i.WriteU16(ccField);
+    
+    // Byte8: LB (8 bits)
+    i.WriteU8(m_lb);
+    
+    // Byte9: [ServiceLevel:4][reserved:1][NLP:3]
+    uint8_t byte9 = ((m_serviceLevel & 0x0F) << 4) | ((m_reserve ? 1 : 0) << 3) | (m_nlp & 0x07);
+    i.WriteU8(byte9);
+}
+
+uint32_t UbCna24NetworkHeader::Deserialize(Buffer::Iterator i)
+{
+    // Byte0-2: SCNA (24 bits, 3 bytes)
+    m_scna = (static_cast<uint32_t>(i.ReadU8()) << 16) |
+             (static_cast<uint32_t>(i.ReadU8()) << 8) |
+             static_cast<uint32_t>(i.ReadU8());
+    
+    // Byte3-5: DCNA (24 bits, 3 bytes)
+    m_dcna = (static_cast<uint32_t>(i.ReadU8()) << 16) |
+             (static_cast<uint32_t>(i.ReadU8()) << 8) |
+             static_cast<uint32_t>(i.ReadU8());
+    
+    // Byte6-7: Congestion Control (16 bits)
+    uint16_t ccField = i.ReadU16();
+    m_mode = (ccField >> 13) & 0x7;
+    m_ccFields.raw13 = ccField & 0x1FFF;
+    
+    // Byte8: LB (8 bits)
+    m_lb = i.ReadU8();
+    
+    // Byte9: [ServiceLevel:4][reserved:1][NLP:3]
+    uint8_t byte9 = i.ReadU8();
+    m_serviceLevel = (byte9 >> 4) & 0x0F;
+    m_reserve = (byte9 >> 3) & 0x01;
+    m_nlp = byte9 & 0x07;
+    
+    return GetSerializedSize();
+}
+
+// Setters
+void UbCna24NetworkHeader::SetScna(uint32_t v)
+{
+    m_scna = v & 0xFFFFFF;  // 确保只使用低24位
+}
+
+void UbCna24NetworkHeader::SetDcna(uint32_t v)
+{
+    m_dcna = v & 0xFFFFFF;  // 确保只使用低24位
+}
+
+void UbCna24NetworkHeader::SetMode(uint8_t m)
+{
+    m_mode = m & 0x7;
+}
+
+void UbCna24NetworkHeader::SetLocation(bool loc)
+{
+    switch (m_mode) {
+        case 0b000:
+            m_ccFields.mode0.location = loc;
+            break;
+        case 0b010:
+            m_ccFields.mode2.location = loc;
+            break;
+        case 0b100:
+            m_ccFields.mode4.location = loc;
+            break;
+        default:
+            break;
+    }
+}
+
+void UbCna24NetworkHeader::SetEnable(bool en)
+{
+    if (m_mode == 0b000) {
+        m_ccFields.mode0.enable = en;
+    }
+}
+
+void UbCna24NetworkHeader::SetC(bool c)
+{
+    if (m_mode == 0b000) {
+        m_ccFields.mode0.c = c;
+    }
+}
+
+void UbCna24NetworkHeader::SetI(bool v)
+{
+    if (m_mode == 0b000) {
+        m_ccFields.mode0.i = v;
+    }
+}
+
+void UbCna24NetworkHeader::SetHint(uint8_t h)
+{
+    if (m_mode == 0b000) {
+        m_ccFields.mode0.hint = h & 0x7F;
+    }
+}
+
+void UbCna24NetworkHeader::SetTimestamp(uint16_t ts)
+{
+    if (m_mode == 0b010) {
+        m_ccFields.mode2.timestamp = ts & 0x03FF;
+    }
+}
+
+void UbCna24NetworkHeader::SetFecn(uint8_t f)
+{
+    f &= 0x3;
+    if (m_mode == 0b010) {
+        m_ccFields.mode2.fecn = f;
+    } else if (m_mode == 0b100) {
+        m_ccFields.mode4.fecn = f;
+    }
+}
+
+void UbCna24NetworkHeader::SetLb(uint8_t lb)
+{
+    m_lb = lb;
+}
+
+void UbCna24NetworkHeader::SetServiceLevel(uint8_t sl)
+{
+    m_serviceLevel = sl & 0x0F;
+}
+
+void UbCna24NetworkHeader::SetNlp(uint8_t nlp)
+{
+    m_nlp = nlp & 0x07;
+}
+
+// Getters
+uint32_t UbCna24NetworkHeader::GetScna() const
+{
+    return m_scna;
+}
+
+uint32_t UbCna24NetworkHeader::GetDcna() const
+{
+    return m_dcna;
+}
+
+uint8_t UbCna24NetworkHeader::GetMode() const
+{
+    return m_mode;
+}
+
+bool UbCna24NetworkHeader::GetLocation() const
+{
+    switch (m_mode) {
+        case 0b000:
+            return m_ccFields.mode0.location;
+        case 0b010:
+            return m_ccFields.mode2.location;
+        case 0b100:
+            return m_ccFields.mode4.location;
+        default:
+            return false;
+    }
+}
+
+bool UbCna24NetworkHeader::GetEnable() const
+{
+    return (m_mode == 0b000) ? m_ccFields.mode0.enable : false;
+}
+
+bool UbCna24NetworkHeader::GetC() const
+{
+    return (m_mode == 0b000) ? m_ccFields.mode0.c : false;
+}
+
+bool UbCna24NetworkHeader::GetI() const
+{
+    return (m_mode == 0b000) ? m_ccFields.mode0.i : false;
+}
+
+uint8_t UbCna24NetworkHeader::GetHint() const
+{
+    return (m_mode == 0b000) ? m_ccFields.mode0.hint : 0;
+}
+
+uint16_t UbCna24NetworkHeader::GetTimestamp() const
+{
+    return (m_mode == 0b010) ? m_ccFields.mode2.timestamp : 0;
+}
+
+uint8_t UbCna24NetworkHeader::GetFecn() const
+{
+    if (m_mode == 0b010) {
+        return m_ccFields.mode2.fecn;
+    }
+    if (m_mode == 0b100) {
+        return m_ccFields.mode4.fecn;
+    }
+    return 0;
+}
+
+uint8_t UbCna24NetworkHeader::GetLb() const
+{
+    return m_lb;
+}
+
+uint8_t UbCna24NetworkHeader::GetServiceLevel() const
+{
+    return m_serviceLevel;
+}
+
+uint8_t UbCna24NetworkHeader::GetNlp() const
+{
+    return m_nlp;
+}
+
+bool UbCna24NetworkHeader::IsValidMode() const
+{
+    switch (m_mode) {
+        case 0b000:
+        case 0b010:
+        case 0b100:
+            return true;
+        default:
+            return false;
+    }
+}
 
 /*
  ***************************************************

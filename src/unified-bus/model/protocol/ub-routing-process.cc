@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include <algorithm>
+#include <limits>
 #include "ns3/ub-controller.h"
+#include "ns3/ub-header.h"
+#include "ns3/ub-network-address.h"
+#include "ns3/ub-port.h"
 #include "ns3/ub-queue-manager.h"
 #include "ns3/ub-routing-process.h"
+#include "ns3/udp-header.h"
+#include "ns3/ipv4-header.h"
 using namespace utils;
 
 namespace ns3 {
@@ -111,10 +118,92 @@ bool UbRoutingProcess::RemoveOtherRoute(const uint32_t destIP)
     return m_rtOther.erase(destIP) > 0;
 }
 
-int UbRoutingProcess::GetOutPort(Ptr<Packet> packet, Ptr<UbQueueManager> queueManager, Ptr<UbController> ctrl)
+int UbRoutingProcess::SelectAdaptiveOutPort(uint32_t sip, uint32_t dip, uint16_t sport, uint16_t dport,
+    uint8_t priority, bool useShortestPath, bool usePacketSpray, uint16_t inPortId, Ptr<UbQueueManager> queueManager)
 {
-    NS_ASSERT_MSG(0, "Not yet implemented!");
-    return -1;
+    uint32_t tempDip = dip;
+    auto candidatePorts = GetCandidatePorts(tempDip, useShortestPath, inPortId);
+    if (candidatePorts.size() == 0) {
+        return -1;
+    }
+
+    auto calcLoadScore = [&](uint16_t outPort) -> uint64_t {
+        if (queueManager == nullptr) {
+            return 0;
+        }
+        return queueManager->GetEgressUsed(outPort, static_cast<uint32_t>(priority));
+    };
+
+    uint64_t bestScore = std::numeric_limits<uint64_t>::max();
+    std::vector<uint16_t> bestPorts;
+    for (uint16_t port : candidatePorts) {
+        uint64_t score = calcLoadScore(port);
+        if (score < bestScore) {
+            bestScore = score;
+            bestPorts.clear();
+            bestPorts.push_back(port);
+        } else if (score == bestScore) {
+            bestPorts.push_back(port);
+        }
+    }
+
+    if (bestPorts.empty()) {
+        return -1;
+    }
+    
+    uint64_t hash64 = 0;
+    hash64 = CalcHash(sip, dip, 0, 0, priority);
+    uint16_t selectedPort = bestPorts[hash64 % bestPorts.size()];
+
+    if(useShortestPath){
+        m_selectShortestPaths = true;
+    } else {
+        auto shortestOutPorts = GetShortestOutPorts(tempDip);
+        if (std::find(shortestOutPorts.begin(), shortestOutPorts.end(), selectedPort) != shortestOutPorts.end()) {
+            m_selectShortestPaths = true;
+        } else {
+            m_selectShortestPaths = false;
+        }
+    }
+
+    return selectedPort;
+}
+
+const std::vector<uint16_t> UbRoutingProcess::GetCandidatePorts(uint32_t &dip, bool useShortestPath, uint16_t inPortId)
+{
+    auto buildCandidates = [this](bool useShortestPath, uint32_t dip) {
+        std::vector<uint16_t> candidates;
+        if (useShortestPath) {
+            auto shortest = GetShortestOutPorts(dip);
+            candidates.assign(shortest.begin(), shortest.end());
+        } else {
+            candidates = GetAllOutPorts(dip);
+        }
+        return candidates;
+    };
+
+    std::vector<uint16_t> candidatePorts = buildCandidates(useShortestPath, dip);
+    if (candidatePorts.empty()) {
+        Ipv4Mask mask("255.255.255.0");
+        uint32_t maskedDip = Ipv4Address(dip).CombineMask(mask).Get();
+        if (maskedDip != dip) {
+            candidatePorts = buildCandidates(useShortestPath, maskedDip);
+            dip = maskedDip;
+        }
+    }
+
+    candidatePorts = normalizePorts(candidatePorts);
+    if (inPortId != UINT16_MAX) {
+        std::vector<uint16_t> validPorts;
+        for (uint16_t port : candidatePorts) {
+            if (port != inPortId) {
+                validPorts.push_back(port);
+            }
+        }
+        candidatePorts = validPorts;
+    }
+
+    return candidatePorts;
 }
 
 uint64_t UbRoutingProcess::CalcHash(uint32_t sip, uint32_t dip, uint16_t sport, uint16_t dport, uint8_t priority)
@@ -144,43 +233,62 @@ int UbRoutingProcess::SelectOutPort(uint32_t sip, uint32_t dip, uint16_t sport, 
     uint32_t idx = 0;
     std::string hashKey;
     uint64_t hash64 = 0;
-    if (usePacketSpray) {
-        hash64 = CalcHash(sip, dip, sport, dport, priority);
-    } else {
-        // usePacketSpray == LB_MODE_PER_FLOW
-        hash64 = CalcHash(sip, dip, 0, 0, priority);
-    }
+    hash64 = CalcHash(sip, dip, sport, dport, priority);
+    // if (usePacketSpray) {
+    //     hash64 = CalcHash(sip, dip, sport, dport, priority);
+    // } else {
+    //     // usePacketSpray == LB_MODE_PER_FLOW
+    //     hash64 = CalcHash(sip, dip, 0, 0, priority);
+    // }
 
-    if (useShortestPath) {
-        auto outPorts = GetShortestOutPorts(dip);
-        std::vector<uint16_t> validPorts;
-        for (uint16_t port : outPorts) {
-            if (port != inPortId)
-                validPorts.push_back(port);
-        }
-        if (validPorts.size() == 0)
-            return -1;
-        idx = hash64 % validPorts.size();
-        return validPorts[idx];
+    // if (useShortestPath) {
+    //     auto outPorts = GetShortestOutPorts(dip);
+    //     std::vector<uint16_t> validPorts;
+    //     for (uint16_t port : outPorts) {
+    //         if (port != inPortId)
+    //             validPorts.push_back(port);
+    //     }
+    //     if (validPorts.size() == 0)
+    //         return -1;
+    //     idx = hash64 % validPorts.size();
+    //     return validPorts[idx];
+    // } else {
+    //     // useShortestPath == ROUTING_ALL_PATHS
+    //     auto outPorts = GetAllOutPorts(dip);
+    //     std::vector<uint16_t> validPorts;
+    //     for (uint16_t port : outPorts) {
+    //         if (port != inPortId)
+    //             validPorts.push_back(port);
+    //     }
+    //     if (validPorts.size() == 0)
+    //         return -1;
+    //     idx = hash64 % validPorts.size();
+    //     auto shortestOutPorts = GetShortestOutPorts(dip);
+    //     if (std::find(shortestOutPorts.begin(), shortestOutPorts.end(), validPorts[idx]) != shortestOutPorts.end()) {
+    //         m_selectShortestPaths = true;
+    //     } else {
+    //         m_selectShortestPaths = false;
+    //     }
+    //     return validPorts[idx];
+    // }
+
+    uint32_t tempDip = dip;
+    auto candidatePorts = GetCandidatePorts(tempDip, useShortestPath, inPortId);
+    if (candidatePorts.size() == 0) {
+        return -1;
+    }
+    idx = hash64 % candidatePorts.size();
+    if(useShortestPath){
+        m_selectShortestPaths = true;
     } else {
-        // useShortestPath == ROUTING_ALL_PATHS
-        auto outPorts = GetAllOutPorts(dip);
-        std::vector<uint16_t> validPorts;
-        for (uint16_t port : outPorts) {
-            if (port != inPortId)
-                validPorts.push_back(port);
-        }
-        if (validPorts.size() == 0)
-            return -1;
-        idx = hash64 % validPorts.size();
-        auto shortestOutPorts = GetShortestOutPorts(dip);
-        if (std::find(shortestOutPorts.begin(), shortestOutPorts.end(), validPorts[idx]) != shortestOutPorts.end()) {
+        auto shortestOutPorts = GetShortestOutPorts(tempDip);
+        if (std::find(shortestOutPorts.begin(), shortestOutPorts.end(), candidatePorts[idx]) != shortestOutPorts.end()) {
             m_selectShortestPaths = true;
         } else {
             m_selectShortestPaths = false;
         }
-        return validPorts[idx];
     }
+    return candidatePorts[idx];
 }
 
 bool UbRoutingProcess::GetSelectShortestPath()
@@ -204,16 +312,26 @@ int UbRoutingProcess::GetOutPort(RoutingKey &rtKey, uint16_t inPort)
                 << " priority: " << (uint16_t)priority
                 << " useShortestPath: " << useShortestPath
                 << " usePacketSpray: " << usePacketSpray);
-    // 1. 首先基于目的节点的port地址进行选择
-    int outPortId = SelectOutPort(sip, dip, sport, dport, priority, useShortestPath, usePacketSpray, inPort);
-    if (outPortId == -1) {
-        // 2. 如果找不到，掩盖port地址，使用主机的primary地址进行寻址
-        Ipv4Mask mask("255.255.255.0");
-        dip = Ipv4Address(dip).CombineMask(mask).Get();
+    // // 1. 首先基于目的节点的port地址进行选择
+    // int outPortId = SelectOutPort(sip, dip, sport, dport, priority, useShortestPath, usePacketSpray, inPort);
+    // if (outPortId == -1) {
+    //     // 2. 如果找不到，掩盖port地址，使用主机的primary地址进行寻址
+    //     Ipv4Mask mask("255.255.255.0");
+    //     dip = Ipv4Address(dip).CombineMask(mask).Get();
+    //     outPortId = SelectOutPort(sip, dip, sport, dport, priority, useShortestPath, usePacketSpray, inPort);
+    //     // 3. 如果还是找不到，报ASSERT
+    //     NS_ASSERT_MSG(outPortId != -1, "No available output port found");
+    // }
+    // return outPortId;
+    int outPortId = -1;
+    if(usePacketSpray){
         outPortId = SelectOutPort(sip, dip, sport, dport, priority, useShortestPath, usePacketSpray, inPort);
-        // 3. 如果还是找不到，报ASSERT
-        NS_ASSERT_MSG(outPortId != -1, "No available output port found");
+    } else {
+        auto node = NodeList::GetNode(m_nodeId);
+        auto queueManager = node->GetObject<UbQueueManager>();
+        outPortId = SelectAdaptiveOutPort(sip, dip, sport, dport, priority, useShortestPath, usePacketSpray, inPort, queueManager);
     }
+    NS_ASSERT_MSG(outPortId != -1, "No available output port found");
     return outPortId;
 }
 } // namespace ns3
