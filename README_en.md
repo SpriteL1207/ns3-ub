@@ -2,7 +2,9 @@
 
 **Language**: [English](README_en.md) | [中文](README.md)
 
-[Quick Start Guide](QUICK_START_en.md)
+**Quick Start**: [QUICK_START_en.md](QUICK_START_en.md)
+
+> This project is built on ns-3.44. For detailed platform support, installation steps, system requirements, and build options, see [ns-3.44 Documentation](https://www.nsnam.org/releases/ns-3-44/documentation/), [Installation Guide](https://www.nsnam.org/docs/release/3.44/installation/singlehtml/), and [ns-3.44 Source](https://gitlab.com/nsnam/ns-3-dev/-/tree/ns-3.44?ref_type=tags).
 
 ## Project Overview
 

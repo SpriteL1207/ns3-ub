@@ -1,5 +1,7 @@
 # 快速开始
 
+> 本项目基于 ns-3.44 构建，已在 Linux 与 Windows WSL 系统下验证。详细的平台支持、安装步骤、系统要求及编译选项，请参阅 [ns-3.44 文档](https://www.nsnam.org/releases/ns-3-44/documentation/)、[安装指南](https://www.nsnam.org/docs/release/3.44/installation/singlehtml/) 及 [ns-3.44 源码](https://gitlab.com/nsnam/ns-3-dev/-/tree/ns-3.44?ref_type=tags)。
+
 ## 环境要求
 
 核心构建依赖如下工具。代码下载可通过 Git，或通过浏览器 / wget / curl 下载源码压缩包（tar + bunzip2 解压）。
