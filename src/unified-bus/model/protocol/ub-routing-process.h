@@ -39,18 +39,16 @@ public:
     void AddShortestRoute(const uint32_t destIP, const std::vector<uint16_t>& outPorts);
     void AddOtherRoute(const uint32_t destIP, const std::vector<uint16_t>& outPorts);
     
-    const std::vector<uint16_t>& GetShortestOutPorts(const uint32_t destIP);
-    const std::vector<uint16_t>& GetOtherOutPorts(const uint32_t destIP);
+    const std::vector<uint16_t> GetShortestOutPorts(const uint32_t destIP);
+    const std::vector<uint16_t> GetOtherOutPorts(const uint32_t destIP);
     const std::vector<uint16_t> GetAllOutPorts(const uint32_t destIP);
     
     // 获取指定目的IP的出端口
     const std::vector<uint16_t> GetCandidatePorts(uint32_t &dip, bool useShortestPath, uint16_t inPortId);
     int GetOutPort(RoutingKey &rtKey, uint16_t inPort = UINT16_MAX);
-    int SelectOutPort(uint32_t sip, uint32_t dip, uint16_t sport, uint16_t dport,
-        uint8_t priority, bool rp, bool lbm, uint16_t inPort = UINT16_MAX);
+    int SelectOutPort(RoutingKey &rtKey, const std::vector<uint16_t> candidatePorts);
     // 用户可自定义自适应路由策略
-    int SelectAdaptiveOutPort(uint32_t sip, uint32_t dip, uint16_t sport, uint16_t dport,
-        uint8_t priority, bool useShortestPath, bool usePacketSpray, uint16_t inPortId, Ptr<UbQueueManager> queueManager);
+    int SelectAdaptiveOutPort(RoutingKey &rtKey, const std::vector<uint16_t> candidatePorts);
     // 删除路由条目
     bool RemoveShortestRoute(const uint32_t destIP);
     bool RemoveOtherRoute(const uint32_t destIP);
@@ -68,8 +66,15 @@ private:
         }
     };
 
+    // 操作类型枚举
+    enum class UbRoutingAlgorithm : uint8_t {
+        HASH = 0,   // Hash-based routing
+        ADAPTIVE = 1   // Adaptive routing
+    };
+
     uint32_t m_nodeId;
     bool m_selectShortestPaths = false;
+    UbRoutingAlgorithm m_routingAlgorithm = UbRoutingAlgorithm::HASH;
     uint64_t CalcHash(uint32_t sip, uint32_t dip, uint16_t sport, uint16_t dport, uint8_t priority);
 
     // 全局端口集合池：存储所有唯一的端口集合

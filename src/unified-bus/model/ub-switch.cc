@@ -57,7 +57,6 @@ void UbSwitch::Init()
     m_queueManager->SetVLNum(m_vlNum);
     m_queueManager->SetPortsNum(m_portsNum);
     m_queueManager->Init();
-    node->AggregateObject(m_queueManager);
 
     NodePortsFcInit();
     m_routingProcess = CreateObject<UbRoutingProcess>();
