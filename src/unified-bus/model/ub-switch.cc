@@ -7,6 +7,7 @@
 #include "ns3/ub-caqm.h"
 #include "ns3/ub-port.h"
 #include "ns3/ub-switch.h"
+#include "ns3/ub-controller.h"
 
 namespace ns3 {
 NS_OBJECT_ENSURE_REGISTERED(UbSwitch);
@@ -59,6 +60,7 @@ void UbSwitch::Init()
 
     NodePortsFcInit();
     m_routingProcess = CreateObject<UbRoutingProcess>();
+    m_routingProcess->SetNodeId(node->GetId());
     m_Ipv4Addr = utils::NodeIdToIp(node->GetId());
 }
 

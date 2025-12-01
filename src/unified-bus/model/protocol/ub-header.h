@@ -403,6 +403,110 @@ private:
 
 /**
  * \ingroup ub-header
+ * \brief UB 24-Bit Network Header (a compact UB-specified network header)
+ *
+ * 报文位置：[Datalink Packet Header: 4bytes][Network Header: 10bytes][TAH][Payload]
+ * 报文头格式：总计10字节
+ *      字节0-2：[SCNA:24]
+ *      字节3-5：[DCNA:24]
+ *      字节6-7：[CC:16]
+ *      [Mode:3][depend on mode:13]
+ *      +[CAQM: 000][Location:1][reserved:1][enable:1][C:1][I:1][HINT:8]
+ *      +[FECN_RTT: 010][Location:1][Time stamp:10][FECN:2]
+ *      +[FECN: 100][Location:1][reserved:10][FECN:2]
+ *      字节8：[LB:8]
+ *      字节9：[Service Level:4][reserved:1][NLP:3]
+ *
+ *      CNA[高位: nodeId][低8位: portId] CnaToIp IpToCna
+ */
+ class UbCna24NetworkHeader : public Header {
+    public:
+        UbCna24NetworkHeader();
+        virtual ~UbCna24NetworkHeader();
+    
+        static TypeId GetTypeId(void);
+        TypeId GetInstanceTypeId(void) const override;
+        void Print(std::ostream &os) const override;
+        void Serialize(Buffer::Iterator start) const override;
+        uint32_t Deserialize(Buffer::Iterator start) override;
+        uint32_t GetSerializedSize(void) const override;
+    
+        // Setters
+        void SetScna(uint32_t scna);
+        void SetDcna(uint32_t dcna);
+        void SetMode(uint8_t mode);
+        void SetLocation(bool location);
+        void SetEnable(bool enable);
+        void SetC(bool c);
+        void SetI(bool i);
+        void SetHint(uint8_t hint);           // 7 bits
+        void SetTimestamp(uint16_t ts);       // 10 bits
+        void SetFecn(uint8_t fecn);           // 2 bits
+        void SetLb(uint8_t lb);
+        void SetServiceLevel(uint8_t sl);     // 4 bits
+        void SetNlp(uint8_t nlp);             // 3 bits
+    
+        // Getters
+        uint32_t GetScna() const;
+        uint32_t GetDcna() const;
+        uint8_t GetMode() const;
+        bool GetLocation() const;
+        bool GetEnable() const;
+        bool GetC() const;
+        bool GetI() const;
+        uint8_t GetHint() const;
+        uint16_t GetTimestamp() const;
+        uint8_t GetFecn() const;
+        uint8_t GetLb() const;
+        uint8_t GetServiceLevel() const;
+        uint8_t GetNlp() const;
+    
+        // 验证
+        bool IsValidMode() const;
+    
+    private:
+        // Byte0-2
+        uint32_t m_scna = 0;
+        // Byte3-5
+        uint32_t m_dcna = 0;
+    
+        // Byte6-7: Congestion Control (与 UbNetworkHeader 复用结构思想)
+        uint8_t m_mode = 0; // 3 bits
+        union {
+            struct {  // mode 000
+                bool location;
+                bool reserve1;
+                bool enable;
+                bool c;
+                bool i;
+                uint8_t hint;  // 7
+            } mode0;
+            struct {  // mode 010
+                bool location;
+                uint16_t timestamp;  // 10
+                uint8_t fecn;        // 2
+            } mode2;
+            struct {                // mode 100
+                bool location;
+                uint16_t reserve3;  // 10
+                uint8_t fecn;       // 2
+            } mode4;
+            uint16_t raw13;
+        } m_ccFields;
+    
+        // Byte8
+        uint8_t m_lb = 0; // hash时可以使用(SCNA, DCNA, LB)实现负载均衡
+    
+        // Byte9: [ServiceLevel:4][reserved:1][NLP:3]
+        uint8_t m_serviceLevel = 0;
+        bool m_reserve = false;
+        uint8_t m_nlp = 0;
+    
+        static const uint32_t totalHeaderSize = 10;
+    };
+
+/**
+ * \ingroup ub-header
  * \brief UB Transport Header (RTPH)
  *
  * 报文头格式：总计16字节 (128位)

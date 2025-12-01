@@ -72,6 +72,7 @@ option(NS3_MONOLIB
        "Build a single shared ns-3 library and link it against executables" OFF
 )
 option(NS3_MPI "Build with MPI support" OFF)
+option(NS3_MTP "Build with Multithreaded simulation support" OFF)
 option(NS3_NATIVE_OPTIMIZATIONS "Build with -march=native -mtune=native" OFF)
 option(
   NS3_NINJA_TRACING
@@ -93,7 +94,7 @@ option(NS3_VERBOSE "Print additional build system messages" OFF)
 option(NS3_VISUALIZER "Build visualizer module" ON)
 option(NS3_WARNINGS "Enable compiler warnings" ON)
 option(NS3_WARNINGS_AS_ERRORS
-       "Treat warnings as errors. Requires NS3_WARNINGS=ON" OFF
+       "Treat warnings as errors. Requires NS3_WARNINGS=ON" ON
 )
 
 # Options that either select which modules will get built or disable modules

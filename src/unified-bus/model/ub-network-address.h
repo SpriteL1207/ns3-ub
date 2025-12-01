@@ -132,7 +132,7 @@ inline uint32_t NodeIdToCna24(uint32_t nodeId)
 }
 inline uint32_t Cna24ToNodeId(uint32_t cnaAddr)
 {
-    return (cnaAddr >> 8) & 0xFFFF; // 右移4位后取低16位 (掩码 0x0FFFF)
+    return (cnaAddr >> 8) & 0xFFFF; // 右移8位后取低16位 (掩码 0x0FFFF)
 }
 
 inline uint32_t Cna24ToPortId(uint32_t cnaAddr)

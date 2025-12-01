@@ -5,6 +5,11 @@
 #include <iomanip>
 #include <sstream>
 #include <ctime>
+#include <string>
+
+#ifdef NS3_MTP
+#include "ns3/mtp-interface.h"
+#endif
 
 using namespace utils;
 
@@ -86,8 +91,16 @@ void RunCase(const string& configPath)
 // 根据配置文件路径执行用例
 int main(int argc, char* argv[])
 {
-    if (UbUtils::Get()->QueryAttributeInfor(argc, argv))
+    if (UbUtils::Get()->QueryAttributeInfor(argc, argv)) 
         return 0;
+
+    // UNISON示例：多线程加速需要使能mtp ./ns3 configure --enable-mtp
+    // 使用如下代码使能UNISON
+//     uint32_t mtpThreads = 8;
+// #ifdef NS3_MTP
+//     MtpInterface::Enable(mtpThreads);
+// #endif
+
     // 开始计时
     auto start = std::chrono::high_resolution_clock::now();
     Time::SetResolution(Time::NS);
@@ -124,8 +137,7 @@ int main(int argc, char* argv[])
 
     // 配置文件路径
     string configPath = "scratch/2nodes_single-tp";
-    if (argc > 1)
-    {
+    if (argc > 1) {
         configPath = string(argv[1]);
     }
 
