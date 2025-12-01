@@ -11,6 +11,11 @@ if(${ENABLE_EXAMPLES})
   endif()
 endif()
 
+set(mtp_libs ${libnetwork})
+if(${ENABLE_MPI})
+  list(APPEND mtp_libs MPI::MPI_CXX)
+endif()
+
 build_lib(
   LIBNAME mtp
   SOURCE_FILES
@@ -21,7 +26,6 @@ build_lib(
     model/logical-process.h
     model/mtp-interface.h
     model/multithreaded-simulator-impl.h
-  LIBRARIES_TO_LINK ${libnetwork}
-                    MPI::MPI_CXX
+  LIBRARIES_TO_LINK ${mtp_libs}
   TEST_SOURCES ${example_as_test_suite}
 )

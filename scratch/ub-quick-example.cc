@@ -5,6 +5,11 @@
 #include <iomanip>
 #include <sstream>
 #include <ctime>
+#include <string>
+
+#ifdef NS3_MTP
+#include "ns3/mtp-interface.h"
+#endif
 
 using namespace utils;
 
@@ -87,7 +92,53 @@ void RunCase(const string& configPath)
 int main(int argc, char* argv[])
 {
     if (UbUtils::Get()->QueryAttributeInfor(argc, argv))
+    {
         return 0;
+    }
+
+    bool enableMtp = false;
+    uint32_t mtpThreads = 0;
+    for (int i = 1; i < argc; ++i)
+    {
+        const std::string arg(argv[i]);
+        if (arg == "--enable-mtp")
+        {
+            enableMtp = true;
+        }
+        else if (arg.rfind("--mtp-threads=", 0) == 0)
+        {
+            try
+            {
+                mtpThreads = static_cast<uint32_t>(std::stoul(arg.substr(14)));
+                enableMtp = true;
+            }
+            catch (const std::exception&)
+            {
+                std::cerr << "Invalid value for --mtp-threads, ignoring: " << arg << std::endl;
+            }
+        }
+    }
+
+#ifdef NS3_MTP
+    if (enableMtp)
+    {
+        if (mtpThreads > 0)
+        {
+            MtpInterface::Enable(mtpThreads);
+        }
+        else
+        {
+            MtpInterface::Enable();
+        }
+    }
+#else
+    if (enableMtp)
+    {
+        std::cerr << "Warning: --enable-mtp requested but ns-3 was not built with --enable-mtp"
+                  << std::endl;
+    }
+#endif
+
     // 开始计时
     auto start = std::chrono::high_resolution_clock::now();
     Time::SetResolution(Time::NS);

@@ -132,7 +132,6 @@ static HybridTestSuite g_hybridFatTree2("hybrid-fat-tree-incast",
 static HybridTestSuite g_hybridSimple("hybrid-simple",
                                       "simple-hybrid",
                                       NS_TEST_SOURCEDIR,
-                                      ""
                                       "",
                                       "",
                                       TestCase::TestDuration::QUICK);
