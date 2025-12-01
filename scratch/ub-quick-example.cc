@@ -91,53 +91,17 @@ void RunCase(const string& configPath)
 // 根据配置文件路径执行用例
 int main(int argc, char* argv[])
 {
-    if (UbUtils::Get()->QueryAttributeInfor(argc, argv))
-    {
+    if (UbUtils::Get()->QueryAttributeInfor(argc, argv)) 
         return 0;
-    }
 
-    bool enableMtp = false;
-    uint32_t mtpThreads = 0;
-    for (int i = 1; i < argc; ++i)
-    {
-        const std::string arg(argv[i]);
-        if (arg == "--enable-mtp")
-        {
-            enableMtp = true;
-        }
-        else if (arg.rfind("--mtp-threads=", 0) == 0)
-        {
-            try
-            {
-                mtpThreads = static_cast<uint32_t>(std::stoul(arg.substr(14)));
-                enableMtp = true;
-            }
-            catch (const std::exception&)
-            {
-                std::cerr << "Invalid value for --mtp-threads, ignoring: " << arg << std::endl;
-            }
-        }
-    }
-
-#ifdef NS3_MTP
-    if (enableMtp)
-    {
-        if (mtpThreads > 0)
-        {
-            MtpInterface::Enable(mtpThreads);
-        }
-        else
-        {
-            MtpInterface::Enable();
-        }
-    }
-#else
-    if (enableMtp)
-    {
-        std::cerr << "Warning: --enable-mtp requested but ns-3 was not built with --enable-mtp"
-                  << std::endl;
-    }
-#endif
+    // UNISON示例：多线程加速需要使能mtp ./ns3 configure --enable-mtp
+    // 使用如下代码使能UNISON
+    // #ifdef NS3_MTP
+    //     MtpInterface::Enable(8);
+    // #endif
+    // #ifdef NS3_MTP
+    //     MtpInterface::Enable(mtpThreads);
+    // #endif
 
     // 开始计时
     auto start = std::chrono::high_resolution_clock::now();
@@ -175,8 +139,7 @@ int main(int argc, char* argv[])
 
     // 配置文件路径
     string configPath = "scratch/2nodes_single-tp";
-    if (argc > 1)
-    {
+    if (argc > 1) {
         configPath = string(argv[1]);
     }
 
