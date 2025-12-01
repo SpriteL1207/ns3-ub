@@ -96,12 +96,10 @@ int main(int argc, char* argv[])
 
     // UNISON示例：多线程加速需要使能mtp ./ns3 configure --enable-mtp
     // 使用如下代码使能UNISON
-    // #ifdef NS3_MTP
-    //     MtpInterface::Enable(8);
-    // #endif
-    // #ifdef NS3_MTP
-    //     MtpInterface::Enable(mtpThreads);
-    // #endif
+//     uint32_t mtpThreads = 8;
+// #ifdef NS3_MTP
+//     MtpInterface::Enable(mtpThreads);
+// #endif
 
     // 开始计时
     auto start = std::chrono::high_resolution_clock::now();
