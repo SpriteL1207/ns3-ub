@@ -111,6 +111,7 @@ UbTransportChannel::UbTransportChannel()
     } else {
         m_pktTraceEnabled = false;
     }
+    NS_LOG_DEBUG("m_pktTraceEnabled:" << m_pktTraceEnabled);
 }
 
 UbTransportChannel::~UbTransportChannel()
@@ -193,6 +194,7 @@ Ptr<Packet> UbTransportChannel::GetNextPacket()
         NS_LOG_DEBUG("[Transport channel] Send packet."
                   << " PacketUid: " << p->GetUid()
                   << " Tpn: " << m_tpn
+                  << " DstTpn: " << m_dstTpn
                   << " Psn: " << m_psnSndNxt
                   << " PacketType: Packet"
                   << " Src: " << m_src
@@ -356,6 +358,7 @@ void UbTransportChannel::RecvTpAck(Ptr<Packet> p)
             p->PeekPacketTag(flowTag);
             UbPacketTraceTag traceTag;
             p->PeekPacketTag(traceTag);
+            NS_LOG_DEBUG("record trace.");
             TpRecvNotify(p->GetUid(), m_psnSndUna - 1, m_dest, m_src, m_dstTpn, m_tpn,
                          PacketType::ACK, p->GetSize(), flowTag.GetFlowId(), traceTag);
         }

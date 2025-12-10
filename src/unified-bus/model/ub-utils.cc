@@ -3,6 +3,9 @@
 
 namespace utils {
 
+std::map<uint32_t, uint32_t> TpConnectionManager::m_nextTpn;
+std::mutex TpConnectionManager::m_lock;
+
 void UbUtils::PrintTimestamp(const std::string &message)
 {
     // 获取当前系统时间点
@@ -664,7 +667,8 @@ TpConnectionManager UbUtils::CreateTp(const string &filename)
     TpConnectionManager retTpConnectionManager;
     ifstream file(filename);
     if (!file.is_open()) {
-        NS_ASSERT_MSG(0, "Can not open File: " << filename);
+        PrintTimestamp("File transport_channel.csv not found."
+                       " Unable to preload TP channels. TP channels will be created on demand.");
         return retTpConnectionManager;
     }
 
@@ -865,6 +869,34 @@ void UbUtils::TopoTraceConnect()
                 NS_ASSERT_MSG(0, "port is null");
             }
         }
+    }
+}
+
+void UbUtils::SingleTpTraceConnect(uint32_t nodeId, uint32_t tpn)
+{
+    BooleanValue val;
+    g_task_enable.GetValue(val);
+    TaskEnable = val.Get();
+
+    BooleanValue recordPktTraceEnableVal;
+    g_record_pkt_trace_enable.GetValue(recordPktTraceEnableVal);
+    bool recordTraceEnabled = recordPktTraceEnableVal.Get();
+    if (!TaskEnable) {
+        return; // 若不开启trace则直接返回
+    }
+    Ptr<Node> node = NodeList::GetNode(nodeId);
+    Ptr<UbController> ubCtrl = node->GetObject<ns3::UbController>();
+    Ptr<UbTransportChannel> tp = ubCtrl->GetTpByTpn(tpn);
+    tp->TraceConnectWithoutContext("FirstPacketSendsNotify", MakeCallback(TpFirstPacketSendsNotify));
+    tp->TraceConnectWithoutContext("LastPacketSendsNotify", MakeCallback(TpLastPacketSendsNotify));
+    tp->TraceConnectWithoutContext("LastPacketACKsNotify", MakeCallback(TpLastPacketACKsNotify));
+    tp->TraceConnectWithoutContext(
+        "LastPacketReceivesNotify", MakeCallback(TpLastPacketReceivesNotify));
+    tp->TraceConnectWithoutContext("WqeSegmentSendsNotify", MakeCallback(TpWqeSegmentSendsNotify));
+    tp->TraceConnectWithoutContext(
+        "WqeSegmentCompletesNotify", MakeCallback(TpWqeSegmentCompletesNotify));
+    if (recordTraceEnabled) {
+        tp->TraceConnectWithoutContext("TpRecvNotify", MakeCallback(TpRecvNotify));
     }
 }
 

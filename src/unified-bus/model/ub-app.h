@@ -13,6 +13,7 @@
 #include "ns3/ub-ldst-api.h"
 #include "ub-tp-connection-manager.h"
 #include "ub-network-address.h"
+#include "ns3/random-variable-stream.h"
 
 using namespace utils;
 namespace ns3 {
@@ -30,8 +31,6 @@ public:
     void SendTrafficForTest(TrafficRecord record);
 
     void SetNode(Ptr<Node> node); // 设置当前节点
-
-    void GetTpnConn(TpConnectionManager tpConnection); // 获取tpnconnection
 
     void SetGetTpnRule(GetTpnRuleT type)
     {
@@ -68,6 +67,13 @@ private:
     void WqeTaskStartsNotify(uint32_t nodeId, uint32_t jettyNum, uint32_t taskId);
     void WqeTaskCompletesNotify(uint32_t nodeId, uint32_t jettyNum, uint32_t taskId);
 
+    void CreateTPs(uint32_t src, uint32_t dst, uint32_t priority, std::vector<uint32_t> &tpns);
+
+    // 创建TP
+    void CreateTP(uint32_t src, uint32_t dst, uint8_t sport,
+                  uint8_t dport, UbPriority priority, uint32_t srcTpn,
+                  uint32_t dstTpn, uint32_t metric, std::vector<uint32_t> &tpns);
+
     map<std::string, TaOpcode> TaOpcodeMap = {
         {"URMA_WRITE", TaOpcode::TA_OPCODE_WRITE},
         {"MEM_STORE", TaOpcode::TA_OPCODE_WRITE},
@@ -81,8 +87,9 @@ private:
     bool m_useShortestPath = true; // 是否根据跳数寻找最短路径
 
     Ptr<Node> m_node;              // 当前节点
-    TpConnectionManager m_tpnConn; // 当前节点维护的tpnConn
+
     uint32_t m_jettyNum = 0;       // 当前节点维护的jettynum,不会重复
+    Ptr<UniformRandomVariable> m_random;
 };
 
 } // namespace ns3

@@ -48,13 +48,13 @@ public:
 
     GlobalValue g_fault_enable =
     GlobalValue("UB_FAULT_ENABLE", "fault moudle enabled", BooleanValue(false), MakeBooleanChecker());
-    
+
     void PrintTimestamp(const std::string &message);
 
     void ParseTrace(bool isTest = false);
 
     void Destroy();
-    
+
     void CreateTraceDir();
 
     // 创建node
@@ -64,7 +64,7 @@ public:
 
     // 读取拓扑文件
     void CreateTopo(const string &filename);
-    
+
     // 读取路由
     void AddRoutingTable(const string &filename);
 
@@ -74,6 +74,9 @@ public:
     void SetComponentsAttribute(const string &filename);
 
     void TopoTraceConnect();
+
+    // 为单个TP和Trace回调函数链接
+    void SingleTpTraceConnect(uint32_t nodeId, uint32_t tpn);
 
     void ClientTraceConnect(int srcNode);
 
@@ -112,7 +115,7 @@ private:
     bool TaskEnable = false;
 
     bool isTest = false;
-    
+
     // 设置Trace全局变量
     GlobalValue g_task_enable = GlobalValue("UB_TRACE_ENABLE", "enable trace", BooleanValue(false), MakeBooleanChecker());
 
@@ -120,12 +123,12 @@ private:
 
     GlobalValue g_record_pkt_trace_enable = GlobalValue("UB_RECORD_PKT_TRACE", "enable record all packet trace", BooleanValue(false), MakeBooleanChecker());
 
-    GlobalValue g_python_script_path = 
+    GlobalValue g_python_script_path =
     GlobalValue("UB_PYTHON_SCRIPT_PATH",
                 "Path to parse_trace.py script (REQUIRED - must be set by user)",
                 StringValue("/path/to/ns-3-ub-tools/trace_analysis/parse_trace.py"),
                 MakeStringChecker());
-    
+
     static string Among(string s, string ts);
 
     void SetRecord(int fieldCount, string field, TrafficRecord &record);
@@ -136,7 +139,7 @@ private:
 
     static void TpFirstPacketSendsNotify(uint32_t nodeId, uint32_t taskId, uint32_t tpn, uint32_t dstTpn,
                                          uint32_t tpMsn, uint32_t psnSndNxt, uint32_t sPort);
-    
+
     static void TpLastPacketSendsNotify(uint32_t nodeId, uint32_t taskId, uint32_t tpn, uint32_t dstTpn,
                                         uint32_t tpMsn, uint32_t psnSndNxt, uint32_t sPort);
 
@@ -153,7 +156,7 @@ private:
     static void TpRecvNotify(uint32_t packetUid, uint32_t psn, uint32_t src, uint32_t dst, uint32_t srcTpn,
                              uint32_t dstTpn, PacketType type, uint32_t size, uint32_t taskId,
                              UbPacketTraceTag traceTag);
-    
+
     static void LdstRecvNotify(uint32_t packetUid, uint32_t src, uint32_t dst, PacketType type,
                                uint32_t size, uint32_t taskId, UbPacketTraceTag traceTag);
 
@@ -162,7 +165,7 @@ private:
     static void DagMemTaskStartsNotify(uint32_t nodeId, uint32_t taskId);
 
     static void DagMemTaskCompletesNotify(uint32_t nodeId, uint32_t taskId);
- 
+
     static void DagWqeTaskStartsNotify(uint32_t nodeId, uint32_t jettyNum, uint32_t taskId);
 
     static void DagWqeTaskCompletesNotify(uint32_t nodeId, uint32_t jettyNum, uint32_t taskId);

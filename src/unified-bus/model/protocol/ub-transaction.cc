@@ -5,6 +5,7 @@
 #include "ns3/ub-datatype.h"
 #include "ns3/ub-controller.h"
 #include "ns3/ub-transaction.h"
+#include "ns3/ub-utils.h"
 
 namespace ns3 {
 
@@ -87,21 +88,18 @@ bool UbTransaction::JettyBindTp(uint32_t src, uint32_t dest, uint32_t jettyNum,
                           m_tpRelatedJetties[tpns[i]].end(),
                           ubJetty) == m_tpRelatedJetties[tpns[i]].end()) {
                 m_tpRelatedJetties[tpns[i]].push_back(ubJetty);
+                NodeList::GetNode(m_nodeId)->GetObject<UbController>()->AddTpUserNum(tpns[i]);
             }
         }
     } else {
         NS_LOG_DEBUG("Single tp");
-        double res = m_random->GetValue();
-        int pos;
-        if (res < 1.0) {
-            pos = (int)(res * ubTransportGroup.size());
-        } else {
-            pos = ubTransportGroup.size() - 1;
-        }
+        // 根据随机结果选择TP
+        int pos = (int)(m_random->GetValue() * ubTransportGroup.size());
         if (std::find(m_tpRelatedJetties[tpns[pos]].begin(),
                       m_tpRelatedJetties[tpns[pos]].end(),
                       ubJetty) == m_tpRelatedJetties[tpns[pos]].end()) {
             m_tpRelatedJetties[tpns[pos]].push_back(ubJetty);
+            NodeList::GetNode(m_nodeId)->GetObject<UbController>()->AddTpUserNum(tpns[pos]);
         }
     }
 
@@ -414,7 +412,7 @@ void UbTransaction::DoDispose()
     for (auto &it : m_jettyOrderedWqe) {
         it.second.clear();
     }
-    m_jettyOrderedWqe.clear(); 
+    m_jettyOrderedWqe.clear();
     Object::DoDispose();
 }
 

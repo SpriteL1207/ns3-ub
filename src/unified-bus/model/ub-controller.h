@@ -11,7 +11,9 @@
 #include "ns3/ub-switch-allocator.h"
 #include "protocol/ub-function.h"
 #include "protocol/ub-datalink.h"
+#include "ns3/ub-tp-connection-manager.h"
 
+using namespace utils;
 namespace ns3 {
 
 class UbLdstApi;
@@ -138,6 +140,14 @@ public:
 
     std::map<uint32_t, Ptr<UbTransportChannel>> GetTpnMap() const;
 
+    void SetTpConnManager(TpConnectionManager conn) { m_tpnConn = conn; }
+    TpConnectionManager GetTpConnManager() { return m_tpnConn; }
+
+    uint32_t GetTpUserNum(uint32_t tpn);
+    uint32_t SetTpUserNum(uint32_t tpn, uint32_t num);
+    uint32_t AddTpUserNum(uint32_t tpn);
+    uint32_t DecreaseTpUserNum(uint32_t tpn);
+
 private:
     Ptr<UbFunction> m_function; // 功能层
     Ptr<UbTransaction> m_transaction; // 事务层
@@ -155,6 +165,9 @@ private:
     std::map<std::vector<std::pair<uint8_t, uint8_t>>, uint8_t> m_portPairsToIter{};
     std::vector<std::vector<std::vector<uint32_t>>> m_dstPriToTp{}; // level_0 dst_node, level_1 priority, level_2 tpns
     std::vector<std::vector<uint8_t>> m_dstPriToTpRrIndex{}; // level_0 dst_node, level_1 priority, level_2 iteration
+
+    TpConnectionManager m_tpnConn; // 当前节点维护的tpnConn
+    std::map<uint32_t, uint32_t> m_tpnUserNum;
 };
 
 } // namespace ns3

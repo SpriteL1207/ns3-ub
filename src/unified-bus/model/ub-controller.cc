@@ -88,6 +88,8 @@ bool UbController::CreateTp(uint32_t src, uint32_t dest, uint8_t sport,
     m_transportsCount++;
     currentNode->GetObject<UbSwitch>()->AddTpIntoAlgroithm(tp, sport, priority);  // 把tp添加到算法
 
+    SetTpUserNum(srcTpn, 0);
+
     NS_LOG_DEBUG("Created transport channel success");
     return true;
 }
@@ -269,4 +271,41 @@ Ptr<UbTransportChannel> UbController::GetTpByMap(uint32_t key)
     return nullptr;
 }
 
+uint32_t UbController::GetTpUserNum(uint32_t tpn)
+{
+    auto it = m_tpnUserNum.find(tpn);
+    if (it != m_tpnUserNum.end()) {
+        return it->second;
+    } else {
+        NS_ASSERT_MSG(0, "Cannot find Tpn from m_tpnUserNum! TP not created before.");
+    }
+}
+
+uint32_t UbController::SetTpUserNum(uint32_t tpn, uint32_t num)
+{
+    m_tpnUserNum[tpn] = num;
+    return num;
+}
+
+uint32_t UbController::AddTpUserNum(uint32_t tpn)
+{
+    auto it = m_tpnUserNum.find(tpn);
+    if (it != m_tpnUserNum.end()) {
+        it->second += 1;
+        return it->second;
+    } else {
+        NS_ASSERT_MSG(0, "Cannot Add Tp user num! TP not created before.");
+    }
+}
+
+uint32_t UbController::DecreaseTpUserNum(uint32_t tpn)
+{
+    auto it = m_tpnUserNum.find(tpn);
+    if (it != m_tpnUserNum.end()) {
+        it->second -= 1;
+        return it->second;
+    } else {
+        NS_ASSERT_MSG(0, "Cannot Decrease Tp user num! TP not created before.");
+    }
+}
 } // namespace ns3
