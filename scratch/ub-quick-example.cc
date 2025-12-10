@@ -81,8 +81,8 @@ void RunCase(const string& configPath)
             UbUtils::Get()->ClientTraceConnect(record.sourceNode);
         }
         UbTrafficGen::Get()->AddTask(record);
-        Ptr<ns3::UbApp> client = DynamicCast<ns3::UbApp>(node->GetApplication(0));
-        client->GetTpnConn(retConnectionManager.GetConnectionManagerByNode(record.sourceNode));
+        Ptr<UbController> ctrl = node->GetObject<ns3::UbController>();
+        ctrl->SetTpConnManager(retConnectionManager.GetConnectionManagerByNode(record.sourceNode));
     }
     UbTrafficGen::Get()->ScheduleNextTasks();
     CheckExampleProcess();

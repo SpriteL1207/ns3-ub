@@ -7,6 +7,8 @@
 #include <set>
 #include <map>
 #include "ub-network-address.h"
+#include <mutex>
+#include "ns3/log.h"
 
 namespace utils {
 /**
@@ -45,17 +47,35 @@ public:
     {
         // 存储连接
         m_allConnections.push_back(conn);
-        
+
         // 为两个节点都建立索引
         BuildIndexesForNode(conn.node1, conn);
         BuildIndexesForNode(conn.node2, conn);
     }
-    
+
+    static uint32_t GetNextTpn(uint32_t nodeId)
+    {
+        uint32_t res = 0;
+        auto it = m_nextTpn.find(nodeId);
+        if (it != m_nextTpn.end()) {
+            res = it->second;
+            m_lock.lock();
+            m_nextTpn[nodeId] += 1;
+            m_lock.unlock();
+        } else {
+            res = 0;
+            m_lock.lock();
+            m_nextTpn[nodeId] = 1;
+            m_lock.unlock();
+        }
+        return res;
+    }
+
     // 获取指定节点的连接管理器视图
     TpConnectionManager GetConnectionManagerByNode(uint32_t nodeId) const
     {
         TpConnectionManager nodeManager;
-        
+
         // 复制与该节点相关的连接
         auto it = m_nodeConnections.find(nodeId);
         if (it != m_nodeConnections.end()) {
@@ -65,7 +85,7 @@ public:
                 nodeManager.BuildIndexesForNode(nodeId, conn);
             }
         }
-        
+
         return nodeManager;
     }
 
@@ -122,7 +142,7 @@ public:
         }
         return {};
     }
-    
+
     // 2. 通过对端nodeId找到所有可用tpn
     std::vector<std::pair<uint32_t, uint32_t>> GetTpnsByPeerNode(uint32_t localNodeId, uint32_t peerNodeId) const
     {
@@ -141,7 +161,7 @@ public:
         }
         return tpns;
     }
-    
+
     // 3. 通过对端nodeId+priority找到所有可用tpn
     std::vector<std::pair<uint32_t, uint32_t>> GetTpnsByPeerNodePriority(uint32_t localNodeId,
                                                     uint32_t peerNodeId,
@@ -162,7 +182,7 @@ public:
         }
         return tpns;
     }
-    
+
     // 4. 通过对端nodeId+本端port找到所有可用tpn
     std::vector<std::pair<uint32_t, uint32_t>> GetTpnsByPeerNodeLocalPort(uint32_t localNodeId,
                                                      uint32_t peerNodeId,
@@ -183,7 +203,7 @@ public:
         }
         return tpns;
     }
-    
+
     // 5. 通过对端nodeId+本端port+对端port找到所有可用tpn
     std::vector<std::pair<uint32_t, uint32_t>> GetTpnsByPeerNodeBothPorts(uint32_t localNodeId,
                                                      uint32_t peerNodeId,
@@ -205,7 +225,7 @@ public:
         }
         return tpns;
     }
-    
+
     // 组合查询：通过完整条件找到所有可用tpn
     std::vector<std::pair<uint32_t, uint32_t>> GetTpnsByFullCriteria(uint32_t localNodeId,
                                                uint32_t peerNodeId,
@@ -214,7 +234,7 @@ public:
                                                uint32_t priority) const
     {
         std::vector<std::pair<uint32_t, uint32_t>> tpns;
-        
+
         // 遍历本节点的所有连接，找到匹配条件的
         auto it = m_nodeConnections.find(localNodeId);
         if (it != m_nodeConnections.end()) {
@@ -222,7 +242,7 @@ public:
                 // 检查是否匹配条件
                 bool isMatch = false;
                 uint32_t localTpn = 0;
-                
+
                 if (conn.node1 == localNodeId && conn.node2 == peerNodeId) {
                     // localNodeId是node1
                     if (conn.port1 == localPort && conn.port2 == peerPort &&
@@ -238,7 +258,7 @@ public:
                         localTpn = conn.tpn2;
                     }
                 }
-                
+
                 if (isMatch) {
                     tpns.push_back(std::make_pair(localTpn, conn.metrics));
                 }
@@ -246,7 +266,7 @@ public:
         }
         return tpns;
     }
-    
+
     // 获取某个节点的所有TPN
     std::vector<uint32_t> GetAllTpnsForNode(uint32_t nodeId) const
     {
@@ -263,7 +283,7 @@ public:
         }
         return tpns;
     }
-    
+
     // 获取节点的邻居节点
     std::set<uint32_t> GetNeighborNodes(uint32_t nodeId) const
     {
@@ -280,25 +300,25 @@ public:
         }
         return neighbors;
     }
-    
+
     // 获取所有连接
     const std::vector<Connection>& GetAllConnections() const
     {
         return m_allConnections;
     }
-    
+
     // 获取连接总数
     size_t GetConnectionCount() const
     {
         return m_allConnections.size();
     }
-    
+
     // 清空指定节点的连接
     void ClearNodeConnections(uint32_t nodeId)
     {
         m_nodeConnections.erase(nodeId);
         ClearNodeFromIndexes(nodeId);
-        
+
         // 从allConnections_中移除相关连接
         m_allConnections.erase(
             std::remove_if(m_allConnections.begin(), m_allConnections.end(),
@@ -308,7 +328,7 @@ public:
             m_allConnections.end()
         );
     }
-    
+
     // 清空所有连接
     void Clear()
     {
@@ -326,11 +346,11 @@ private:
     {
         // 添加到节点连接列表
         m_nodeConnections[localNodeId].push_back(conn);
-        
+
         uint32_t peerNodeId;
         uint32_t localPort;
         uint32_t peerPort;
-        
+
         // 确定对端节点和端口
         if (conn.node1 == localNodeId) {
             peerNodeId = conn.node2;
@@ -341,21 +361,21 @@ private:
             localPort = conn.port2;
             peerPort = conn.port1;
         }
-        
+
         // 建立各种索引
         // 索引2: 对端节点
         m_peerNodeIndex[{localNodeId, peerNodeId}].push_back(conn);
-        
+
         // 索引3: 对端节点+优先级
         m_peerNodePriorityIndex[{localNodeId, peerNodeId, static_cast<uint32_t>(conn.priority)}].push_back(conn);
-        
+
         // 索引4: 对端节点+本端端口
         m_peerNodeLocalPortIndex[{localNodeId, peerNodeId, localPort}].push_back(conn);
-        
+
         // 索引5: 对端节点+本端端口+对端端口
         m_bothPortsIndex[{localNodeId, peerNodeId, localPort, peerPort}].push_back(conn);
     }
-    
+
     // 从索引中清理指定节点
     void ClearNodeFromIndexes(uint32_t nodeId)
     {
@@ -367,7 +387,7 @@ private:
                 ++it;
             }
         }
-        
+
         for (auto it = m_peerNodePriorityIndex.begin(); it != m_peerNodePriorityIndex.end();) {
             if (std::get<0>(it->first) == nodeId) {
                 it = m_peerNodePriorityIndex.erase(it);
@@ -375,7 +395,7 @@ private:
                 ++it;
             }
         }
-        
+
         for (auto it = m_peerNodeLocalPortIndex.begin(); it != m_peerNodeLocalPortIndex.end();) {
             if (std::get<0>(it->first) == nodeId) {
                 it = m_peerNodeLocalPortIndex.erase(it);
@@ -383,7 +403,7 @@ private:
                 ++it;
             }
         }
-        
+
         for (auto it = m_bothPortsIndex.begin(); it != m_bothPortsIndex.end();) {
             if (std::get<0>(it->first) == nodeId) {
                 it = m_bothPortsIndex.erase(it);
@@ -396,21 +416,26 @@ private:
 private:
     // 主存储：所有连接
     std::vector<Connection> m_allConnections;
-    
+
     // 每个节点的相关连接
     std::unordered_map<uint32_t, std::vector<Connection>> m_nodeConnections;
-    
+
     // 索引2: (localNodeId, peerNodeId) -> connections
     std::map<std::pair<uint32_t, uint32_t>, std::vector<Connection>> m_peerNodeIndex;
-    
+
     // 索引3: (localNodeId, peerNodeId, priority) -> connections
     std::map<std::tuple<uint32_t, uint32_t, uint32_t>, std::vector<Connection>> m_peerNodePriorityIndex;
-    
+
     // 索引4: (localNodeId, peerNodeId, localPort) -> connections
     std::map<std::tuple<uint32_t, uint32_t, uint32_t>, std::vector<Connection>> m_peerNodeLocalPortIndex;
-    
+
     // 索引5: (localNodeId, peerNodeId, localPort, peerPort) -> connections
     std::map<std::tuple<uint32_t, uint32_t, uint32_t, uint32_t>, std::vector<Connection>> m_bothPortsIndex;
+
+    // 全局存储所有节点下一个新建的tpn编号
+    static std::map<uint32_t, uint32_t> m_nextTpn;
+
+    static std::mutex m_lock;
 };
 
 } // namespace utils

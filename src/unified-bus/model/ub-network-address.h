@@ -45,11 +45,17 @@ inline uint32_t IpToNodeId(Ipv4Address ipAddress)
     return high_byte * BYTE_RANGE + low_byte;
 }
 
+inline uint32_t IpToPortId(Ipv4Address ipAddress)
+{
+    uint32_t ip = ipAddress.Get();
+    return ((ip & 0x000000FF) - 1);
+}
+
 inline Ipv4Address NodeIdToIp(uint32_t id, uint32_t portId)
 {
     // 确保portId在0-255范围内（1字节）
     portId = (portId + 1) % BYTE_RANGE;
-    
+
     return Ipv4Address(0x0a000000 +          // 基础网络10.0.0.0
                      ((id / BYTE_RANGE) * 0x00010000) +  // 第三字节偏移
                      ((id % BYTE_RANGE) * 0x00000100) +  // 原第四字节偏移（将被覆盖）
@@ -67,10 +73,10 @@ inline uint32_t NodeIdToCna16(uint32_t nodeId, uint32_t portId)
     portId = portId + 1;
     // 确保portId不超过4位（0-15）
     portId &= 0xF; // 只保留低4位
-    
+
     // 确保nodeId不超过12位（0-4095）
     nodeId &= 0xFFF; // 只保留低12位
-    
+
     // 将nodeId左移4位，空出低4位给portId
     return (nodeId << 4) | portId;
 }
@@ -79,7 +85,7 @@ inline uint32_t NodeIdToCna16(uint32_t nodeId)
 {
     // 确保nodeId不超过12位（0-4095）
     nodeId &= 0xFFF; // 只保留低12位
-    
+
     // 将nodeId左移4位，低4位补0
     return nodeId << 4;
 }
@@ -114,10 +120,10 @@ inline uint32_t NodeIdToCna24(uint32_t nodeId, uint32_t portId)
     portId = portId + 1;
     // 确保portId不超过8位
     portId &= 0xFF; // 只保留低8位
-    
+
     // 确保nodeId不超过16位
     nodeId &= 0xFFFF; // 只保留低16位
-    
+
     // 将nodeId左移8位，空出低8位给portId
     return (nodeId << 8) | portId;
 }
@@ -126,7 +132,7 @@ inline uint32_t NodeIdToCna24(uint32_t nodeId)
 {
     // 确保nodeId不超过16位
     nodeId &= 0xFFFF; // 只保留低16位
-    
+
     // 将nodeId左移8位，低8位补0
     return nodeId << 8;
 }
