@@ -22,7 +22,7 @@ TypeId UbLdstApi::GetTypeId(void)
                                           MakeBooleanAccessor(&UbLdstApi::m_usePacketSpray),
                                           MakeBooleanChecker())
                             .AddAttribute("UseShortestPaths",
-                                          "Restrict routing to shortest paths only.",
+                                          "Sets a packet header flag that instructs switches to restrict forwarding to shortest paths (true) or allow non-shortest paths (false).",
                                           BooleanValue(true),
                                           MakeBooleanAccessor(&UbLdstApi::m_useShortestPaths),
                                           MakeBooleanChecker())

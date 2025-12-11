@@ -64,7 +64,7 @@ TypeId UbTransportChannel::GetTypeId(void)
                       MakeBooleanAccessor(&UbTransportChannel::m_usePacketSpray),
                       MakeBooleanChecker())
         .AddAttribute("UseShortestPaths",
-                      "Restrict routing to shortest paths only.",
+                      "Sets a packet header flag that instructs switches to restrict forwarding to shortest paths (true) or allow non-shortest paths (false).",
                       BooleanValue(true),
                       MakeBooleanAccessor(&UbTransportChannel::m_useShortestPaths),
                       MakeBooleanChecker())

@@ -103,7 +103,7 @@ int main(int argc, char* argv[])
 
     // 开始计时
     auto start = std::chrono::high_resolution_clock::now();
-    Time::SetResolution(Time::NS);
+    Time::SetResolution(Time::PS);
 
     // 日志中添加时间前缀
     //ns3::LogComponentEnableAll(LOG_PREFIX_TIME);

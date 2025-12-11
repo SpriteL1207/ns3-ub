@@ -24,9 +24,14 @@ TypeId UbApp::GetTypeId(void)
             .SetGroupName("UnifiedBus")
             .AddConstructor<UbApp>()
             .AddAttribute("EnableMultiPath",
-                          "Enable Multi Path",
+                          "Enable Multipath feature",
                           BooleanValue(false),
                           MakeBooleanAccessor(&UbApp::m_multiPathEnable),
+                          MakeBooleanChecker())
+            .AddAttribute("UseShortestPaths",
+                          "If true, only create TPs on source ports that belong to shortest paths.",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&UbApp::m_useShortestPaths),
                           MakeBooleanChecker())
             .AddTraceSource("MemTaskStartsNotify",
                             "MEM Task Starts, taskId",
@@ -106,7 +111,7 @@ void UbApp::SendTraffic(TrafficRecord record)
         }
         ubFunc->CreateJetty(record.sourceNode, record.destNode, m_jettyNum);
         vector<uint32_t> tpns = GetNode()->GetObject<UbController>()->GetTpConnManager().GetTpns(
-            m_getTpnRule, m_useShortestPath, record.sourceNode,
+            m_getTpnRule, m_useShortestPaths, record.sourceNode,
             record.destNode, UINT32_MAX, UINT32_MAX, record.priority);
         // tpns为空表示无TP文件，亦或者TP文件中没有相关的TP。无论哪种，实时新建TP
         if (tpns.empty()) {
@@ -196,7 +201,7 @@ void UbApp::CreateTPs(uint32_t src, uint32_t dst, uint32_t priority, std::vector
             }
         }
         // 仅在开启非最短路模式的情况下加入非最短路由
-        if (!otherOutPortsVec.empty() && !m_useShortestPath) {
+        if (!otherOutPortsVec.empty() && !m_useShortestPaths) {
             routingEntries[dstPortIp] = std::vector<std::pair<uint16_t, uint32_t>>();
             for (uint16_t outPort : otherOutPortsVec) {
                 routingEntries[dstPortIp].push_back(std::make_pair(outPort, 1));
