@@ -133,6 +133,15 @@ Examples:
 2..3,SWITCH,4,1ns
 ```
 
+Notes on `forwardDelay`:
+- **Meaning**: the optional fourth column `forwardDelay` sets the **arbitration latency** (scheduling delay) for the node's internal switch allocator.
+- **Code mapping**: when present, `UbUtils::CreateNode()` applies this value by calling `allocator->SetAttribute("AllocationTime", StringValue(forwardDelay));`.
+- **Mechanism**: In `UbRoundRobinAllocator::TriggerAllocator`, this time is used to schedule the `AllocateNextPacket` event (`Simulator::Schedule(m_allocationTime, ...)`). This simulates the hardware processing time required for the arbiter to select which ingress queue's packet gets to transmit to an egress port.
+- **Scope**: Applies to both `SWITCH` nodes and `DEVICE` nodes.
+- **Format**: use ns-3 Time literals (e.g. `10ns`, `1us`, `1ms`).
+- **Example**: `0,SWITCH,4,10ns` sets the switch allocator `AllocationTime` to `10ns` for node `0`.
+- **Inspecting at runtime**: run your case with `--PrintAttributes=ns3::UbSwitchAllocator` to see the attribute and its current/default value.
+
 ---
 
 ## `topology.csv`
