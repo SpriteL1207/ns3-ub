@@ -81,6 +81,19 @@ conda install pandas matplotlib seaborn
 ./ns3 build
 ```
 
+### （可选）启用 Unison 多线程并行仿真
+
+如需启用 Unison for ns-3 的多线程并行仿真（MTP），请在配置阶段加入 `--enable-mtp`（可同时启用示例）：
+
+```bash
+./ns3 configure --enable-mtp --enable-examples
+./ns3 build
+```
+
+说明：启用并行仿真通常还需要在仿真程序中调用 `MtpInterface::Enable(...)`（并用 `#ifdef NS3_MTP` 保护）；更多用法与注意事项请参阅 [UNISON_README.md](UNISON_README.md)。
+
+提示：主程序示例 [scratch/ub-quick-example.cc](scratch/ub-quick-example.cc) 已包含 Unison/MTP 的示例代码片段（默认注释掉），如需使用可按需取消注释并设置线程数。
+
 ## 运行简单示例
 
 ```bash

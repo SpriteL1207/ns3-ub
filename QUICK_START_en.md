@@ -81,6 +81,19 @@ Note: Please install the required third-party packages via `requirements.txt` be
 ./ns3 build
 ```
 
+### (Optional) Enable Unison multi-threaded simulation
+
+To enable Unison for ns-3 multi-threaded parallel simulation (MTP), add `--enable-mtp` during configuration (you may also enable examples):
+
+```bash
+./ns3 configure --enable-mtp --enable-examples
+./ns3 build
+```
+
+Note: Enabling parallel simulation usually also requires calling `MtpInterface::Enable(...)` in your simulation program (guarded by `#ifdef NS3_MTP`). See [UNISON_README.md](UNISON_README.md) for details.
+
+Tip: The main example program [scratch/ub-quick-example.cc](scratch/ub-quick-example.cc) already includes a Unison/MTP snippet (commented out by default). You can uncomment it and set the thread count as needed.
+
 ## Run a Minimal Example
 
 ```bash
