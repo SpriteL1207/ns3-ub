@@ -4,6 +4,8 @@
 
 #include "ns3/object.h"
 #include "ns3/packet.h"
+#include "ns3/simulator.h"
+#include "ns3/nstime.h"
 #include "ub-network-address.h"
 
 namespace ns3 {
@@ -56,14 +58,27 @@ public:
     Ptr<Packet> GetNextPacket() override;
     std::queue<Ptr<Packet>>& Get() {return m_queue;}
     Ptr<Packet> Front() {return m_queue.front();}
-    void Pop() {m_queue.pop();}
-    void Push(Ptr<Packet> p) {m_queue.push(p);}
+    void Pop() {
+        m_queue.pop();
+        if (!m_queue.empty()) {
+            m_headArrivalTime = Simulator::Now();
+        }
+    }
+    void Push(Ptr<Packet> p) {
+        if (m_queue.empty()) {
+            m_headArrivalTime = Simulator::Now();
+        }
+        m_queue.push(p);
+    }
     IngressQueueType GetIqType() override;
     uint32_t GetNextPacketSize() override;
+    Time GetHeadArrivalTime() { return m_headArrivalTime; }
 
 private:
     std::queue<Ptr<Packet>> m_queue;
     IngressQueueType m_iqType = IngressQueueType::VOQ;
+    
+    Time m_headArrivalTime = Seconds(0);
 };
 
 /**

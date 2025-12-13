@@ -62,6 +62,8 @@ void UbSwitch::Init()
     m_routingProcess = CreateObject<UbRoutingProcess>();
     m_routingProcess->SetNodeId(node->GetId());
     m_Ipv4Addr = utils::NodeIdToIp(node->GetId());
+
+    Simulator::Schedule(MilliSeconds(10), &UbSwitch::CheckDeadlock, this);
 }
 
 void UbSwitch::DoDispose()
@@ -521,6 +523,28 @@ Ptr<UbCongestionControl> UbSwitch::GetCongestionCtrl()
 void UbSwitch::LastPacketTraversesNotify(uint32_t nodeId, UbTransportHeader ubTpHeader)
 {
     m_traceLastPacketTraversesNotify(nodeId, ubTpHeader);
+}
+
+void UbSwitch::CheckDeadlock()
+{
+    Time now = Simulator::Now();
+    Time threshold = MilliSeconds(10); // 10ms threshold
+
+    for (uint32_t outPort = 0; outPort < m_voq.size(); ++outPort) {
+        for (uint32_t pri = 0; pri < m_voq[outPort].size(); ++pri) {
+            for (uint32_t inPort = 0; inPort < m_voq[outPort][pri].size(); ++inPort) {
+                Ptr<UbPacketQueue> queue = m_voq[outPort][pri][inPort];
+                if (queue && !queue->IsEmpty()) {
+                    if (now - queue->GetHeadArrivalTime() > threshold) {
+                        NS_LOG_WARN("Potential Deadlock in Switch " << GetObject<Node>()->GetId() 
+                            << " VOQ[Out:" << outPort << "][Pri:" << pri << "][In:" << inPort << "]"
+                            << " Head packet stuck for " << (now - queue->GetHeadArrivalTime()).GetMilliSeconds() << " ms");
+                    }
+                }
+            }
+        }
+    }
+    Simulator::Schedule(MilliSeconds(1), &UbSwitch::CheckDeadlock, this);
 }
 
 }  // namespace ns3

@@ -80,7 +80,7 @@ public:
 
     void ClientTraceConnect(int srcNode);
 
-    bool QueryAttributeInfor(int argc, char *argv[]);
+    bool QueryAttributeInfo(int argc, char *argv[]);
 
     void InitFaultMoudle(const string &FaultConfigFile);
 

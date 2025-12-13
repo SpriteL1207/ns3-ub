@@ -72,6 +72,8 @@ public:
     void SwitchSendFinish(uint32_t portId, uint32_t pri, Ptr<Packet> packet);
     Ptr<UbQueueManager> GetQueueManager();    // Queue Manage Unit
 
+    void CheckDeadlock();
+
 private:
 
     TracedCallback<uint32_t, UbTransportHeader> m_traceLastPacketTraversesNotify;

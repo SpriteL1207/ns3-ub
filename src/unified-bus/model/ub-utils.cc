@@ -912,7 +912,7 @@ void UbUtils::ClientTraceConnect(int srcNode)
     client->TraceConnectWithoutContext("WqeTaskCompletesNotify", MakeCallback(DagWqeTaskCompletesNotify));
 }
 
-bool UbUtils::QueryAttributeInfor(int argc, char *argv[])
+bool UbUtils::QueryAttributeInfo(int argc, char *argv[])
 {
     std::string className;
     std::string attrName;
