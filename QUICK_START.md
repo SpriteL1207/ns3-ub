@@ -88,6 +88,9 @@ conda install pandas matplotlib seaborn
 ```bash
 ./ns3 configure --enable-mtp --enable-examples
 ./ns3 build
+
+# 运行时可通过 --mtp-threads 参数启用多线程（需 >= 2）
+./ns3 run 'scratch/ub-quick-example scratch/2nodes_single-tp' -- --mtp-threads=8
 ```
 
 说明：启用并行仿真通常还需要在仿真程序中调用 `MtpInterface::Enable(...)`（并用 `#ifdef NS3_MTP` 保护）；更多用法与注意事项请参阅 [UNISON_README.md](UNISON_README.md)。
@@ -135,6 +138,8 @@ ls scratch/2nodes_single-tp/output/
 - 2D FullMesh 4x4（多路径 All-to-All）：
   ```bash
   ./ns3 run 'scratch/ub-quick-example scratch/2dfm4x4-multipath_a2a'
+  # 启用多线程加速（需 --enable-mtp 编译）
+  ./ns3 run 'scratch/ub-quick-example scratch/2dfm4x4-multipath_a2a' -- --mtp-threads=8
   ```
 
 - 2D FullMesh 4x4（分层广播）：
@@ -145,9 +150,11 @@ ls scratch/2nodes_single-tp/output/
 - Clos（32 hosts / 4 leafs / 8 spines, pod2pod）：
   ```bash
   ./ns3 run 'scratch/ub-quick-example scratch/clos_32hosts-4leafs-8spines_pod2pod'
+  # 大型拓扑建议使用多线程
+  ./ns3 run 'scratch/ub-quick-example scratch/clos_32hosts-4leafs-8spines_pod2pod' -- --mtp-threads=16
   ```
 
-说明：部分大型用例运行时间较长，请按需选择运行。
+说明：部分大型用例运行时间较长，可使用 `-- --mtp-threads=8` 启用多线程加速（需 `--enable-mtp` 编译）。
 
 ## 完整工作流程示例
 

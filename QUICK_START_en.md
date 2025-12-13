@@ -88,6 +88,9 @@ To enable Unison for ns-3 multi-threaded parallel simulation (MTP), add `--enabl
 ```bash
 ./ns3 configure --enable-mtp --enable-examples
 ./ns3 build
+
+# Use --mtp-threads to enable multi-threading at runtime (must be >= 2)
+./ns3 run 'scratch/ub-quick-example scratch/2nodes_single-tp' -- --mtp-threads=8
 ```
 
 Note: Enabling parallel simulation usually also requires calling `MtpInterface::Enable(...)` in your simulation program (guarded by `#ifdef NS3_MTP`). See [UNISON_README.md](UNISON_README.md) for details.
@@ -135,6 +138,8 @@ The following are the available use case directories and corresponding run comma
 - 2D FullMesh 4x4 (multipath All-to-All):
   ```bash
   ./ns3 run 'scratch/ub-quick-example scratch/2dfm4x4-multipath_a2a'
+  # Enable multi-threading acceleration (requires --enable-mtp compilation)
+  ./ns3 run 'scratch/ub-quick-example scratch/2dfm4x4-multipath_a2a' -- --mtp-threads=8
   ```
 
 - 2D FullMesh 4x4 (hierarchical broadcast):
@@ -145,9 +150,11 @@ The following are the available use case directories and corresponding run comma
 - Clos (32 hosts / 4 leafs / 8 spines, pod2pod):
   ```bash
   ./ns3 run 'scratch/ub-quick-example scratch/clos_32hosts-4leafs-8spines_pod2pod'
+  # Multi-threading recommended for large topologies
+  ./ns3 run 'scratch/ub-quick-example scratch/clos_32hosts-4leafs-8spines_pod2pod' -- --mtp-threads=16
   ```
 
-Note: Some large-scale use cases take a long time to run, please select and run as needed.
+Note: Some large-scale use cases take a long time to run. Please use `-- --mtp-threads=8` to enable multi-threading (requires `--enable-mtp` compilation).
 
 ## Full Workflow Example (Complete Workflow Verification)
 
