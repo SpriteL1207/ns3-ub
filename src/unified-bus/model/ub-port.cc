@@ -213,8 +213,7 @@ void UbPort::CreateAndInitFc(const std::string& type)
     if (type == "CBFC") {
         m_flowControl = CreateObject<UbCbfc>();
         if (m_flowControl == nullptr) {
-            NS_LOG_DEBUG("[UbPort CreateAndInitFc] create UbFlowControl fail");
-            NS_LOG_WARN(this);
+            NS_FATAL_ERROR("Failed to create UbCbfc object for port " << m_portId);
         }
         auto flowControl = DynamicCast<UbCbfc>(m_flowControl);
         flowControl->Init(m_cbfcFlitLen, m_cbfcFlitsPerCell, m_cbfcRetCellGrainDataPacket,
@@ -223,8 +222,7 @@ void UbPort::CreateAndInitFc(const std::string& type)
     } else if (type == "PFC") {
         m_flowControl = CreateObject<UbPfc>();
         if (m_flowControl == nullptr) {
-            NS_LOG_DEBUG("[UbPort CreateAndInitFc] create UbFlowControl fail");
-            NS_LOG_WARN(this);
+            NS_FATAL_ERROR("Failed to create UbPfc object for port " << m_portId);
         }
         auto flowControl = DynamicCast<UbPfc>(m_flowControl);
         flowControl->Init(m_pfcUpThld, m_pfcLowThld, GetNode()->GetId(), m_portId);
@@ -236,8 +234,7 @@ void UbPort::CreateAndInitFc(const std::string& type)
     } else {
         m_flowControl = CreateObject<UbFlowControl>();
         if (m_flowControl == nullptr) {
-            NS_LOG_DEBUG("[UbPort CreateAndInitFc] create UbFlowControl fail");
-            NS_LOG_WARN(this);
+            NS_FATAL_ERROR("Failed to create UbFlowControl object for port " << m_portId);
         }
     }
 }
@@ -318,7 +315,7 @@ void UbPort::TransmitPacket(Ptr<Packet> packet, Time delay)
     Simulator::Schedule(txCompleteTime, &UbPort::TransmitComplete, this);
     bool result = m_channel->TransmitStart(packet, this, txTime);
     if (result == false) {
-        NS_LOG_DEBUG("[DequeueAndTransmit]: send fail");
+        NS_LOG_WARN("Channel transmission failed! Packet dropped at Node " << GetNode()->GetId() << " Port " << m_portId);
     }
     // 记录本端口发送的数据量
     NS_LOG_DEBUG("[UbFc DequeueAndTransmit] will send pkt size: " << packet->GetSize());
