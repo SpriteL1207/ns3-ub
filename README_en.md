@@ -235,3 +235,4 @@ This project follows the ns-3 license agreement, GPL v2. See the `LICENSE` file 
   year = {2025}
 }
 ```
+[![Visitors](https://api.visitorbadge.io/api/visitors?path=https%3A%2F%2Fgitcode.com%2Fopen-usim%2Fns-3-ub&countColor=%23263759)](https://visitorbadge.io/status?path=https%3A%2F%2Fgitcode.com%2Fopen-usim%2Fns-3-ub)
