@@ -449,12 +449,22 @@ void UbSwitchCaqm::ResetLocalCc()
         auto sw = node->GetObject<UbSwitch>();
         uint32_t ndevice = node->GetNDevices();
         for (uint32_t portId = 0; portId < ndevice; portId++) {
+            // 使用OutPort视图统计VOQ占用
+            uint64_t voqUsed = sw->GetQueueManager()->GetTotalOutPortBufferUsed(portId);
+            
+            // 加上EgressQueue的字节占用
+            Ptr<UbPort> port = DynamicCast<UbPort>(node->GetDevice(portId));
+            uint64_t egressUsed = port->GetUbQueue()->GetCurrentBytes();
+            
+            // 总队列占用 = VOQ + EgressQueue
+            uint64_t totalQueueSize = voqUsed + egressUsed;
+            
             uint64_t cc = uint64_t(m_lambda *
                                 (m_ccUpdatePeriod.GetSeconds()
                                 * m_bps[portId].GetBitRate() / 8
                                 - m_txSize[portId]
                                 + m_idealQueueSize
-                                - sw->GetQueueManager()->GetAllEgressUsed(portId)
+                                - totalQueueSize
                                 - m_creditAllocated[portId]));
             m_cc[portId] = cc;
             m_txSize[portId] = 0;
@@ -486,14 +496,24 @@ void UbSwitchCaqm::SwitchForwardPacket(uint32_t inPort, uint32_t outPort, Ptr<Pa
             return;
         }
         m_txSize[outPort] += p->GetSize();
-        auto sw = NodeList::GetNode(m_nodeId)->GetObject<UbSwitch>();
+        auto node = NodeList::GetNode(m_nodeId);
+        auto sw = node->GetObject<UbSwitch>();
+        
+        // 计算总队列占用 = VOQ + EgressQueue
+        uint64_t voqUsed = sw->GetQueueManager()->GetTotalOutPortBufferUsed(outPort);
+        Ptr<UbPort> port = DynamicCast<UbPort>(node->GetDevice(outPort));
+        uint64_t egressUsed = port->GetUbQueue()->GetCurrentBytes();
+        uint64_t totalQueueSize = voqUsed + egressUsed;
+        
         NS_LOG_DEBUG("[" << GetTypeId().GetName() << "]"
                   << "[Debug]"
                   << "[" << __FUNCTION__ << "]"
                   << " Node:" << m_nodeId
                   << " Inport:" << inPort
                   << " OutPort:" << outPort
-                  << " Egress queue size:" << sw->GetQueueManager()->GetAllEgressUsed(outPort)
+                  << " VOQ:" << voqUsed
+                  << " Egress:" << egressUsed
+                  << " Total queue:" << totalQueueSize
                   << " Txsize:" << m_txSize[outPort]);
         UbDatalinkPacketHeader dlPktHeader;
         UbNetworkHeader netHeader;

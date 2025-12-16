@@ -54,27 +54,27 @@ void UbCbfc::DoDispose()
 bool UbCbfc::IsFcLimited(Ptr<UbIngressQueue> ingressQ)
 {
     uint32_t nextPktSize = 0;
-    if (ingressQ->GetIqType() == IngressQueueType::VOQ) {
-        if (ingressQ->GetInPortId() == ingressQ->GetOutPortId()) {  // crd报文等控制报文，直接发出
+    if (ingressQ->GetIngressQueueType() == IngressQueueType::VOQ) {
+        if (ingressQ->GetInPortId() == ingressQ->GetOutPortId()) {  // Control packets (e.g., CRD) sent directly
             NS_LOG_DEBUG("is crd pkt");
             return false;
         }
         nextPktSize = ingressQ->GetNextPacketSize();
         NS_LOG_DEBUG("is forward pkt nextPktSize: " << nextPktSize);
-    } else if (ingressQ->GetIqType() == IngressQueueType::TPCHANNEL) {
+    } else if (ingressQ->GetIngressQueueType() == IngressQueueType::TP) {
         nextPktSize = ingressQ->GetNextPacketSize();
         NS_LOG_DEBUG("is tp pkt nextPktSize:" << nextPktSize);
     }
 
     int32_t consumeCellNum = ceil((float)nextPktSize / (m_cbfcCfg->m_flitLen * m_cbfcCfg->m_nFlitPerCell));
-    if (m_crdTxfree[ingressQ->GetIgqPriority()] < consumeCellNum) {
+    if (m_crdTxfree[ingressQ->GetIngressPriority()] < consumeCellNum) {
         NS_LOG_INFO("Flow Control Credit Limited,outPort:{" << ingressQ->GetOutPortId() << "} VL:{"
-                                                            << ingressQ->GetIgqPriority() << "}");
-        NS_LOG_DEBUG("m_crdTxfree[ " << ingressQ->GetIgqPriority() << " ]: " << m_crdTxfree[ingressQ->GetIgqPriority()]
+                                                            << ingressQ->GetIngressPriority() << "}");
+        NS_LOG_DEBUG("m_crdTxfree[ " << ingressQ->GetIngressPriority() << " ]: " << m_crdTxfree[ingressQ->GetIngressPriority()]
                                      << "is insufficient");
         return true;
     }
-    NS_LOG_DEBUG("m_crdTxfree[ " << ingressQ->GetIgqPriority() << " ]: " << m_crdTxfree[ingressQ->GetIgqPriority()]
+    NS_LOG_DEBUG("m_crdTxfree[ " << ingressQ->GetIngressPriority() << " ]: " << m_crdTxfree[ingressQ->GetIngressPriority()]
                                  << "is enough");
 
     return false;
@@ -92,13 +92,13 @@ void UbCbfc::HandleReleaseOccupiedFlowControl(Ptr<Packet> p, uint32_t inPortId, 
 
 void UbCbfc::HandleSentPacket(Ptr<Packet> p, Ptr<UbIngressQueue> ingressQ)
 {
-    if ((ingressQ->GetIqType() == IngressQueueType::VOQ) &&
-        (ingressQ->GetInPortId() != ingressQ->GetOutPortId())) { // 转发的报文
+    if ((ingressQ->GetIngressQueueType() == IngressQueueType::VOQ) &&
+        (ingressQ->GetInPortId() != ingressQ->GetOutPortId())) { // Forwarding data packets
         CbfcConsumeCrd(p); // 计算消耗的信用证
-    } else if ((ingressQ->GetIqType() == IngressQueueType::VOQ)
-                && (ingressQ->GetInPortId() == ingressQ->GetOutPortId())) { // crd报文等控制报文
+    } else if ((ingressQ->GetIngressQueueType() == IngressQueueType::VOQ)
+                && (ingressQ->GetInPortId() == ingressQ->GetOutPortId())) { // Control packets (e.g., CRD)
         NS_LOG_DEBUG("is crd pkt");
-    } else if (ingressQ->GetIqType() == IngressQueueType::TPCHANNEL) { // tp报文
+    } else if (ingressQ->GetIngressQueueType() == IngressQueueType::TP) { // Transport Channel (TP) packets
         NS_LOG_DEBUG("is pkt from Transport");
         CbfcConsumeCrd(p); // 计算消耗的信用证
     }
@@ -207,12 +207,9 @@ bool UbCbfc::CbfcRestoreCrd(Ptr<Packet> p)
 void UbCbfc::SendCrdAck(Ptr<Packet> cbfcPkt, uint32_t targetPortId)
 {
     Ptr<Node> node = NodeList::GetNode(m_nodeId);
-
-    Ptr<UbPort> port = DynamicCast<UbPort>(node->GetDevice(targetPortId));
-    node->GetObject<UbSwitch>()->AddPktToVoq(cbfcPkt, targetPortId, 0, targetPortId);
+    
+    node->GetObject<UbSwitch>()->SendControlFrame(cbfcPkt, targetPortId);
     NS_LOG_DEBUG("send crd pkt");
-
-    Simulator::ScheduleNow(&UbPort::TriggerTransmit, port);
 }
 
 Ptr<Packet> UbCbfc::ReleaseOccupiedCrd(Ptr<Packet> p, uint32_t targetPortId)
@@ -307,15 +304,15 @@ void UbPfc::DoDispose()
 
 bool UbPfc::IsFcLimited(Ptr<UbIngressQueue> ingressQ)
 {
-    if (ingressQ->GetIqType() == IngressQueueType::VOQ) {
+    if (ingressQ->GetIngressQueueType() == IngressQueueType::VOQ) {
         if (ingressQ->GetInPortId() == ingressQ->GetOutPortId()) { // crd报文等控制报文，直接发出
             NS_LOG_DEBUG("is Pfc pkt");
             return false;
         }
     }
-    if (m_pfcStatus->m_portCredits[ingressQ->GetIgqPriority()] == 0) {
+    if (m_pfcStatus->m_portCredits[ingressQ->GetIngressPriority()] == 0) {
         NS_LOG_INFO("Flow Control Pfc Limited! NodeId: " << m_nodeId << ",outPort:{" << ingressQ->GetOutPortId() << "} VL:{"
-                    << ingressQ->GetIgqPriority() << "}");
+                    << ingressQ->GetIngressPriority() << "}");
         return true;  // 不允许发送
     }
 
@@ -399,12 +396,11 @@ void UbPfc::SendPfc(Ptr<Packet> pfcPacket, uint32_t targetPortId)
 {
     Ptr<Node> node = NodeList::GetNode(m_nodeId);
     Ptr<UbPort> port = DynamicCast<UbPort>(node->GetDevice(targetPortId));
-
-    node->GetObject<UbSwitch>()->AddPktToVoq(pfcPacket, targetPortId, 0, targetPortId);
+    
+    node->GetObject<UbSwitch>()->SendControlFrame(pfcPacket, targetPortId);
+    
     auto flowControl = DynamicCast<UbPfc>(port->m_flowControl);
     flowControl->m_pfcStatus->m_pfcSndCnt++;
-
-    Simulator::ScheduleNow(&UbPort::TriggerTransmit, port);
 }
 
 Ptr<Packet> UbPfc::CheckPfcThreshold(Ptr<Packet> p, uint32_t portId)
@@ -424,14 +420,17 @@ Ptr<Packet> UbPfc::CheckPfcThreshold(Ptr<Packet> p, uint32_t portId)
     int ubVlNum = val.Get();
     for (int pri = 0; pri < ubVlNum; pri++) {
         auto queueManager = node->GetObject<UbSwitch>()->GetQueueManager();
-        if (queueManager->GetIngressUsed(portId, pri) < lo_thresh) {
-            NS_LOG_DEBUG("ingressBuf[ " << pri << " ]: " << queueManager->GetIngressUsed(portId, pri)
+        // 使用InPort视图检查入端口拥塞状态
+        uint64_t inPortBufUsed = queueManager->GetInPortBufferUsed(portId, pri);
+        
+        if (inPortBufUsed < lo_thresh) {
+            NS_LOG_DEBUG("InPortBuf[" << pri << "]: " << inPortBufUsed
                          << " < lo_thresh: " << lo_thresh << " m_pfcSndCredits: "
                          << (uint32_t)flowControl->m_pfcStatus->m_pfcSndCredits[pri]);
             flowControl->m_pfcStatus->m_pfcSndCredits[pri] = UB_CREDIT_MAX_VALUE;
         }
-        if (queueManager->GetIngressUsed(portId, pri) >= hi_thresh) {
-            NS_LOG_DEBUG("ingressBuf[ " << pri << " ]: " << queueManager->GetIngressUsed(portId, pri)
+        if (inPortBufUsed >= hi_thresh) {
+            NS_LOG_DEBUG("InPortBuf[" << pri << "]: " << inPortBufUsed
                          << " >= hi_thresh: " << hi_thresh << " m_pfcSndCredits = 0");
             flowControl->m_pfcStatus->m_pfcSndCredits[pri] = 0;
         }

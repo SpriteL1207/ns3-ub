@@ -86,7 +86,7 @@ bool UbController::CreateTp(uint32_t src, uint32_t dest, uint8_t sport,
     m_transaction->TpInit(tp);
     m_numToTp[srcTpn] = tp;
     m_transportsCount++;
-    currentNode->GetObject<UbSwitch>()->AddTpIntoAlgroithm(tp, sport, priority);  // 把tp添加到算法
+    currentNode->GetObject<UbSwitch>()->RegisterTpWithAllocator(tp, sport, priority);  // register TP with allocator
 
     SetTpUserNum(srcTpn, 0);
 

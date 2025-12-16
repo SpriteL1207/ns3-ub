@@ -36,7 +36,7 @@ class UbPort;
 enum class FcType {
     CBFC,
     PFC,
-    UBFC
+    NONE  // No flow control
 };
 
 /**
@@ -57,7 +57,7 @@ public:
     virtual void HandleReceivedPacket(Ptr<Packet> p) {}
     virtual FcType GetFcType()
     {
-        return FcType::UBFC;
+        return FcType::NONE;
     }
 };
 

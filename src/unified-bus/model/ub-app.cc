@@ -99,7 +99,7 @@ void UbApp::SendTraffic(TrafficRecord record)
         MemTaskStartsNotify(GetNode()->GetId(), record.taskId);
         std::vector<uint32_t> threadIds = {0, 1};
         ldstInstance->HandleLdstTask(record.sourceNode, record.destNode, record.dataSize,
-                          record.taskId, type, threadIds, 0);
+                          record.taskId, record.priority, type, threadIds, 0);
     } else if (record.opType == "URMA_WRITE") {
         // URMA发送
         Ptr<UbFunction> ubFunc = GetNode()->GetObject<UbController>()->GetUbFunction();
@@ -192,8 +192,10 @@ void UbApp::CreateTPs(uint32_t src, uint32_t dst, uint32_t priority, std::vector
     for (uint32_t dstPort = 0; dstPort < NodeList::GetNode(dst)->GetNDevices(); dstPort++) {
         // 查找去往该ip的出端口，若非空则记录
         Ipv4Address dstPortIp = NodeIdToIp(dst, dstPort);
-        std::vector<uint16_t> shortestOutPortsVec = rt->GetShortestOutPorts(dstPortIp.Get());
-        std::vector<uint16_t> otherOutPortsVec = rt->GetOtherOutPorts(dstPortIp.Get());
+        std::vector<uint16_t> shortestOutPortsVec;
+        std::vector<uint16_t> otherOutPortsVec;
+        rt->GetShortestOutPorts(dstPortIp.Get(), shortestOutPortsVec);
+        rt->GetOtherOutPorts(dstPortIp.Get(), otherOutPortsVec);
         if (!shortestOutPortsVec.empty()) {
             routingEntries[dstPortIp] = std::vector<std::pair<uint16_t, uint32_t>>();
             for (uint16_t outPort : shortestOutPortsVec) {

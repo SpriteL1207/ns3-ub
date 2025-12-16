@@ -10,8 +10,6 @@ class UbQueueManager;
 class UbController;
 class UbPacketQueue;
 
-using VirtualOutputQueue_t = std::vector<std::vector<std::vector<Ptr<UbPacketQueue> > > >;
-
 /**
  * @brief 查路由需要的相关参数
  */
@@ -39,21 +37,22 @@ public:
     void AddShortestRoute(const uint32_t destIP, const std::vector<uint16_t>& outPorts);
     void AddOtherRoute(const uint32_t destIP, const std::vector<uint16_t>& outPorts);
     
-    const std::vector<uint16_t> GetShortestOutPorts(const uint32_t destIP);
-    const std::vector<uint16_t> GetOtherOutPorts(const uint32_t destIP);
+    void GetShortestOutPorts(const uint32_t destIP, std::vector<uint16_t>& outPorts);
+    void GetOtherOutPorts(const uint32_t destIP, std::vector<uint16_t>& outPorts);
     const std::vector<uint16_t> GetAllOutPorts(const uint32_t destIP);
     
-    // 获取指定目的IP的出端口
-    const std::vector<uint16_t> GetCandidatePorts(uint32_t &dip, bool useShortestPath, uint16_t inPortId);
-    int GetOutPort(RoutingKey &rtKey, uint16_t inPort = UINT16_MAX);
-    int SelectOutPort(RoutingKey &rtKey, const std::vector<uint16_t> candidatePorts);
-    // 用户可自定义自适应路由策略
-    int SelectAdaptiveOutPort(RoutingKey &rtKey, const std::vector<uint16_t> candidatePorts);
+    // 获取最短路径候选端口和非最短路径候选端口
+    void GetShortestCandidates(uint32_t &dip, uint16_t inPortId, std::vector<uint16_t>& outPorts);
+    void GetNonShortestCandidates(uint32_t &dip, uint16_t inPortId, std::vector<uint16_t>& outPorts);
+    int GetOutPort(RoutingKey &rtKey, bool &selectedShortestPath, uint16_t inPort = UINT16_MAX);
+    int SelectOutPort(RoutingKey &rtKey, const std::vector<uint16_t>& shortestPorts, 
+                      const std::vector<uint16_t>& nonShortestPorts, bool &selectedShortestPath);
+    // 自适应路由策略
+    int SelectAdaptiveOutPort(RoutingKey &rtKey, const std::vector<uint16_t>& shortestPorts,
+                              const std::vector<uint16_t>& nonShortestPorts, bool &selectedShortestPath);
     // 删除路由条目
     bool RemoveShortestRoute(const uint32_t destIP);
     bool RemoveOtherRoute(const uint32_t destIP);
-    bool GetSelectShortestPath();
-
 private:
     struct VectorHash {
         size_t operator()(const std::vector<uint16_t>& v) const
@@ -73,7 +72,6 @@ private:
     };
 
     uint32_t m_nodeId;
-    bool m_selectShortestPaths = false;
     UbRoutingAlgorithm m_routingAlgorithm = UbRoutingAlgorithm::HASH;
     uint64_t CalcHash(uint32_t sip, uint32_t dip, uint16_t sport, uint16_t dport, uint8_t priority);
 
