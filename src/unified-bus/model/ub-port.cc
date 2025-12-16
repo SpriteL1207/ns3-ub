@@ -35,11 +35,11 @@ TypeId UbEgressQueue::GetTypeId(void)
             MakeTraceSourceAccessor(&UbEgressQueue::m_traceUbDequeue),
             "ns3::UbEgressQueue::UbDequeue")
             .AddAttribute(
-            "m_maxIngressQueues",
-            "The maximum number of packets accepted by this eq.",
-            UintegerValue(100),
-            MakeUintegerAccessor(&UbEgressQueue::m_maxIngressQueues),
-            MakeUintegerChecker<uint32_t>());
+            "MaxEgressBytes",
+            "The maximum number of bytes accepted by this egress queue.",
+            UintegerValue(512 * 1024),  // 512KB default (about 128 max-size packets of 4096 bytes)
+            MakeUintegerAccessor(&UbEgressQueue::m_maxEgressBytes),
+            MakeUintegerChecker<uint64_t>());
     return tid;
 }
 
@@ -50,14 +50,24 @@ UbEgressQueue::UbEgressQueue()
 bool UbEgressQueue::DoEnqueue(PacketEntry packetEntry)
 {
     NS_LOG_FUNCTION (this);
+    
+    auto [inPortId, priority, pkt] = packetEntry;
+    uint32_t pktSize = pkt->GetSize();
 
-    if (m_egressQ.size () >= m_maxIngressQueues) {
-        NS_LOG_LOGIC ("Queue full (at max packets) -- droppping pkt");
+    // Check byte limit
+    if (m_currentBytes + pktSize > m_maxEgressBytes) {
+        NS_LOG_WARN ("[UbEgressQueue DoEnqueue] Buffer full: " 
+                     << (m_currentBytes + pktSize) << " bytes > limit " << m_maxEgressBytes 
+                     << " bytes. Packet dropped (inPort=" << inPortId 
+                     << " priority=" << (uint32_t)priority << ")");
         return false;
     }
+    
     m_egressQ.push(packetEntry);
+    m_currentBytes += pktSize;  // 更新字节统计
 
-    NS_LOG_LOGIC ("[UbEgressQueue DoEnqueue] Egress Queue size: " << m_egressQ.size ());
+    NS_LOG_LOGIC ("[UbEgressQueue DoEnqueue] Egress Queue size: " << m_egressQ.size () 
+                  << " bytes: " << m_currentBytes << " (+" << pktSize << ")");
 
     return true;
 }
@@ -84,8 +94,13 @@ PacketEntry UbEgressQueue::DoDequeue()
 
     auto packetEntry = m_egressQ.front ();
     m_egressQ.pop();
+    
+    auto [inPortId, priority, pkt] = packetEntry;
+    uint32_t pktSize = pkt->GetSize();
+    m_currentBytes -= pktSize;  // 更新字节统计
 
-    NS_LOG_LOGIC ("[UbEgressQueue DoDequeue] Egress Queue size: " << m_egressQ.size ());
+    NS_LOG_LOGIC ("[UbEgressQueue DoDequeue] Egress Queue size: " << m_egressQ.size ()
+                  << " bytes: " << m_currentBytes << " (-" << pktSize << ")");
 
     return packetEntry;
 }
@@ -177,7 +192,7 @@ UbPort::UbPort()
 {
     NS_LOG_FUNCTION(this);
     m_ubEQ = CreateObject<UbEgressQueue>();
-    m_ubSendState = SendState::READY;
+    m_sendState = SendState::READY;
     m_txBytes = 0;
     BooleanValue val;
     if (GlobalValue::GetValueByNameFailSafe("UB_RECORD_PKT_TRACE", val)) {
@@ -205,37 +220,47 @@ uint32_t UbPort::GetIfIndex() const
 
 void UbPort::SetSendState(SendState state)
 {
-    m_ubSendState = state;
+    m_sendState = state;
 }
 
-void UbPort::CreateAndInitFc(const std::string& type)
+void UbPort::CreateAndInitFc(FcType type)
 {
-    if (type == "CBFC") {
-        m_flowControl = CreateObject<UbCbfc>();
-        if (m_flowControl == nullptr) {
-            NS_FATAL_ERROR("Failed to create UbCbfc object for port " << m_portId);
-        }
-        auto flowControl = DynamicCast<UbCbfc>(m_flowControl);
-        flowControl->Init(m_cbfcFlitLen, m_cbfcFlitsPerCell, m_cbfcRetCellGrainDataPacket,
-            m_cbfcRetCellGrainControlPacket, m_cbfcPortTxfree, GetNode()->GetId(), m_portId);
-        NS_LOG_DEBUG("[UbPort CreateAndInitFc] flowControl Cbfc Init");
-    } else if (type == "PFC") {
-        m_flowControl = CreateObject<UbPfc>();
-        if (m_flowControl == nullptr) {
-            NS_FATAL_ERROR("Failed to create UbPfc object for port " << m_portId);
-        }
-        auto flowControl = DynamicCast<UbPfc>(m_flowControl);
-        flowControl->Init(m_pfcUpThld, m_pfcLowThld, GetNode()->GetId(), m_portId);
-        IntegerValue val;
-        g_ub_vl_num.GetValue(val);
-        int ubVlNum = val.Get();
-        m_revQueueSize.resize(ubVlNum, 0);
-        NS_LOG_DEBUG("[UbPort CreateAndInitFc] flowControl Pfc Init");
-    } else {
-        m_flowControl = CreateObject<UbFlowControl>();
-        if (m_flowControl == nullptr) {
-            NS_FATAL_ERROR("Failed to create UbFlowControl object for port " << m_portId);
-        }
+    switch (type) {
+        case FcType::CBFC:
+            m_flowControl = CreateObject<UbCbfc>();
+            if (m_flowControl == nullptr) {
+                NS_FATAL_ERROR("Failed to create UbCbfc object for port " << m_portId);
+            } else {
+                auto flowControl = DynamicCast<UbCbfc>(m_flowControl);
+                flowControl->Init(m_cbfcFlitLen, m_cbfcFlitsPerCell, m_cbfcRetCellGrainDataPacket,
+                    m_cbfcRetCellGrainControlPacket, m_cbfcPortTxfree, GetNode()->GetId(), m_portId);
+                NS_LOG_DEBUG("[UbPort CreateAndInitFc] flowControl Cbfc Init");
+            }
+            break;
+        case FcType::PFC:
+            m_flowControl = CreateObject<UbPfc>();
+            if (m_flowControl == nullptr) {
+                NS_FATAL_ERROR("Failed to create UbPfc object for port " << m_portId);
+            } else {
+                auto flowControl = DynamicCast<UbPfc>(m_flowControl);
+                flowControl->Init(m_pfcUpThld, m_pfcLowThld, GetNode()->GetId(), m_portId);
+                IntegerValue val;
+                g_ub_vl_num.GetValue(val);
+                int ubVlNum = val.Get();
+                m_revQueueSize.resize(ubVlNum, 0);
+                NS_LOG_DEBUG("[UbPort CreateAndInitFc] flowControl Pfc Init");
+            }
+            break;
+        case FcType::NONE:
+            // No flow control: base class with no-op implementation
+            m_flowControl = CreateObject<UbFlowControl>();
+            if (m_flowControl == nullptr) {
+                NS_FATAL_ERROR("Failed to create UbFlowControl object for port " << m_portId);
+            }
+            NS_LOG_DEBUG("[UbPort CreateAndInitFc] Default flow control (no-op) Init");
+            break;
+        default:
+            NS_FATAL_ERROR("Unknown flow control type for port " << m_portId);
     }
 }
 
@@ -247,14 +272,10 @@ void UbPort::TransmitComplete()
         << " PacketUid: " << m_currentPkt->GetUid());
     NS_LOG_FUNCTION(this);
 
-    m_ubSendState = SendState::READY;
+    m_sendState = SendState::READY;
     NS_ASSERT_MSG(
         m_currentPkt != nullptr, "UbPort::TransmitComplete(): m_currentPkt zero");
 
-    // 转发时通知switch发送完成
-    if (m_currentInPortId != m_portId) {
-        GetNode()->GetObject<UbSwitch>()->SwitchSendFinish(m_portId, m_currentPriority, m_currentPkt);
-    }
     m_flowControl->HandleReleaseOccupiedFlowControl(m_currentPkt, m_currentInPortId, m_portId);
 
     m_currentPkt = nullptr;
@@ -267,7 +288,7 @@ void UbPort::DequeuePacket(void)
 {
     NS_ASSERT_MSG(!m_ubEQ->IsEmpty(), "No packets can be sent! NodeId: "<< GetNode()->GetId()
         << " PortId: " << m_portId);
-    m_ubSendState = SendState::BUSY;
+    m_sendState = SendState::BUSY;
 
     auto [inPortId, priority, packet] = m_ubEQ->DoDequeue();
 
@@ -278,11 +299,6 @@ void UbPort::DequeuePacket(void)
         // Switch allocation when port sendding packet.
         auto allocator = GetNode()->GetObject<UbSwitch>()->GetAllocator();
         Simulator::ScheduleNow(&UbSwitchAllocator::TriggerAllocator, allocator, this);
-    }
-
-    // switch节点, 通知switch发送了packet
-    if (inPortId != m_portId) { // 转发的报文
-        GetNode()->GetObject<UbSwitch>()->NotifySwitchDequeue(inPortId, m_portId, priority, packet);
     }
 
     if (!m_faultCallBack.IsNull()) {
@@ -430,7 +446,7 @@ void UbPort::TriggerTransmit()
         NS_LOG_DEBUG("[UbPort TriggerTransmit] m_linkUp");
         return;
     } // if link is down, return
-    if (m_ubSendState == SendState::BUSY) {
+    if (IsBusy()) {
         NS_LOG_DEBUG("[UbPort TriggerTransmit] SendState::BUSY");
         return; // Quit if channel busy
     }
@@ -445,7 +461,7 @@ void UbPort::TriggerTransmit()
 
 void UbPort::NotifyAllocationFinish()
 {
-    if (m_ubSendState == SendState::BUSY) {
+    if (IsBusy()) {
         return;
     }
     if (m_ubEQ->IsEmpty()) {
@@ -509,12 +525,12 @@ uint64_t UbPort::GetTxBytes()
 
 bool UbPort::IsReady()
 {
-    return m_ubSendState == SendState::READY;
+    return m_sendState == SendState::READY;
 }
 
 bool UbPort::IsBusy()
 {
-    return m_ubSendState == SendState::BUSY;
+    return m_sendState == SendState::BUSY;
 }
 
 void UbPort::SetDataRate(DataRate bps)

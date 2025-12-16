@@ -3,6 +3,7 @@
 #include "ns3/ub-switch.h"
 #include "ns3/ub-port.h"
 #include "protocol/ub-routing-process.h"
+#include "protocol/ub-transport.h"
 #include "ub-queue-manager.h"
 
 namespace ns3 {
@@ -32,7 +33,7 @@ UbSwitchAllocator::~UbSwitchAllocator()
 
 void UbSwitchAllocator::DoDispose()
 {
-    m_igsrc.clear();
+    m_ingressSources.clear();
 }
 
 void UbSwitchAllocator::TriggerAllocator(Ptr<UbPort> outPort)
@@ -41,25 +42,63 @@ void UbSwitchAllocator::TriggerAllocator(Ptr<UbPort> outPort)
 
 void UbSwitchAllocator::Init()
 {
+    Simulator::Schedule(MilliSeconds(10), &UbSwitchAllocator::CheckDeadlock, this);
 }
 void UbSwitchAllocator::RegisterUbIngressQueue(Ptr<UbIngressQueue> ingressQueue, uint32_t outPort, uint32_t priority)
 {
-    m_igsrc[outPort][priority].push_back(ingressQueue);
+    m_ingressSources[outPort][priority].push_back(ingressQueue);
+}
+
+void UbSwitchAllocator::CheckDeadlock()
+{
+    Time now = Simulator::Now();
+    Time threshold = MilliSeconds(10);
+
+    for (uint32_t outPort = 0; outPort < m_ingressSources.size(); ++outPort) {
+        for (uint32_t pri = 0; pri < m_ingressSources[outPort].size(); ++pri) {
+            for (const auto& queue : m_ingressSources[outPort][pri]) {
+                if (queue && !queue->IsEmpty()) {
+                    if (now - queue->GetHeadArrivalTime() > threshold) {
+                        std::stringstream ss;
+                        ss << "Potential Deadlock in Node " << m_nodeId 
+                           << " OutPort:" << outPort << " Pri:" << pri;
+                        
+                        if (queue->GetIngressQueueType() == IngressQueueType::VOQ) {
+                            ss << " QueueType:VOQ InPort:" << queue->GetInPortId();
+                        } else if (queue->GetIngressQueueType() == IngressQueueType::TP) {
+                            auto tp = DynamicCast<UbTransportChannel>(queue);
+                            if (tp) {
+                                ss << " QueueType:TP TPN:" << tp->GetTpn();
+                            } else {
+                                ss << " QueueType:TP (Cast Failed)";
+                            }
+                        } else {
+                            ss << " QueueType:Unknown(" << (int)queue->GetIngressQueueType() << ")";
+                        }
+
+                        ss << " Head packet stuck for " << (now - queue->GetHeadArrivalTime()).GetMilliSeconds() << " ms";
+                        NS_LOG_WARN(ss.str());
+                    }
+                }
+            }
+        }
+    }
+    Simulator::Schedule(MilliSeconds(10), &UbSwitchAllocator::CheckDeadlock, this);
 }
 
 void UbSwitchAllocator::RegisterEgressStauts(uint32_t portsNum)
 {
-    m_egStatus.resize(portsNum, true);
+    m_egressStatus.resize(portsNum, true);
 }
 
 void UbSwitchAllocator::SetEgressStatus(uint32_t portId, bool status)
 {
-    m_egStatus[portId] = status;
+    m_egressStatus[portId] = status;
 }
 
 bool UbSwitchAllocator::GetEgressStatus(uint32_t portId)
 {
-    return m_egStatus[portId];
+    return m_egressStatus[portId];
 }
 
 /*-----------------------------------------UbRoundRobinAllocator----------------------------------------------*/
@@ -73,6 +112,7 @@ TypeId UbRoundRobinAllocator::GetTypeId(void)
 
 void UbRoundRobinAllocator::Init()
 {
+    UbSwitchAllocator::Init();
     auto node = NodeList::GetNode(m_nodeId);
     uint32_t portsNum = node->GetNDevices();
     auto vlNum = node->GetObject<UbSwitch>()->GetVLNum();
@@ -80,10 +120,10 @@ void UbRoundRobinAllocator::Init()
     for (auto &v: m_rrIdx) {
         v.resize(vlNum, 0);
     }
-    m_igsrc.resize(portsNum);
+    m_ingressSources.resize(portsNum);
     m_isRunning.resize(portsNum, false);
     m_oneMoreRound.resize(portsNum, false);
-    for (auto &i : m_igsrc) {
+    for (auto &i : m_ingressSources) {
         i.resize(vlNum);
     }
 }
@@ -115,10 +155,16 @@ void UbRoundRobinAllocator::AllocateNextPacket(Ptr<UbPort> outPort)
     if (ingressQueue != nullptr) {
         auto packet = ingressQueue->GetNextPacket();
         auto inPortId = ingressQueue->GetInPortId();
-        auto priority = ingressQueue->GetIgqPriority();
+        auto priority = ingressQueue->GetIngressPriority();
         auto packetEntry = std::make_tuple(inPortId, priority, packet);
         outPort->GetFlowControl()->HandleSentPacket(packet, ingressQueue);
         outPort->GetUbQueue()->DoEnqueue(packetEntry);
+        
+        // Packet moved from VOQ to EgressQueue, notify Switch to update buffer statistics
+        if (inPortId != outPortId) { // Forwarded packet (not locally generated)
+            auto node = NodeList::GetNode(m_nodeId);
+            node->GetObject<UbSwitch>()->NotifySwitchDequeue(inPortId, outPortId, priority, packet);
+        }
     }
     m_isRunning[outPortId] = false;
     // 通知port发包
@@ -139,15 +185,16 @@ Ptr<UbIngressQueue> UbRoundRobinAllocator::SelectNextIngressQueue(Ptr<UbPort> ou
     auto node = NodeList::GetNode(m_nodeId);
     auto vlNum = node->GetObject<UbSwitch>()->GetVLNum();
     for (pi = 0 ; pi < vlNum; pi++) {
-        size_t qSize = m_igsrc[outPortId][pi].size();
+        size_t qSize = m_ingressSources[outPortId][pi].size();
         for (idx = 0; idx < qSize; idx++) {
             auto qidx = (idx + m_rrIdx[outPortId][pi]) % qSize;
-            if (!m_igsrc[outPortId][pi][qidx]->IsEmpty() &&
-                !outPort->GetFlowControl()->IsFcLimited(m_igsrc[outPortId][pi][qidx])) {
+            if (!m_ingressSources[outPortId][pi][qidx]->IsEmpty() &&
+                !m_ingressSources[outPortId][pi][qidx]->IsLimited() &&
+                !outPort->GetFlowControl()->IsFcLimited(m_ingressSources[outPortId][pi][qidx])) {
                 m_rrIdx[outPortId][pi] = (qidx + 1) % qSize;
                 NS_LOG_DEBUG("[UbSwitchAllocator DispatchPacket] " << " NodeId: " << node->GetId()
                 << " PortId: " << outPortId <<" qidx: "<< qidx);
-                return m_igsrc[outPortId][pi][qidx];
+                return m_ingressSources[outPortId][pi][qidx];
             }
         }
     }

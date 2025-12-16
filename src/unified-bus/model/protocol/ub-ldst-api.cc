@@ -75,13 +75,14 @@ void UbLdstApi::SendPacket(Ptr<UbLdstTaskSegment> taskSegment, Ptr<Packet> packe
 
     auto node = NodeList::GetNode(m_nodeId);
     auto sw = node->GetObject<UbSwitch>();
-    int outPort = sw->GetRoutingProcess()->GetOutPort(rtKey);
+    bool selectedShortestPath = false;
+    int outPort = sw->GetRoutingProcess()->GetOutPort(rtKey, selectedShortestPath);
     if (outPort < 0) {
         // Route failed
         NS_ASSERT_MSG(0, "The route cannot be found");
     }
     uint16_t destPort = outPort;
-    sw->AddPktToVoq(packet, destPort, taskSegment->GetPriority(), destPort);
+    sw->PushPacketToVoq(packet, destPort, taskSegment->GetPriority(), destPort);
     Ptr<UbPort> port = DynamicCast<UbPort>(node->GetDevice(destPort));
     Simulator::ScheduleNow(&UbPort::TriggerTransmit, port);
 }
@@ -91,7 +92,7 @@ Ptr<Packet> UbLdstApi::GenDataPacket(Ptr<UbLdstTaskSegment> taskSegment)
     // Store/load request: DLH cNTH cTAH(0x03/0x06) [cMAETAH] Payload
     UbCompactMAExtTah cMAETah;
     UbCompactTransactionHeader cTaHeader;
-    UbCna16NetworkHeader memHeader;
+    UbCna16NetworkHeader cna16NetworkHeader;
     uint32_t length = taskSegment->GetLength();
     uint32_t payloadSize = 0;
     uint32_t dataSize = taskSegment->PeekNextDataSize();
@@ -117,15 +118,15 @@ Ptr<Packet> UbLdstApi::GenDataPacket(Ptr<UbLdstTaskSegment> taskSegment)
     cMAETah.SetLength((uint8_t)length);
     cTaHeader.SetIniTaSsn(taskSegment->GetTaskSegmentId()); // taskid
     uint16_t scna = static_cast<uint16_t>(utils::NodeIdToCna16(taskSegment->GetSrc()));
-    memHeader.SetScna(scna);
+    cna16NetworkHeader.SetScna(scna);
     uint16_t dcna = static_cast<uint16_t>(utils::NodeIdToCna16(taskSegment->GetDest()));
-    memHeader.SetDcna(dcna);
-    memHeader.SetLb(m_lbHashSalt);
-    memHeader.SetServiceLevel(taskSegment->GetPriority());
+    cna16NetworkHeader.SetDcna(dcna);
+    cna16NetworkHeader.SetLb(m_lbHashSalt);
+    cna16NetworkHeader.SetServiceLevel(taskSegment->GetPriority());
 
     packet->AddHeader(cMAETah);
     packet->AddHeader(cTaHeader);
-    packet->AddHeader(memHeader);
+    packet->AddHeader(cna16NetworkHeader);
 
     // add dl header
     UbDataLink::GenPacketHeader(packet, false, false, taskSegment->GetPriority(), taskSegment->GetPriority(),
@@ -151,12 +152,12 @@ void UbLdstApi::RecvDataPacket(Ptr<Packet> packet)
     NS_LOG_DEBUG("[UbLdstApi RecvDataPacket] nodeId: " << m_nodeId << " packetUid: " << packet->GetUid());
     UbDatalinkPacketHeader linkPacketHeader;
     UbCompactAckTransactionHeader caTaHeader;
-    UbCna16NetworkHeader memHeader;
+    UbCna16NetworkHeader cna16NetworkHeader;
     UbCompactTransactionHeader cTaHeader;
     UbCompactMAExtTah cMAETah;
     
     packet->RemoveHeader(linkPacketHeader);
-    packet->RemoveHeader(memHeader);
+    packet->RemoveHeader(cna16NetworkHeader);
     packet->RemoveHeader(cTaHeader);
     packet->PeekHeader(cMAETah);
 
@@ -174,20 +175,20 @@ void UbLdstApi::RecvDataPacket(Ptr<Packet> packet)
     uint16_t tassn = cTaHeader.GetIniTaSsn();
     caTaHeader.SetIniTaSsn(tassn);
 
-    uint16_t tmp = memHeader.GetScna();
-    memHeader.SetScna(memHeader.GetDcna());
-    memHeader.SetDcna(tmp);
+    uint16_t tmp = cna16NetworkHeader.GetScna();
+    cna16NetworkHeader.SetScna(cna16NetworkHeader.GetDcna());
+    cna16NetworkHeader.SetDcna(tmp);
 
     ackp->AddHeader(caTaHeader);
-    ackp->AddHeader(memHeader);
+    ackp->AddHeader(cna16NetworkHeader);
     UbDataLink::GenPacketHeader(ackp, false, true, linkPacketHeader.GetCreditTargetVL(), linkPacketHeader.GetPacketVL(),
                                 linkPacketHeader.GetLoadBalanceMode(), linkPacketHeader.GetRoutingPolicy(),
                                 UbDatalinkHeaderConfig::PACKET_UB_MEM);
 
     RoutingKey rtKey;
-    rtKey.sip = utils::Cna16ToIp(memHeader.GetScna()).Get();
-    rtKey.dip = utils::Cna16ToIp(memHeader.GetDcna()).Get();
-    rtKey.sport = memHeader.GetLb();
+    rtKey.sip = utils::Cna16ToIp(cna16NetworkHeader.GetScna()).Get();
+    rtKey.dip = utils::Cna16ToIp(cna16NetworkHeader.GetDcna()).Get();
+    rtKey.sport = cna16NetworkHeader.GetLb();
     rtKey.dport = 0;
     rtKey.priority = linkPacketHeader.GetPacketVL();
     rtKey.useShortestPath = linkPacketHeader.GetRoutingPolicy();
@@ -196,13 +197,14 @@ void UbLdstApi::RecvDataPacket(Ptr<Packet> packet)
     auto node = NodeList::GetNode(m_nodeId);
     auto sw = node->GetObject<UbSwitch>();
 
-    int destPort = sw->GetRoutingProcess()->GetOutPort(rtKey);
+    bool selectedShortestPath = false;
+    int destPort = sw->GetRoutingProcess()->GetOutPort(rtKey, selectedShortestPath);
     if (destPort < 0) {
         // Route failed
         NS_ASSERT_MSG(0, "The route cannot be found");
     }
 
-    sw->AddPktToVoq(ackp, destPort, linkPacketHeader.GetPacketVL(), destPort);
+    sw->PushPacketToVoq(ackp, destPort, linkPacketHeader.GetPacketVL(), destPort);
 
     NS_LOG_DEBUG("[UbLdstApi RecvDataPacket] Send Ack. NodeId: " << m_nodeId << " PacketUid: "
                   << ackp->GetUid() << " packetSize: " << ackp->GetSize() << " destPort: " << destPort);
@@ -211,8 +213,8 @@ void UbLdstApi::RecvDataPacket(Ptr<Packet> packet)
         packet->PeekPacketTag(flowTag);
         UbPacketTraceTag traceTag;
         packet->PeekPacketTag(traceTag);
-        LdstRecvNotify(packet->GetUid(), utils::Cna16ToNodeId(memHeader.GetDcna()),
-                       utils::Cna16ToNodeId(memHeader.GetScna()),
+        LdstRecvNotify(packet->GetUid(), utils::Cna16ToNodeId(cna16NetworkHeader.GetDcna()),
+                       utils::Cna16ToNodeId(cna16NetworkHeader.GetScna()),
                        PacketType::PACKET, packet->GetSize(), flowTag.GetFlowId(), traceTag);
     }
     Ptr<UbPort> triggerPort = DynamicCast<UbPort>(node->GetDevice(destPort));
@@ -228,10 +230,10 @@ void UbLdstApi::RecvResponse(Ptr<Packet> packet)
     NS_LOG_DEBUG("[UbLdstApi RecvResponse] packetUid: " << packet->GetUid());
     // Store/load response: DLH cNTH cATAH(0x11/0x12) Payload
     UbDatalinkPacketHeader linkPacketHeader;
-    UbCna16NetworkHeader memHeader;
+    UbCna16NetworkHeader cna16NetworkHeader;
     UbCompactAckTransactionHeader caTaHeader;
     packet->RemoveHeader(linkPacketHeader);
-    packet->RemoveHeader(memHeader);
+    packet->RemoveHeader(cna16NetworkHeader);
     packet->RemoveHeader(caTaHeader);
 
     if (m_pktTraceEnabled) {
@@ -239,8 +241,8 @@ void UbLdstApi::RecvResponse(Ptr<Packet> packet)
         packet->PeekPacketTag(flowTag);
         UbPacketTraceTag traceTag;
         packet->PeekPacketTag(traceTag);
-        LdstRecvNotify(packet->GetUid(), utils::Cna16ToNodeId(memHeader.GetDcna()),
-                       utils::Cna16ToNodeId(memHeader.GetScna()),
+        LdstRecvNotify(packet->GetUid(), utils::Cna16ToNodeId(cna16NetworkHeader.GetDcna()),
+                       utils::Cna16ToNodeId(cna16NetworkHeader.GetScna()),
                        PacketType::ACK, packet->GetSize(), flowTag.GetFlowId(), traceTag);
     }
     uint32_t taskSegmentId = caTaHeader.GetIniTaSsn();

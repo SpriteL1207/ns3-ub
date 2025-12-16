@@ -50,7 +50,7 @@ void UbSwitch::Init()
     m_allocator->SetNodeId(node->GetId());
     m_allocator->Init();
     VoqInit();
-    AddVoqIntoAlgroithm();
+    RegisterVoqsWithAllocator();
 
     // queueManager init
     m_queueManager = CreateObject<UbQueueManager>();
@@ -58,12 +58,10 @@ void UbSwitch::Init()
     m_queueManager->SetPortsNum(m_portsNum);
     m_queueManager->Init();
 
-    NodePortsFcInit();
+    InitNodePortsFlowControl();
     m_routingProcess = CreateObject<UbRoutingProcess>();
     m_routingProcess->SetNodeId(node->GetId());
     m_Ipv4Addr = utils::NodeIdToIp(node->GetId());
-
-    Simulator::Schedule(MilliSeconds(10), &UbSwitch::CheckDeadlock, this);
 }
 
 void UbSwitch::DoDispose()
@@ -78,33 +76,33 @@ void UbSwitch::DoDispose()
 /**
  * @brief Init flow control for each port
  */
-void UbSwitch::NodePortsFcInit()
+void UbSwitch::InitNodePortsFlowControl()
 {
-    NS_LOG_DEBUG("[UbSwitch NodePortsFcInit] m_portsNum: " << m_portsNum << " m_isCBFCEnable: " << m_isCBFCEnable
+    NS_LOG_DEBUG("[UbSwitch InitNodePortsFlowControl] m_portsNum: " << m_portsNum << " m_isCBFCEnable: " << m_isCBFCEnable
                 << " m_isPFCEnable: " << m_isPFCEnable);
 
     for (uint32_t pidx = 0; pidx < m_portsNum; pidx++) {
         Ptr<UbPort> port = DynamicCast<ns3::UbPort>(GetObject<Node>()->GetDevice(pidx));
+        FcType fcType = FcType::NONE;  // Default: no flow control
         if (m_isCBFCEnable) {
-            port->CreateAndInitFc("CBFC");
+            fcType = FcType::CBFC;
         } else if (m_isPFCEnable) {
-            port->CreateAndInitFc("PFC");
-        } else {
-            port->CreateAndInitFc("UBFC");
+            fcType = FcType::PFC;
         }
+        port->CreateAndInitFc(fcType);
     }
 }
 
 /**
  * @brief 将初始化后的vop放入调度算法中
  */
-void UbSwitch::AddVoqIntoAlgroithm()
+void UbSwitch::RegisterVoqsWithAllocator()
 {
     for (uint32_t i = 0; i < m_portsNum; i++) {
         for (uint32_t j = 0; j < m_vlNum; j++) {
             for (uint32_t k = 0 ; k < m_portsNum; k++) { // voq
-                auto igq = m_voq[i][j][k];
-                m_allocator->RegisterUbIngressQueue(igq, i, j);
+                auto ingressQ = m_voq[i][j][k];
+                m_allocator->RegisterUbIngressQueue(ingressQ, i, j);
             }
         }
     }
@@ -113,16 +111,16 @@ void UbSwitch::AddVoqIntoAlgroithm()
 /**
  * @brief 将tp放入调度算法中
  */
-void UbSwitch::AddTpIntoAlgroithm(Ptr<UbIngressQueue> tp, uint32_t outPort, uint32_t priority)
+void UbSwitch::RegisterTpWithAllocator(Ptr<UbIngressQueue> tp, uint32_t outPort, uint32_t priority)
 {
     if ((outPort >= m_portsNum) || (priority >= m_vlNum)) {
         NS_ASSERT_MSG(0, "Invalid indices (outPort, priority)!");
     }
-    NS_LOG_DEBUG("[UbSwitch AddTpIntoAlgroithm] TP: outPortIdx: " << outPort
+    NS_LOG_DEBUG("[UbSwitch RegisterTpWithAllocator] TP: outPortIdx: " << outPort
                  << "priorityIdx: " << priority << "outPort: " << outPort);
     tp->SetOutPortId(outPort);
-    tp->SetInPortId(outPort); // tp不使用inport
-    tp->SetIgqPriority(priority);
+    tp->SetInPortId(outPort); // tp uses outPort as inPort, since tp has no inPort
+    tp->SetIngressPriority(priority);
     m_allocator->RegisterUbIngressQueue(tp, outPort, priority);
 }
 
@@ -155,7 +153,7 @@ void UbSwitch::VoqInit()
             for (uint32_t k = 0; k < m_portsNum; k++) {
                 auto q = CreateObject<UbPacketQueue>();
                 q->SetOutPortId(outPortIdx);
-                q->SetIgqPriority(priorityIdx);
+                q->SetIngressPriority(priorityIdx);
                 q->SetInPortId(inPortIdx); // tp不使用inport
                 q->SetInPortId(k);
                 j.push_back(q);
@@ -170,7 +168,7 @@ void UbSwitch::VoqInit()
 /**
  * @brief push packet into voq
  */
-void UbSwitch::AddPktToVoq(Ptr<Packet> p, uint32_t outPort, uint32_t priority, uint32_t inPort)
+void UbSwitch::PushPacketToVoq(Ptr<Packet> p, uint32_t outPort, uint32_t priority, uint32_t inPort)
 {
     if ((outPort > m_portsNum) || (priority > m_vlNum) || (inPort > m_portsNum)) { // 不合理请求
         NS_ASSERT_MSG(0, "Invalid VOQ indices (outPort, priority, inPort)!");
@@ -203,11 +201,9 @@ void UbSwitch::SwitchHandlePacket(Ptr<UbPort> port, Ptr<Packet> packet)
             port->m_flowControl->HandleReceivedControlPacket(packet);
             break;
         case UB_URMA_DATA_PACKET:
-            ParseURMAPacketHeader(packet);
             HandleURMADataPacket(port, packet);
             break;
         case UB_LDST_DATA_PACKET:
-            ParseLdstPacketHeader(packet);
             HandleLdstDataPacket(port, packet);
             break;
         default:
@@ -237,14 +233,18 @@ void UbSwitch::SinkControlFrame(Ptr<UbPort> port, Ptr<Packet> packet)
  */
 void UbSwitch::HandleURMADataPacket(Ptr<UbPort> port, Ptr<Packet> packet)
 {
+    // Parse headers once for efficient reuse
+    ParsedURMAHeaders headers;
+    ParseURMAPacketHeader(packet, headers);
+    
     switch (GetNodeType()) {
         case UB_DEVICE:
-            if (!SinkTpDataPacket(port, packet)) {
-                ForwardDataPacket(port, packet);
+            if (!SinkTpDataPacket(port, packet, headers)) {
+                ForwardDataPacket(port, packet, headers);
             }
             break;
         case UB_SWITCH:
-            ForwardDataPacket(port, packet);
+            ForwardDataPacket(port, packet, headers);
             break;
         default:
             NS_ASSERT_MSG(0, "Invalid Node! ");
@@ -252,18 +252,22 @@ void UbSwitch::HandleURMADataPacket(Ptr<UbPort> port, Ptr<Packet> packet)
 }
 
 /**
- * @brief Handle Mem type data packet
+ * @brief Handle Ldst type data packet
  */
 void UbSwitch::HandleLdstDataPacket(Ptr<UbPort> port, Ptr<Packet> packet)
 {
+    // Parse headers once for efficient reuse
+    ParsedLdstHeaders headers;
+    ParseLdstPacketHeader(packet, headers);
+    
     switch (GetNodeType()) {
         case UB_DEVICE:
-            if (!SinkMemDataPacket(port, packet)) {
-                ForwardDataPacket(port, packet);
+            if (!SinkLdstDataPacket(port, packet, headers)) {
+                ForwardDataPacket(port, packet, headers);
             }
             break;
         case UB_SWITCH:
-            ForwardDataPacket(port, packet);
+            ForwardDataPacket(port, packet, headers);
             break;
         default:
             NS_ASSERT_MSG(0, "Invalid Node! ");
@@ -273,13 +277,13 @@ void UbSwitch::HandleLdstDataPacket(Ptr<UbPort> port, Ptr<Packet> packet)
 /**
  * @brief Sink URMA type data packet
  */
-bool UbSwitch::SinkTpDataPacket(Ptr<UbPort> port, Ptr<Packet> packet)
+bool UbSwitch::SinkTpDataPacket(Ptr<UbPort> port, Ptr<Packet> packet, const ParsedURMAHeaders &headers)
 {
-    NS_LOG_DEBUG("[UbPort recv] Psn: " << m_ubTpHeader.GetPsn());
+    NS_LOG_DEBUG("[UbPort recv] Psn: " << headers.transportHeader.GetPsn());
     Ipv4Mask mask("255.255.255.0");
 
     // Forward
-    if (!utils::IsInSameSubnet(m_ipv4Header.GetDestination(), GetNodIpv4Addr(), mask)) {
+    if (!utils::IsInSameSubnet(headers.ipv4Header.GetDestination(), GetNodeIpv4Addr(), mask)) {
         return false;
     }
     // Sink
@@ -288,16 +292,20 @@ bool UbSwitch::SinkTpDataPacket(Ptr<UbPort> port, Ptr<Packet> packet)
         port->m_flowControl->HandleReceivedPacket(packet);
     }
 
-    uint32_t dstTpn = m_ubTpHeader.GetDestTpn();
+    uint32_t dstTpn = headers.transportHeader.GetDestTpn();
     auto targetTp = GetObject<UbController>()->GetTpByTpn(dstTpn);
     NS_ASSERT_MSG(targetTp != nullptr, "Port Cannot Get TP By Tpn!");
-    if (m_ubTpHeader.GetTPOpcode() == static_cast<uint8_t>(TpOpcode::TP_OPCODE_ACK_WITH_CETPH)
-        || m_ubTpHeader.GetTPOpcode() == static_cast<uint8_t>(TpOpcode::TP_OPCODE_ACK_WITHOUT_CETPH)) {
+    if (headers.transportHeader.GetTPOpcode() == static_cast<uint8_t>(TpOpcode::TP_OPCODE_ACK_WITH_CETPH)
+        || headers.transportHeader.GetTPOpcode() == static_cast<uint8_t>(TpOpcode::TP_OPCODE_ACK_WITHOUT_CETPH)) {
         NS_LOG_DEBUG("[UbPort recv] is ACK");
-        packet->RemoveHeader(m_datalinkHeader);
-        packet->RemoveHeader(m_networkHeader);
-        packet->RemoveHeader(m_ipv4Header);
-        packet->RemoveHeader(m_udpHeader);
+        UbDatalinkPacketHeader tempDlHeader;
+        UbNetworkHeader tempNetHeader;
+        Ipv4Header tempIpv4Header;
+        UdpHeader tempUdpHeader;
+        packet->RemoveHeader(tempDlHeader);
+        packet->RemoveHeader(tempNetHeader);
+        packet->RemoveHeader(tempIpv4Header);
+        packet->RemoveHeader(tempUdpHeader);
         targetTp->RecvTpAck(packet);
     } else {
         targetTp->RecvDataPacket(packet);
@@ -306,14 +314,14 @@ bool UbSwitch::SinkTpDataPacket(Ptr<UbPort> port, Ptr<Packet> packet)
 }
 
 /**
- * @brief Sink Mem type data packet
+ * @brief Sink Ldst type data packet
  */
-bool UbSwitch::SinkMemDataPacket(Ptr<UbPort> port, Ptr<Packet> packet)
+bool UbSwitch::SinkLdstDataPacket(Ptr<UbPort> port, Ptr<Packet> packet, const ParsedLdstHeaders &headers)
 {
     // Store/load request: DLH cNTH cTAH(0x03/0x06) [cMAETAH] Payload
     // Store/load response: DLH cNTH cATAH(0x11/0x12) Payload
-    NS_LOG_DEBUG("[UbPort recv] ub mem frame");
-    uint16_t dCna = m_memHeader.GetDcna();
+    NS_LOG_DEBUG("[UbPort recv] ub ldst frame");
+    uint16_t dCna = headers.cna16NetworkHeader.GetDcna();
     uint32_t dnode = utils::Cna16ToNodeId(dCna);
     // Forward
     if (dnode != GetObject<Node>()->GetId()) {
@@ -327,14 +335,14 @@ bool UbSwitch::SinkMemDataPacket(Ptr<UbPort> port, Ptr<Packet> packet)
     auto ldstApi = GetObject<Node>()->GetObject<UbController>()->GetUbFunction()->GetUbLdstApi();
     NS_ASSERT_MSG(ldstApi != nullptr, "UbLdstApi can not be nullptr!");
 
-    uint8_t type = m_dummyTaHeader.GetTaOpcode();
+    uint8_t type = headers.dummyTransactionHeader.GetTaOpcode();
     // 数据包
     if (type == (uint8_t)TaOpcode::TA_OPCODE_WRITE || type == (uint8_t)TaOpcode::TA_OPCODE_READ) {
         ldstApi->RecvDataPacket(packet);
     } else if (type == (uint8_t)TaOpcode::TA_OPCODE_TRANSACTION_ACK ||
                type == (uint8_t)TaOpcode::TA_OPCODE_READ_RESPONSE) {
         ldstApi->RecvResponse(packet);
-        NS_LOG_DEBUG("mem packet is ack!");
+        NS_LOG_DEBUG("ldst packet is ack!");
     } else {
         NS_ASSERT_MSG(0, "packet Ta Op code is wrong!");
     }
@@ -342,143 +350,203 @@ bool UbSwitch::SinkMemDataPacket(Ptr<UbPort> port, Ptr<Packet> packet)
 }
 
 /**
- * @brief Parse packet header and forward different type data packet
+ * @brief Forward URMA data packet (headers already parsed)
  */
-void UbSwitch::ForwardDataPacket(Ptr<UbPort> port, Ptr<Packet> packet)
+void UbSwitch::ForwardDataPacket(Ptr<UbPort> port, Ptr<Packet> packet, const ParsedURMAHeaders &headers)
 {
-    /* 解析包头 */
-    UbDatalinkPacketHeader m_datalinkHeader;
-    packet->PeekHeader(m_datalinkHeader);
-    int outPort = -1;
+    // Log packet traversal
+    LastPacketTraversesNotify(GetObject<Node>()->GetId(), headers.transportHeader);
+    
+    // Get routing key from parsed headers
     RoutingKey rtKey;
-    switch (GetPacketType(packet)) {
-        case UB_URMA_DATA_PACKET:
-            LastPacketTraversesNotify(GetObject<Node>()->GetId(), m_ubTpHeader);
-            GetURMARoutingKey(packet, rtKey);
-            break;
-        case UB_LDST_DATA_PACKET:  {
-            GetLdstRoutingKey(packet, rtKey);
-            break;
-        }
-        default:
-            NS_ASSERT_MSG(0, "Invalid Packet Type! ");
-    }
-    /* 路由 */
-    outPort = m_routingProcess->GetOutPort(rtKey, port->GetIfIndex());
+    GetURMARoutingKey(headers, rtKey);
+    
+    // Route
+    bool selectedShortestPath = false;
+    int outPort = m_routingProcess->GetOutPort(rtKey, selectedShortestPath, port->GetIfIndex());
     if (outPort < 0) {
-        // Route failed
         NS_LOG_WARN("The route cannot be found. Packet Dropped!");
         return;
     }
-    /* 绕路路由防止形成环 */
-    if (!m_routingProcess->GetSelectShortestPath()) {
-        ChangePakcetRoutingPolicy(packet, true);
+    
+    // If packet routed via non-shortest path, force subsequent hops to use shortest path
+    if (!selectedShortestPath) {
+        ForceShortestPathRouting(packet, headers.datalinkPacketHeader);
     }
-    /* 缓存管理 */
+    
+    // Buffer management: check input port buffer space
     uint32_t inPort = port->GetIfIndex();
-    uint8_t priority = m_datalinkHeader.GetPacketVL();
-    if (!m_queueManager->CheckIngress(inPort, priority, packet->GetSize())) {
-        // Drop
-        NS_LOG_WARN("Ingress memory not enough. Packet Dropped!");
+    uint8_t priority = headers.datalinkPacketHeader.GetPacketVL();
+    uint32_t pSize = packet->GetSize();
+    
+    if (!m_queueManager->CheckInPortSpace(inPort, priority, pSize)) {
+        NS_LOG_WARN("NodeId " << GetObject<Node>()->GetId() << " InPort " << inPort << " pri=" << (uint32_t)priority 
+                    << " buffer full. Packet Dropped!");
         return;
     }
+    
     SendPacket(packet, inPort, outPort, priority);
 }
 
-void UbSwitch::ChangePakcetRoutingPolicy(Ptr<Packet> packet, bool useShortestPath)
+/**
+ * @brief Forward LDST data packet (headers already parsed)
+ */
+void UbSwitch::ForwardDataPacket(Ptr<UbPort> port, Ptr<Packet> packet, const ParsedLdstHeaders &headers)
 {
+    // Get routing key from parsed headers
+    RoutingKey rtKey;
+    GetLdstRoutingKey(headers, rtKey);
+    
+    // Route
+    bool selectedShortestPath = false;
+    int outPort = m_routingProcess->GetOutPort(rtKey, selectedShortestPath, port->GetIfIndex());
+    if (outPort < 0) {
+        NS_LOG_WARN("The route cannot be found. Packet Dropped!");
+        return;
+    }
+    
+    // If packet routed via non-shortest path, force subsequent hops to use shortest path
+    if (!selectedShortestPath) {
+        ForceShortestPathRouting(packet, headers.datalinkPacketHeader);
+    }
+    
+    // Buffer management: check input port buffer space
+    uint32_t inPort = port->GetIfIndex();
+    uint8_t priority = headers.datalinkPacketHeader.GetPacketVL();
+    uint32_t pSize = packet->GetSize();
+    
+    if (!m_queueManager->CheckInPortSpace(inPort, priority, pSize)) {
+        NS_LOG_WARN("NodeId " << GetObject<Node>()->GetId() << " InPort " << inPort << " pri=" << (uint32_t)priority 
+                    << " buffer full. Packet Dropped!");
+        return;
+    }
+    
+    SendPacket(packet, inPort, outPort, priority);
+}
+
+void UbSwitch::ForceShortestPathRouting(Ptr<Packet> packet, const UbDatalinkPacketHeader &parsedHeader)
+{
+    UbDatalinkPacketHeader modifiedHeader = parsedHeader;
+    modifiedHeader.SetRoutingPolicy(true);  // Force shortest path
+    
     UbDatalinkPacketHeader tempHeader;
-    m_datalinkHeader.SetRoutingPolicy(useShortestPath);
     packet->RemoveHeader(tempHeader);
-    packet->AddHeader(m_datalinkHeader);
+    packet->AddHeader(modifiedHeader);
 }
 
-void UbSwitch::ParseURMAPacketHeader(Ptr<Packet> packet)
+void UbSwitch::ParseURMAPacketHeader(Ptr<Packet> packet, ParsedURMAHeaders &headers)
 {
-    // 解析network包头
-    // 解析ipv4包头
-    // 解析udp包头
-    // 解析tp包头
-    packet->RemoveHeader(m_datalinkHeader);
-    packet->RemoveHeader(m_networkHeader);
-    packet->RemoveHeader(m_ipv4Header);
-    packet->RemoveHeader(m_udpHeader);
-    packet->PeekHeader(m_ubTpHeader);
-    packet->AddHeader(m_udpHeader);
-    packet->AddHeader(m_ipv4Header);
-    packet->AddHeader(m_networkHeader);
-    packet->AddHeader(m_datalinkHeader);
+    // Parse headers needed by switch (store all that must be removed anyway)
+    // Order: DLH -> NH -> IPv4 -> UDP -> TP -> ...
+    packet->RemoveHeader(headers.datalinkPacketHeader);
+    packet->RemoveHeader(headers.networkHeader);
+    packet->RemoveHeader(headers.ipv4Header);
+    packet->RemoveHeader(headers.udpHeader);
+    packet->PeekHeader(headers.transportHeader);
+    packet->AddHeader(headers.udpHeader);
+    packet->AddHeader(headers.ipv4Header);
+    packet->AddHeader(headers.networkHeader);
+    packet->AddHeader(headers.datalinkPacketHeader);
 }
 
-void UbSwitch::ParseLdstPacketHeader(Ptr<Packet> packet)
+void UbSwitch::ParseLdstPacketHeader(Ptr<Packet> packet, ParsedLdstHeaders &headers)
 {
-    packet->RemoveHeader(m_datalinkHeader);
-    packet->RemoveHeader(m_memHeader);
-    packet->PeekHeader(m_dummyTaHeader);
-    packet->AddHeader(m_memHeader);
-    packet->AddHeader(m_datalinkHeader);
+    // Parse only headers needed by switch for routing and forwarding
+    // Order: DLH -> CNA16NH -> dummyTA -> ...
+    // Note: dummyTA can be either UbCompactTransactionHeader or UbCompactAckTransactionHeader
+    packet->RemoveHeader(headers.datalinkPacketHeader);
+    packet->RemoveHeader(headers.cna16NetworkHeader);
+    packet->PeekHeader(headers.dummyTransactionHeader);
+    packet->AddHeader(headers.cna16NetworkHeader);
+    packet->AddHeader(headers.datalinkPacketHeader);
 }
 
-void UbSwitch::GetURMARoutingKey(Ptr<Packet> packet, RoutingKey &rtKey)
+void UbSwitch::GetURMARoutingKey(const ParsedURMAHeaders &headers, RoutingKey &rtKey)
 {
-    rtKey.sip = m_ipv4Header.GetSource().Get();
-    rtKey.dip = m_ipv4Header.GetDestination().Get();
-    rtKey.sport = m_udpHeader.GetSourcePort();
-    rtKey.dport = m_udpHeader.GetDestinationPort();
-    rtKey.priority = m_datalinkHeader.GetPacketVL();
-    rtKey.useShortestPath = m_datalinkHeader.GetRoutingPolicy();
-    rtKey.usePacketSpray = m_datalinkHeader.GetLoadBalanceMode();
+    rtKey.sip = headers.ipv4Header.GetSource().Get();
+    rtKey.dip = headers.ipv4Header.GetDestination().Get();
+    rtKey.sport = headers.udpHeader.GetSourcePort();
+    rtKey.dport = headers.udpHeader.GetDestinationPort();
+    rtKey.priority = headers.datalinkPacketHeader.GetPacketVL();
+    rtKey.useShortestPath = headers.datalinkPacketHeader.GetRoutingPolicy();
+    rtKey.usePacketSpray = headers.datalinkPacketHeader.GetLoadBalanceMode();
 }
 
-void UbSwitch::GetLdstRoutingKey(Ptr<Packet> packet, RoutingKey &rtKey)
+void UbSwitch::GetLdstRoutingKey(const ParsedLdstHeaders &headers, RoutingKey &rtKey)
 {
-    uint16_t dCna = m_memHeader.GetDcna();
-    uint16_t sCna = m_memHeader.GetScna();
+    uint16_t dCna = headers.cna16NetworkHeader.GetDcna();
+    uint16_t sCna = headers.cna16NetworkHeader.GetScna();
     uint32_t snode = utils::Cna16ToNodeId(sCna);
     uint32_t dnode = utils::Cna16ToNodeId(dCna);
     uint16_t sport = utils::Cna16ToPortId(sCna);
     uint16_t dport = 0;
-    uint16_t lb = m_memHeader.GetLb();
+    uint16_t lb = headers.cna16NetworkHeader.GetLb();
     rtKey.sip = utils::NodeIdToIp(snode, sport).Get();
     rtKey.dip = utils::NodeIdToIp(dnode, dport).Get();
     rtKey.sport = lb;
     rtKey.dport = dport;
-    rtKey.priority = m_datalinkHeader.GetPacketVL();
-    rtKey.useShortestPath = m_datalinkHeader.GetRoutingPolicy();
-    rtKey.usePacketSpray = m_datalinkHeader.GetLoadBalanceMode();
+    rtKey.priority = headers.datalinkPacketHeader.GetPacketVL();
+    rtKey.useShortestPath = headers.datalinkPacketHeader.GetRoutingPolicy();
+    rtKey.usePacketSpray = headers.datalinkPacketHeader.GetLoadBalanceMode();
 }
 
 /**
- * @brief Trigger port to send packet to nexthop
+ * @brief Packet enters VOQ from input port
+ * Place packet into VOQ[outPort][priority][inPort] and update buffer statistics
  */
 void UbSwitch::SendPacket(Ptr<Packet> packet, uint32_t inPort, uint32_t outPort, uint32_t priority)
 {
     auto node = GetObject<Node>();
     Ptr<UbPort> recvPort = DynamicCast<ns3::UbPort>(node->GetDevice(inPort));
+    
     m_voq[outPort][priority][inPort]->Push(packet);
-    m_queueManager->PushIngress(inPort, priority, packet->GetSize());
+    
+    // Update both InPort and OutPort view buffer statistics
+    m_queueManager->PushToVoq(inPort, outPort, priority, packet->GetSize());
+    
     if (IsPFCEnable()) {
         recvPort->m_flowControl->HandleReceivedPacket(packet);
     }
-    m_queueManager->PushEgress(outPort, priority, packet->GetSize());
-    Ptr<UbPort> sendPort = DynamicCast<ns3::UbPort>(node->GetDevice(outPort));
-    sendPort->TriggerTransmit();
+    
+    Ptr<UbPort> port = DynamicCast<ns3::UbPort>(node->GetDevice(outPort));
+    port->TriggerTransmit();
 }
 
 /**
- * @brief Packet dequeue from ingress and push into egress.
- * This method is called by Port: m_node->NotifySwitchDequeue(inPortId, outPort, priority, packet)
+ * @brief Send control frame (PFC/CBFC) on specified port
+ * Control frames use highest priority (0) and are locally generated (inPort = outPort)
+ */
+void UbSwitch::SendControlFrame(Ptr<Packet> packet, uint32_t portId)
+{
+    // Control frames: inPort = outPort, priority = 0
+    uint32_t priority = 0;
+    
+    // Check if high priority buffer has space (should rarely be full)
+    if (!m_queueManager->CheckInPortSpace(portId, priority, packet->GetSize())) {
+        NS_LOG_WARN("High priority buffer full! Port=" << portId
+                    << " This should rarely happen for control frames.");
+    }
+    
+    SendPacket(packet, portId, portId, priority);
+}
+
+/**
+ * @brief Packet dequeued from VOQ and moved to EgressQueue
+ * Called by allocator when packet is selected from VOQ and placed into EgressQueue.
+ * Updates buffer statistics to reflect packet leaving VOQ.
  */
 void UbSwitch::NotifySwitchDequeue(uint16_t inPortId, uint32_t outPort, uint32_t priority, Ptr<Packet> packet)
 {
-    UbDatalinkHeader dlHeader;
-    packet->PeekHeader(dlHeader);
-    if (!dlHeader.IsControlCreditHeader()) {
+    // Update buffer statistics for all packets (including control frames)
+    m_queueManager->PopFromVoq(inPortId, outPort, priority, packet->GetSize());
+    
+    // Only data packets trigger congestion control
+    UbPacketType_t packetType = GetPacketType(packet);
+    if (packetType != UB_CONTROL_FRAME) {
         NS_LOG_DEBUG("[QMU] Node:" << GetObject<Node>()->GetId()
               << " port:" << outPort
-              << " egress size:" << m_queueManager->GetAllEgressUsed(outPort));
+              << " VOQ outPort buffer:" << m_queueManager->GetTotalOutPortBufferUsed(outPort));
         m_congestionCtrl->SwitchForwardPacket(inPortId, outPort, packet);
-        m_queueManager->PopIngress(inPortId, priority, packet->GetSize());
     }
 }
 
@@ -497,19 +565,6 @@ Ptr<UbQueueManager> UbSwitch::GetQueueManager()
     return m_queueManager;
 }
 
-void UbSwitch::SwitchSendFinish(uint32_t portId, uint32_t pri, Ptr<Packet> packet)
-{
-    UbDatalinkHeader dlHeader;
-
-    packet->PeekHeader(dlHeader);
-    if (!dlHeader.IsControlCreditHeader()) {
-        m_queueManager->PopEgress(portId, pri, packet->GetSize());
-        NS_LOG_DEBUG("[queueManager] Node:" << GetObject<Node>()->GetId()
-                  << " port:" << portId
-                  << " egress size:" << m_queueManager->GetAllEgressUsed(portId));
-    }
-}
-
 void UbSwitch::SetCongestionCtrl(Ptr<UbCongestionControl> congestionCtrl)
 {
     m_congestionCtrl = congestionCtrl;
@@ -523,28 +578,6 @@ Ptr<UbCongestionControl> UbSwitch::GetCongestionCtrl()
 void UbSwitch::LastPacketTraversesNotify(uint32_t nodeId, UbTransportHeader ubTpHeader)
 {
     m_traceLastPacketTraversesNotify(nodeId, ubTpHeader);
-}
-
-void UbSwitch::CheckDeadlock()
-{
-    Time now = Simulator::Now();
-    Time threshold = MilliSeconds(10); // 10ms threshold
-
-    for (uint32_t outPort = 0; outPort < m_voq.size(); ++outPort) {
-        for (uint32_t pri = 0; pri < m_voq[outPort].size(); ++pri) {
-            for (uint32_t inPort = 0; inPort < m_voq[outPort][pri].size(); ++inPort) {
-                Ptr<UbPacketQueue> queue = m_voq[outPort][pri][inPort];
-                if (queue && !queue->IsEmpty()) {
-                    if (now - queue->GetHeadArrivalTime() > threshold) {
-                        NS_LOG_WARN("Potential Deadlock in Switch " << GetObject<Node>()->GetId() 
-                            << " VOQ[Out:" << outPort << "][Pri:" << pri << "][In:" << inPort << "]"
-                            << " Head packet stuck for " << (now - queue->GetHeadArrivalTime()).GetMilliSeconds() << " ms");
-                    }
-                }
-            }
-        }
-    }
-    Simulator::Schedule(MilliSeconds(1), &UbSwitch::CheckDeadlock, this);
 }
 
 }  // namespace ns3

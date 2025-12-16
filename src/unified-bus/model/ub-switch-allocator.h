@@ -34,12 +34,13 @@ public:
     void SetEgressStatus(uint32_t portId, bool status);
     bool GetEgressStatus(uint32_t portId);
     void DoDispose() override;
+    void CheckDeadlock();
 
 protected:
     Time m_allocationTime;
     uint32_t m_nodeId;
-    IngressSource_t m_igsrc;
-    EgressStatus_t m_egStatus;
+    IngressSource_t m_ingressSources;
+    EgressStatus_t m_egressStatus;
 };
 
 

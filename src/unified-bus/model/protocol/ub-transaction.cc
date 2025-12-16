@@ -265,8 +265,8 @@ void UbTransaction::OnScheduleWqeSegmentFinish(Ptr<UbWqeSegment> segment)
     Ptr<UbTransportChannel> tp = m_tpnMap[segment->GetTpn()];
     segment->SetTpMsn(tp->GetMsnCnt());
     segment->SetPsnStart(tp->GetPsnCnt());
-    tp->UpDatePsnCnt(segment->GetPsnSize());
-    tp->UpDateMsnCnt(1);
+    tp->UpdatePsnCnt(segment->GetPsnSize());
+    tp->UpdateMsnCnt(1);
     tp->PushWqeSegment(segment);
     NS_LOG_INFO("WQE Segment Sends, taskId:" << segment->GetTaskId()
         << "TASSN: "<< segment->GetTaSsn());
