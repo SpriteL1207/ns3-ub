@@ -26,7 +26,8 @@ public:
     UbSwitchAllocator();
     virtual ~UbSwitchAllocator();
     static TypeId GetTypeId (void);
-    virtual void TriggerAllocator(Ptr<UbPort> outPort);
+    void TriggerAllocator(Ptr<UbPort> outPort);
+    virtual void AllocateNextPacket(Ptr<UbPort> outPort);
     virtual void Init();
     void SetNodeId(uint32_t nodeId) {m_nodeId = nodeId;}
     void RegisterUbIngressQueue(Ptr<UbIngressQueue> ingressQueue, uint32_t outPort, uint32_t priority);
@@ -41,6 +42,8 @@ protected:
     uint32_t m_nodeId;
     IngressSource_t m_ingressSources;
     EgressStatus_t m_egressStatus;
+    std::vector<bool> m_isRunning;	
+    std::vector<bool> m_oneMoreRound;
 };
 
 
@@ -53,15 +56,50 @@ public:
     virtual ~UbRoundRobinAllocator() {}
     static TypeId GetTypeId(void);
 
-    virtual void TriggerAllocator(Ptr<UbPort> outPort) override;
     virtual void Init() override;
     Ptr<UbIngressQueue> SelectNextIngressQueue(Ptr<UbPort> outPort);
-    void AllocateNextPacket(Ptr<UbPort> outPort);
+    virtual void AllocateNextPacket(Ptr<UbPort> outPort) override;
 
 private:
     std::vector<std::vector<uint32_t> > m_rrIdx;
-    std::vector<bool> m_isRunning;
-    std::vector<bool> m_oneMoreRound;
+};
+
+
+/**
+ * @brief 基于 DWRR 的 VL 间调度器
+ *
+ *  - 每个 [outPort][priority(VL)] 维护：
+ *      - m_quantum
+ *      - m_deficit  
+ *  - m_currVlIdx[outPort]：当前在 VL 间 DWRR 轮询到的 VLAN
+ *  - 相同 VLAN 内多个 IngressQueue 按 RR 轮询（m_rrIdx）
+ */
+class UbDwrrAllocator : public UbSwitchAllocator {
+public:
+    UbDwrrAllocator() {}
+    virtual ~UbDwrrAllocator() {}
+    static TypeId GetTypeId(void);
+
+    virtual void Init() override;
+    Ptr<UbIngressQueue> SelectNextIngressQueue(Ptr<UbPort> outPort);
+    virtual void AllocateNextPacket(Ptr<UbPort> outPort) override;
+
+    void SetQuantum(uint32_t priority, uint32_t quantum);
+    void SetQuantum(uint32_t outPort, uint32_t priority, uint32_t quantum);
+
+private:
+    std::vector<std::vector<uint32_t> > m_rrIdx;
+    std::vector<std::vector<uint32_t> > m_quantum;
+    std::vector<std::vector<uint32_t> > m_deficit;
+    std::vector<uint32_t> m_currVlIdx;
+
+    // 记录最近一次在某个 VLAN 下选中的 ingressQueue 索引，用于额度不足时回滚 m_rrIdx
+    std::vector<std::vector<uint32_t> > m_lastSelectedQIdx;
+
+    uint32_t    m_defaultQuantum;
+    std::string m_vlQuantumsStr;
+    void ApplyDefaultQuantum();
+    void ParseAndApplyVlQuantums(const std::string& s);
 };
 
 } /* namespace ns3 */

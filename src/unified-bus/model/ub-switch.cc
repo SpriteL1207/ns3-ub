@@ -32,6 +32,12 @@ TypeId UbSwitch::GetTypeId (void)
                       BooleanValue(false),
                       MakeBooleanAccessor(&UbSwitch::m_isPFCEnable),
                       MakeBooleanChecker())
+        .AddAttribute("VlScheduler",
+                      "VL inter-scheduling algorithm (SP or DWRR).",
+                      EnumValue(SP),
+                      MakeEnumAccessor<VlScheduler>(&UbSwitch::m_vlScheduler),
+                      MakeEnumChecker(SP, "SP",
+                                      DWRR, "DWRR"))
         .AddTraceSource("LastPacketTraversesNotify",
                         "Last Packet Traverses, NodeId",
                         MakeTraceSourceAccessor(&UbSwitch::m_traceLastPacketTraversesNotify),
@@ -46,7 +52,15 @@ void UbSwitch::Init()
     auto node = GetObject<Node>();
     m_portsNum = node->GetNDevices();
     // alg init
-    m_allocator = CreateObject<UbRoundRobinAllocator>();
+    switch (m_vlScheduler) {
+        case DWRR:
+            m_allocator = CreateObject<UbDwrrAllocator>();
+            break;
+        case SP:
+        default:
+            m_allocator = CreateObject<UbRoundRobinAllocator>();
+            break;
+    }
     m_allocator->SetNodeId(node->GetId());
     m_allocator->Init();
     VoqInit();
@@ -500,10 +514,10 @@ void UbSwitch::SendPacket(Ptr<Packet> packet, uint32_t inPort, uint32_t outPort,
     Ptr<UbPort> recvPort = DynamicCast<ns3::UbPort>(node->GetDevice(inPort));
     
     m_voq[outPort][priority][inPort]->Push(packet);
-    
+
     // Update both InPort and OutPort view buffer statistics
     m_queueManager->PushToVoq(inPort, outPort, priority, packet->GetSize());
-    
+
     if (IsPFCEnable()) {
         recvPort->m_flowControl->HandleReceivedPacket(packet);
     }

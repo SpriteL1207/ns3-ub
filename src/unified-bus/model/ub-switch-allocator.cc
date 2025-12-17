@@ -9,6 +9,7 @@
 namespace ns3 {
 
 NS_OBJECT_ENSURE_REGISTERED(UbSwitchAllocator);
+NS_OBJECT_ENSURE_REGISTERED(UbDwrrAllocator);
 NS_LOG_COMPONENT_DEFINE("UbSwitchAllocator");
 
 TypeId UbSwitchAllocator::GetTypeId(void)
@@ -34,9 +35,36 @@ UbSwitchAllocator::~UbSwitchAllocator()
 void UbSwitchAllocator::DoDispose()
 {
     m_ingressSources.clear();
+    m_isRunning.clear();
+    m_oneMoreRound.clear();
 }
 
 void UbSwitchAllocator::TriggerAllocator(Ptr<UbPort> outPort)
+{
+    std::string typeName = GetInstanceTypeId().GetName();
+    NS_LOG_DEBUG("[" << typeName << " TriggerAllocator] portId: " << outPort->GetIfIndex());
+
+    auto outPortId = outPort->GetIfIndex();
+    
+    if (outPortId >= m_isRunning.size()) {
+         NS_LOG_WARN("Port ID out of range in Allocator");
+         return;
+    }
+
+    if (m_isRunning[outPortId]) {
+        // one more round flag
+        // 为了避免 running 过程中新生成的包：
+        // 1. 无法被当前轮次调度
+        // 2. 下一次 trigger 会被当前轮次的状态掩盖
+        m_oneMoreRound[outPortId] = true;
+        NS_LOG_DEBUG("[" << typeName << " TriggerAllocator] Allocator is running, will retrigger.");
+        return;
+    }
+    m_isRunning[outPortId] = true;
+    Simulator::Schedule(m_allocationTime, &UbSwitchAllocator::AllocateNextPacket, this, outPort);
+}
+
+void UbSwitchAllocator::AllocateNextPacket(Ptr<UbPort> outPort)
 {
 }
 
@@ -44,6 +72,7 @@ void UbSwitchAllocator::Init()
 {
     Simulator::Schedule(MilliSeconds(10), &UbSwitchAllocator::CheckDeadlock, this);
 }
+
 void UbSwitchAllocator::RegisterUbIngressQueue(Ptr<UbIngressQueue> ingressQueue, uint32_t outPort, uint32_t priority)
 {
     m_ingressSources[outPort][priority].push_back(ingressQueue);
@@ -121,28 +150,11 @@ void UbRoundRobinAllocator::Init()
         v.resize(vlNum, 0);
     }
     m_ingressSources.resize(portsNum);
-    m_isRunning.resize(portsNum, false);
-    m_oneMoreRound.resize(portsNum, false);
+    m_isRunning.assign(portsNum, false);
+    m_oneMoreRound.assign(portsNum, false);
     for (auto &i : m_ingressSources) {
         i.resize(vlNum);
     }
-}
-
-void UbRoundRobinAllocator::TriggerAllocator(Ptr<UbPort> outPort)
-{
-    NS_LOG_DEBUG("[UbRoundRobinAllocator TriggerAllocator] portId: " << outPort->GetIfIndex());
-    auto outPortId = outPort->GetIfIndex();
-    if (m_isRunning[outPortId]) {
-        // one more round flag
-        // 为了避免running过程中新生成的包：
-        // 1.无法被当前轮次调度
-        // 2.下一次trigger会被当前轮次的状态掩盖
-        m_oneMoreRound[outPortId] = true;
-        NS_LOG_DEBUG("[UbRoundRobinAllocator TriggerAllocator] Allocator is running, will retrigger.");
-        return;
-    }
-    m_isRunning[outPortId] = true;
-    Simulator::Schedule(m_allocationTime, &UbRoundRobinAllocator::AllocateNextPacket, this, outPort);
 }
 
 void UbRoundRobinAllocator::AllocateNextPacket(Ptr<UbPort> outPort)
@@ -161,7 +173,7 @@ void UbRoundRobinAllocator::AllocateNextPacket(Ptr<UbPort> outPort)
         outPort->GetUbQueue()->DoEnqueue(packetEntry);
         
         // Packet moved from VOQ to EgressQueue, notify Switch to update buffer statistics
-        if (inPortId != outPortId) { // Forwarded packet (not locally generated)
+        if (ingressQueue->GetIngressQueueType() != IngressQueueType::TP) { // Forwarded packet (not locally generated)
             auto node = NodeList::GetNode(m_nodeId);
             node->GetObject<UbSwitch>()->NotifySwitchDequeue(inPortId, outPortId, priority, packet);
         }
@@ -199,6 +211,296 @@ Ptr<UbIngressQueue> UbRoundRobinAllocator::SelectNextIngressQueue(Ptr<UbPort> ou
         }
     }
     return nullptr;
+}
+
+
+/*-----------------------------------------UbDwrrAllocator----------------------------------------------*/
+
+TypeId UbDwrrAllocator::GetTypeId(void)
+{
+    static TypeId tid = TypeId("ns3::UbDwrrAllocator")
+        .SetParent<UbSwitchAllocator>()
+        .AddConstructor<UbDwrrAllocator>()
+        .AddAttribute("DefaultQuantum",
+                      "Default DWRR quantum in bytes for all VLs.",
+                      UintegerValue(1500),
+                      MakeUintegerAccessor(&UbDwrrAllocator::m_defaultQuantum),
+                      MakeUintegerChecker<uint32_t>(500, 1<<30))
+        .AddAttribute("VlQuantums",
+                      "Per-VL quantum overrides as 'vl:bytes,vl:bytes', e.g. '7:6000,8:12000'.",
+                      StringValue(""),
+                      MakeStringAccessor(&UbDwrrAllocator::m_vlQuantumsStr),
+                      MakeStringChecker())
+        ;
+    return tid;
+}
+
+void UbDwrrAllocator::Init()
+{
+    auto node = NodeList::GetNode(m_nodeId);
+    uint32_t portsNum = node->GetNDevices();
+    auto vlNum = node->GetObject<UbSwitch>()->GetVLNum();
+
+    m_rrIdx.assign(portsNum, std::vector<uint32_t>(vlNum, 0));
+    m_quantum.assign(portsNum, std::vector<uint32_t>(vlNum, 0));
+    m_deficit.assign(portsNum, std::vector<uint32_t>(vlNum, 0));
+    m_lastSelectedQIdx.assign(portsNum, std::vector<uint32_t>(vlNum, 0));
+    m_currVlIdx.assign(portsNum, 0);
+
+    m_isRunning.assign(portsNum, false);
+    m_oneMoreRound.assign(portsNum, false);
+
+    m_ingressSources.resize(portsNum);
+    for (auto &i : m_ingressSources) {
+        i.resize(vlNum);
+    }
+
+    ApplyDefaultQuantum();
+    ParseAndApplyVlQuantums(m_vlQuantumsStr);
+}
+
+void UbDwrrAllocator::SetQuantum(uint32_t priority, uint32_t quantum)
+{
+    for (uint32_t port = 0; port < m_quantum.size(); ++port) {
+        if (priority < m_quantum[port].size()) {
+            m_quantum[port][priority] = quantum;
+        }
+    }
+}
+
+void UbDwrrAllocator::SetQuantum(uint32_t outPort, uint32_t priority, uint32_t quantum)
+{
+    if (outPort >= m_quantum.size()) {
+        return;
+    }
+    if (priority >= m_quantum[outPort].size()) {
+        return;
+    }
+    m_quantum[outPort][priority] = quantum;
+}
+
+Ptr<UbIngressQueue> UbDwrrAllocator::SelectNextIngressQueue(Ptr<UbPort> outPort)
+{
+    uint32_t outPortId = outPort->GetIfIndex();
+    auto node = NodeList::GetNode(m_nodeId);
+    auto vlNum = node->GetObject<UbSwitch>()->GetVLNum();
+
+    if (vlNum == 0) {
+        return nullptr;
+    }
+
+    uint32_t startVl = m_currVlIdx[outPortId] % vlNum;
+
+    for (uint32_t cnt = 0; cnt < vlNum; ++cnt) {
+        uint32_t pi = (startVl + cnt) % vlNum;
+        auto &queues = m_ingressSources[outPortId][pi];
+        size_t qSize = queues.size();
+
+        if (qSize == 0) {
+            m_deficit[outPortId][pi] = 0;
+            continue;
+        }
+
+        bool hasNonEmpty = false;
+        for (uint32_t idx = 0; idx < qSize; ++idx) {
+            uint32_t qidx = (idx + m_rrIdx[outPortId][pi]) % qSize;
+            auto q = queues[qidx];
+
+            if (!q->IsEmpty() &&
+                !outPort->GetFlowControl()->IsFcLimited(q)) {
+                hasNonEmpty = true;
+
+                m_deficit[outPortId][pi] += m_quantum[outPortId][pi];
+                m_lastSelectedQIdx[outPortId][pi] = qidx;
+                m_rrIdx[outPortId][pi] = (qidx + 1) % qSize;
+                m_currVlIdx[outPortId] = (pi + 1) % vlNum;
+
+                NS_LOG_DEBUG("[UbDwrrAllocator SelectNextIngressQueue]"
+                             << " NodeId: " << node->GetId()
+                             << " OutPortId: " << outPortId
+                             << " VL: " << pi
+                             << " qidx: " << qidx
+                             << " deficit: " << m_deficit[outPortId][pi]);
+                return q;
+            }
+        }
+
+        if (!hasNonEmpty) {
+            m_deficit[outPortId][pi] = 0;
+        }
+    }
+
+    return nullptr;
+}
+
+void UbDwrrAllocator::AllocateNextPacket(Ptr<UbPort> outPort)
+{
+    NS_LOG_DEBUG("[UbDwrrAllocator AllocateNextPacket] portId: " << outPort->GetIfIndex());
+    auto outPortId = outPort->GetIfIndex();
+
+    // 标记这轮调度是否实际发出了至少一个包
+    bool sentAny = false;
+
+    auto ingressQueue = SelectNextIngressQueue(outPort);
+    if (ingressQueue != nullptr) {
+        auto priority = ingressQueue->GetIngressPriority();
+        uint32_t pi = priority;
+        auto &queues = m_ingressSources[outPortId][pi];
+        size_t qSize = queues.size();
+        if (qSize > 0) {
+            uint32_t qidx = m_lastSelectedQIdx[outPortId][pi];
+            uint32_t &deficit = m_deficit[outPortId][pi];
+
+            bool first = true;
+
+            while (deficit > 0 && qSize > 0) {
+                auto q = queues[qidx];
+
+                if (q->IsEmpty() || outPort->GetFlowControl()->IsFcLimited(q)) {
+                    bool found = false;
+                    for (uint32_t i = 0; i < qSize; ++i) {
+                        uint32_t candIdx = (qidx + i) % qSize;
+                        auto candQ = queues[candIdx];
+                        if (!candQ->IsEmpty() &&
+                            !outPort->GetFlowControl()->IsFcLimited(candQ)) {
+                            qidx = candIdx;
+                            q = candQ;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        deficit = 0;
+                        break;
+                    }
+                }
+
+                uint32_t pktSize = q->GetNextPacketSize();
+
+                // 第一个包就发不出去：不扣赤字，并回滚 m_rrIdx
+                if (pktSize > deficit) {
+                    if (!sentAny) {
+                        m_rrIdx[outPortId][pi] = qidx;  
+                    }
+                    break;
+                }
+
+                auto packet = q->GetNextPacket();
+                auto inPortId = q->GetInPortId();
+                auto packetEntry = std::make_tuple(inPortId, priority, packet);
+                outPort->GetFlowControl()->HandleSentPacket(packet, q);
+                outPort->GetUbQueue()->DoEnqueue(packetEntry);
+
+                // Packet moved from VOQ to EgressQueue, notify Switch to update buffer statistics
+                if (ingressQueue->GetIngressQueueType() != IngressQueueType::TP) { // Forwarded packet (not locally generated)
+                    auto node = NodeList::GetNode(m_nodeId);
+                    node->GetObject<UbSwitch>()->NotifySwitchDequeue(inPortId, outPortId, priority, packet);
+                }
+
+                sentAny = true;
+                deficit -= pktSize;
+
+                if (first) {
+                    qidx = m_rrIdx[outPortId][pi];
+                    first = false;
+                } else {
+                    m_rrIdx[outPortId][pi] = (qidx + 1) % qSize;
+                    qidx = m_rrIdx[outPortId][pi];
+                }
+            }
+
+            bool vlanEmpty = true;
+            for (auto &qq : queues) {
+                if (!qq->IsEmpty() &&
+                    !outPort->GetFlowControl()->IsFcLimited(qq)) {
+                    vlanEmpty = false;
+                    break;
+                }
+            }
+            if (vlanEmpty) {
+                deficit = 0;
+            }
+        }
+    }
+
+    if (ingressQueue != nullptr && !sentAny) {
+        Simulator::Schedule(m_allocationTime,
+                            &UbDwrrAllocator::AllocateNextPacket,
+                            this, outPort);
+        return;
+    }
+
+    m_isRunning[outPortId] = false;
+    // 通知 port 发包
+    Simulator::ScheduleNow(&UbPort::NotifyAllocationFinish, outPort);
+    if (m_oneMoreRound[outPortId]) {
+        m_oneMoreRound[outPortId] = false;
+        Simulator::ScheduleNow(&UbDwrrAllocator::TriggerAllocator, this, outPort);
+        NS_LOG_DEBUG("[UbDwrrAllocator AllocateNextPacket] ReTriggerAllocator portId: "
+                     << outPort->GetIfIndex());
+    }
+}
+
+void UbDwrrAllocator::ApplyDefaultQuantum()
+{
+    auto node = NodeList::GetNode(m_nodeId);
+    uint32_t portsNum = node->GetNDevices();
+    auto vlNum = node->GetObject<UbSwitch>()->GetVLNum();
+
+    uint32_t q = std::max<uint32_t>(m_defaultQuantum, 64);
+    for (uint32_t p = 0; p < portsNum; ++p) {
+        for (uint32_t vl = 0; vl < vlNum; ++vl) {
+            m_quantum[p][vl] = q;
+        }
+    }
+}
+
+void UbDwrrAllocator::ParseAndApplyVlQuantums(const std::string& s)
+{
+    if (s.empty()) return;
+
+    std::istringstream ss(s);
+    std::string token;
+
+    auto node = NodeList::GetNode(m_nodeId);
+    uint32_t portsNum = node->GetNDevices();
+    auto vlNum = node->GetObject<UbSwitch>()->GetVLNum();
+
+    while (std::getline(ss, token, ',')) {
+        if (token.empty()) continue;
+
+        token.erase(0, token.find_first_not_of(" \t"));
+        token.erase(token.find_last_not_of(" \t") + 1);
+
+        auto pos = token.find(':');
+        if (pos == std::string::npos) continue;
+
+        std::string vlStr = token.substr(0, pos);
+        std::string qStr  = token.substr(pos + 1);
+
+        vlStr.erase(0, vlStr.find_first_not_of(" \t"));
+        vlStr.erase(vlStr.find_last_not_of(" \t") + 1);
+        qStr.erase(0, qStr.find_first_not_of(" \t"));
+        qStr.erase(qStr.find_last_not_of(" \t") + 1);
+
+        char* endp = nullptr;
+        long vl = std::strtol(vlStr.c_str(), &endp, 10);
+        if (endp == vlStr.c_str() || vl < 0 || (uint32_t)vl >= vlNum) {
+            NS_LOG_WARN("UbDwrrAllocator::VlQuantums invalid vl: " << vlStr);
+            continue;
+        }
+
+        endp = nullptr;
+        long q = std::strtol(qStr.c_str(), &endp, 10);
+        if (endp == qStr.c_str() || q <= 0) {
+            NS_LOG_WARN("UbDwrrAllocator::VlQuantums invalid quantum: " << qStr);
+            continue;
+        }
+
+        for (uint32_t p = 0; p < portsNum; ++p) {
+            m_quantum[p][(uint32_t)vl] = (uint32_t)q;
+        }
+    }
 }
 
 } // namespae ns3

@@ -134,6 +134,11 @@ private:
     bool m_isCBFCEnable;
     // pfc
     bool m_isPFCEnable;
+    enum VlScheduler {
+        SP = 0,
+        DWRR = 1
+    };
+    VlScheduler m_vlScheduler {SP};
 };
 
 } // namespace ns3
