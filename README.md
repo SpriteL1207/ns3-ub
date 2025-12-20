@@ -239,4 +239,4 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
   year = {2025}
 }
 ```
-[![Visitors](https://api.visitorbadge.io/api/combined?path=https%3A%2F%2Fgitcode.com%2Fopen-usim%2Fns-3-ub&labelColor=%23dcdcdd&countColor=%230070c0)](https://visitorbadge.io/status?path=https%3A%2F%2Fgitcode.com%2Fopen-usim%2Fns-3-ub)
+<a href='https://mapmyvisitors.com/web/1c1da'  title='Visit tracker'><img src='https://mapmyvisitors.com/map.png?cl=ffffff&w=a&t=tt&d=Ctk3Fz1wWGpnv9Or15k53KwUJ5GPcNoSRETpXtl4GF4&co=2d78ad&ct=ffffff'/></a>
