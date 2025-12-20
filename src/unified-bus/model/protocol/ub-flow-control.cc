@@ -267,6 +267,176 @@ FcType UbCbfc::GetFcType()
     return m_fcType;
 }
 
+
+TypeId UbCbfcSharedMode::GetTypeId(void)
+{
+    static TypeId tid = TypeId("ns3::UbCbfcSharedMode")
+        .SetParent<UbCbfc>()
+        .AddConstructor<UbCbfcSharedMode>();
+    return tid;
+}
+
+void UbCbfcSharedMode::Init(uint8_t flitLen, uint8_t nFlitPerCell, uint8_t retCellGrainDataPacket,
+                            uint8_t retCellGrainControlPacket, int32_t reservedPerVlCells,
+                            int32_t sharedInitCells, uint32_t nodeId, uint32_t portId)
+{
+    UbCbfc::Init(flitLen, nFlitPerCell, retCellGrainDataPacket, retCellGrainControlPacket,
+                 reservedPerVlCells, nodeId, portId);
+
+    m_shareCrd = sharedInitCells;
+    m_reservedPerVlCells = reservedPerVlCells;
+
+    NS_LOG_DEBUG("NodeId: " << m_nodeId << "PortId: " << m_portId << "Init CbfcSharedMode");
+    NS_LOG_DEBUG("m_shareCrd: " << m_shareCrd << " reservedPerVlCells: " << m_reservedPerVlCells);
+}
+
+FcType UbCbfcSharedMode::GetFcType()
+{
+    return FcType::CBFCSHARED;
+}
+
+bool UbCbfcSharedMode::IsFcLimited(Ptr<UbIngressQueue> ingressQ)
+{
+    uint32_t nextPktSize = 0;
+
+    if (ingressQ->GetIngressQueueType() == IngressQueueType::VOQ) {
+        if (ingressQ->GetInPortId() == ingressQ->GetOutPortId()) {
+            NS_LOG_DEBUG("is crd pkt");
+            return false;
+        }
+        nextPktSize = ingressQ->GetNextPacketSize();
+        NS_LOG_DEBUG("is forward pkt nextPktSize: " << nextPktSize);
+    } else if (ingressQ->GetIngressQueueType() == IngressQueueType::TP) {
+        nextPktSize = ingressQ->GetNextPacketSize();
+        NS_LOG_DEBUG("is tp pkt nextPktSize:" << nextPktSize);
+    }
+
+    const int32_t consumeCellNum =
+        ceil((float)nextPktSize / (m_cbfcCfg->m_flitLen * m_cbfcCfg->m_nFlitPerCell));
+
+    const uint8_t vlId = ingressQ->GetIngressPriority();
+    const int32_t totalAvail = m_shareCrd + m_crdTxfree[vlId];
+
+    if (totalAvail < consumeCellNum) {
+        NS_LOG_INFO("Flow Control Credit Limited,outPort:{" << ingressQ->GetOutPortId()
+                                                            << "} VL:{" << (uint32_t)vlId << "}");
+        NS_LOG_DEBUG("TotalAvailable[ " << (uint32_t)vlId << " ]: " << totalAvail
+                                     << " is insufficient. Need: " << consumeCellNum);
+        return true;
+    }
+    NS_LOG_DEBUG("TotalAvailable[ " << (uint32_t)vlId << " ]: " << totalAvail
+                                 << " is enough. Need: " << consumeCellNum);
+
+    return false;
+}
+
+void UbCbfcSharedMode::HandleSentPacket(Ptr<Packet> p, Ptr<UbIngressQueue> ingressQ)
+{
+    if ((ingressQ->GetIngressQueueType() == IngressQueueType::VOQ) &&
+        (ingressQ->GetInPortId() != ingressQ->GetOutPortId())) {
+        CbfcSharedConsumeCrd(p);
+    } else if ((ingressQ->GetIngressQueueType() == IngressQueueType::VOQ) &&
+               (ingressQ->GetInPortId() == ingressQ->GetOutPortId())) {
+        NS_LOG_DEBUG("is crd pkt");
+    } else if (ingressQ->GetIngressQueueType() == IngressQueueType::TP) {
+        NS_LOG_DEBUG("is pkt from Transport");
+        CbfcSharedConsumeCrd(p);
+    }
+}
+
+void UbCbfcSharedMode::HandleReceivedControlPacket(Ptr<Packet> p)
+{
+    CbfcSharedRestoreCrd(p);
+}
+
+bool UbCbfcSharedMode::CbfcSharedConsumeCrd(Ptr<Packet> p)
+{
+    const uint32_t pktSize = p->GetSize();
+    NS_LOG_DEBUG("NodeId: " << m_nodeId << " PortId: " << m_portId << " pktSize: " << pktSize);
+    UbDatalinkPacketHeader pktHeader;
+    p->PeekHeader(pktHeader);
+    const uint8_t vlId = pktHeader.GetPacketVL();
+
+    const int32_t consumeCellNum =
+        ceil((float)pktSize / (m_cbfcCfg->m_flitLen * m_cbfcCfg->m_nFlitPerCell));
+    
+    NS_LOG_DEBUG("befor consume, m_shareCrd: " << m_shareCrd << " m_crdTxfree[ " << (uint32_t)vlId << " ]: " << m_crdTxfree[vlId]);
+
+    if (m_shareCrd >= consumeCellNum) {
+        m_shareCrd -= consumeCellNum;
+        NS_LOG_DEBUG("left m_shareCrd: " << m_shareCrd << " left m_crdTxfree[ " << (uint32_t)vlId << " ]: " << m_crdTxfree[vlId]);
+        return true;
+    }
+
+    const int32_t remainder = consumeCellNum - m_shareCrd;
+    m_shareCrd = 0;
+
+    if (m_crdTxfree[vlId] >= remainder) {
+        m_crdTxfree[vlId] -= remainder;
+        NS_LOG_DEBUG("left m_shareCrd: " << m_shareCrd << " left m_crdTxfree[ " << (uint32_t)vlId << " ]: " << m_crdTxfree[vlId]);
+        return true;
+    }
+
+    NS_LOG_WARN("CbfcSharedConsumeCrd underflow, vlId: " << (uint32_t)vlId);
+    m_crdTxfree[vlId] = 0;
+    return false;
+}
+
+bool UbCbfcSharedMode::CbfcSharedRestoreCrd(Ptr<Packet> p)
+{
+    Ptr<Node> node = NodeList::GetNode(m_nodeId);
+    Ptr<UbPort> port = DynamicCast<UbPort>(node->GetDevice(m_portId));
+
+    NS_LOG_DEBUG("NodeId: " << m_nodeId << " PortId: " << m_portId);
+    port->ResetCredits();
+    UbDatalinkControlCreditHeader crdHeader = UbDataLink::ParseCreditHeader(p, port);
+
+    uint32_t ResumeCellGrainNum = 0;
+    bool ret = false;
+    IntegerValue val;
+    g_ub_vl_num.GetValue(val);
+    int ubVlNum = val.Get();
+
+    for (int index = 0; index < ubVlNum; index++) {
+        NS_LOG_DEBUG("port m_credits[ " << (uint32_t)index << " ]: " << (uint32_t)port->m_credits[index]);
+    }
+
+    int32_t totalReturned = 0;
+
+    for (int index = 0; index < ubVlNum; index++) {
+        if (port->m_credits[index] > 0) {
+            ResumeCellGrainNum = port->m_credits[index];
+            int32_t cells = ResumeCellGrainNum * m_cbfcCfg->m_retCellGrainControlPacket;
+            totalReturned += cells;
+        }
+    }
+
+    if (totalReturned > 0) {
+        NS_LOG_DEBUG("before resume Share: " << m_shareCrd << " TotalReturned: " << totalReturned);
+        m_shareCrd += totalReturned;
+        
+        for (int vl = 0; vl < ubVlNum; vl++) {
+            if (m_shareCrd <= 0) break;
+
+            if (m_crdTxfree[vl] < m_reservedPerVlCells) {
+                int32_t needed = m_reservedPerVlCells - m_crdTxfree[vl];
+                int32_t canGive = std::min(needed, m_shareCrd);
+                
+                NS_LOG_DEBUG("Refill VL " << vl << " before: " << m_crdTxfree[vl] << " add: " << canGive);
+                m_crdTxfree[vl] += canGive;
+                m_shareCrd -= canGive;
+                NS_LOG_DEBUG("Refill VL " << vl << " after: " << m_crdTxfree[vl]);
+            }
+        }
+        NS_LOG_DEBUG("left Share: " << m_shareCrd);
+        ret = true;
+    }
+
+    Simulator::ScheduleNow(&UbPort::TriggerTransmit, port);
+    return ret;
+}
+
+
 TypeId UbPfc::GetTypeId(void)
 {
     static TypeId tid = TypeId("ns3::UbPfc").SetParent<UbFlowControl>().AddConstructor<UbPfc>();

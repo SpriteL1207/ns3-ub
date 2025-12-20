@@ -34,6 +34,7 @@ class UbIngressQueue;
 class UbLink;
 class UbFlowControl;
 class UbCbfc;
+class UbCbfcSharedMode;
 class UbPfc;
 
 // Egress queue enqueue item: (inPortId, priority, packet)
@@ -228,6 +229,7 @@ private:
     uint8_t m_cbfcRetCellGrainDataPacket;       // 数据包返回的CRD的粒度，通常从以下选项中选择 {1, 2, 4, 8, 16, 32, 64, 128}
     uint8_t m_cbfcRetCellGrainControlPacket;    // 控制报文返回的CRD的粒度，通常从以下选项中选择 {1, 2, 4, 8, 16, 32, 64, 128}
     int32_t m_cbfcPortTxfree;
+    int32_t m_cbfcSharedInitCells;
 
     // pfc
     int32_t m_pfcUpThld;

@@ -87,6 +87,7 @@ public:
     Ipv4Address GetNodeIpv4Addr(){return m_Ipv4Addr;}
     Ptr<UbRoutingProcess> GetRoutingProcess() {return m_routingProcess;}
     bool IsCBFCEnable();
+    bool IsCBFCSharedEnable();
     bool IsPFCEnable();
 
     void SetCongestionCtrl(Ptr<UbCongestionControl> congestionCtrl);
@@ -132,6 +133,7 @@ private:
     bool m_isECNEnable;
     // cbfc
     bool m_isCBFCEnable;
+    bool m_isCBFCSharedEnable;
     // pfc
     bool m_isPFCEnable;
     enum VlScheduler {

@@ -27,6 +27,11 @@ TypeId UbSwitch::GetTypeId (void)
                       BooleanValue(false),
                       MakeBooleanAccessor(&UbSwitch::m_isCBFCEnable),
                       MakeBooleanChecker())
+        .AddAttribute("EnableCBFCShared",
+                      "Enable CBFC shared credit mode.",
+                      BooleanValue(false),
+                      MakeBooleanAccessor(&UbSwitch::m_isCBFCSharedEnable),
+                      MakeBooleanChecker())
         .AddAttribute("EnablePFC",
                       "Enable PFC.",
                       BooleanValue(false),
@@ -93,12 +98,14 @@ void UbSwitch::DoDispose()
 void UbSwitch::InitNodePortsFlowControl()
 {
     NS_LOG_DEBUG("[UbSwitch InitNodePortsFlowControl] m_portsNum: " << m_portsNum << " m_isCBFCEnable: " << m_isCBFCEnable
-                << " m_isPFCEnable: " << m_isPFCEnable);
+                << " m_isPFCEnable: " << m_isPFCEnable << " m_isCBFCSharedEnable: " << m_isCBFCSharedEnable);
 
     for (uint32_t pidx = 0; pidx < m_portsNum; pidx++) {
         Ptr<UbPort> port = DynamicCast<ns3::UbPort>(GetObject<Node>()->GetDevice(pidx));
         FcType fcType = FcType::NONE;  // Default: no flow control
-        if (m_isCBFCEnable) {
+        if (m_isCBFCSharedEnable) {
+            fcType = FcType::CBFCSHARED;
+        } else if (m_isCBFCEnable) {
             fcType = FcType::CBFC;
         } else if (m_isPFCEnable) {
             fcType = FcType::PFC;
@@ -231,7 +238,10 @@ void UbSwitch::SwitchHandlePacket(Ptr<UbPort> port, Ptr<Packet> packet)
  */
 void UbSwitch::SinkControlFrame(Ptr<UbPort> port, Ptr<Packet> packet)
 {
-    if (IsCBFCEnable()) {
+    if (IsCBFCSharedEnable()) {
+        auto flowControl = DynamicCast<UbCbfcSharedMode>(port->GetFlowControl());
+        flowControl->CbfcSharedRestoreCrd(packet);
+    } else if (IsCBFCEnable()) {
         auto flowControl = DynamicCast<UbCbfc>(port->GetFlowControl());
         flowControl->CbfcRestoreCrd(packet);
     } else if (IsPFCEnable()) {
@@ -302,7 +312,7 @@ bool UbSwitch::SinkTpDataPacket(Ptr<UbPort> port, Ptr<Packet> packet, const Pars
     }
     // Sink
     NS_LOG_DEBUG("[UbPort recv] Pkt tb is local");
-    if (IsCBFCEnable()) {
+    if (IsCBFCEnable() || IsCBFCSharedEnable()) {
         port->m_flowControl->HandleReceivedPacket(packet);
     }
 
@@ -342,7 +352,7 @@ bool UbSwitch::SinkLdstDataPacket(Ptr<UbPort> port, Ptr<Packet> packet, const Pa
         return false;
     }
     // Sink Packet
-    if (IsCBFCEnable()) {
+    if (IsCBFCEnable() || IsCBFCSharedEnable()) {
         port->m_flowControl->HandleReceivedPacket(packet);
     }
 
@@ -567,6 +577,11 @@ void UbSwitch::NotifySwitchDequeue(uint16_t inPortId, uint32_t outPort, uint32_t
 bool UbSwitch::IsCBFCEnable()
 {
     return m_isCBFCEnable;
+}
+
+bool UbSwitch::IsCBFCSharedEnable()
+{
+    return m_isCBFCSharedEnable;
 }
 
 bool UbSwitch::IsPFCEnable()
