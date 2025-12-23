@@ -307,6 +307,7 @@ Ptr<UbIngressQueue> UbDwrrAllocator::SelectNextIngressQueue(Ptr<UbPort> outPort)
             auto q = queues[qidx];
 
             if (!q->IsEmpty() &&
+                !q->IsLimited() &&
                 !outPort->GetFlowControl()->IsFcLimited(q)) {
                 hasNonEmpty = true;
 
@@ -362,6 +363,7 @@ void UbDwrrAllocator::AllocateNextPacket(Ptr<UbPort> outPort)
                         uint32_t candIdx = (qidx + i) % qSize;
                         auto candQ = queues[candIdx];
                         if (!candQ->IsEmpty() &&
+                            !candQ->IsLimited() &&
                             !outPort->GetFlowControl()->IsFcLimited(candQ)) {
                             qidx = candIdx;
                             q = candQ;
