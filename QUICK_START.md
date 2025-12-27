@@ -53,7 +53,7 @@ global UB_PYTHON_SCRIPT_PATH "scratch/ns-3-ub-tools/trace_analysis/parse_trace.p
 
 ## Python 工具与依赖
 
-项目的 Python 工具集位于 `scratch/ns-3-ub-tools/`（详见：[scratch/ns-3-ub-tools/README.md](scratch/ns-3-ub-tools/README.md)）：
+项目的 Python 工具集位于 `scratch/ns-3-ub-tools/`（文档与脚本产物清单请参阅子模块仓库：[open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools)）：
 
 - 拓扑/可视化：`net_sim_builder.py`、`topo_plot.py`、`user_topo_*.py`
 - 流量生成：`traffic_maker/*`
@@ -202,4 +202,4 @@ ls scratch/2dfm4x4-multipath_a2a/output/
 |------|------|
 | [README.md](README.md) | 项目总览：UB 模块能力、目录结构与核心概念 |
 | [scratch/README.md](scratch/README.md) | 用例执行与配置：运行 `scratch/<case>` 用例，与配置文件说明 |
-| [scratch/ns-3-ub-tools/README.md](scratch/ns-3-ub-tools/README.md) | 配套工具链：生成及 trace 后处理与分析 |
+| [open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools) | 配套工具链（子模块）：用例配置生成与 trace 后处理与分析 |

@@ -53,7 +53,7 @@ global UB_PYTHON_SCRIPT_PATH "scratch/ns-3-ub-tools/trace_analysis/parse_trace.p
 
 ## Python Tools & Dependencies
 
-The project's Python toolset is located in `scratch/ns-3-ub-tools/` (see: [scratch/ns-3-ub-tools/README.md](scratch/ns-3-ub-tools/README.md)):
+The project's Python toolset is located in `scratch/ns-3-ub-tools/` (for docs and script outputs, see the submodule repository: [open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools)):
 
 - Topology/Visualization: `net_sim_builder.py`, `topo_plot.py`, `user_topo_*.py`
 - Traffic Generation: `traffic_maker/*`
@@ -201,4 +201,4 @@ For detailed scenario configuration and file formats, see: [scratch/README.md](s
 |----------|-------------|
 | [README_en.md](README_en.md) | Project overview: UB components, repo layout, and key concepts |
 | [scratch/README.md](scratch/README.md) | Case execution and configuration: run `scratch/<case>` scenarios; define and validate case configs |
-| [scratch/ns-3-ub-tools/README.md](scratch/ns-3-ub-tools/README.md) | Toolchain: generate inputs and perform trace post-processing/analysis |
+| [open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools) | Toolchain (submodule): case generation and trace post-processing/analysis |

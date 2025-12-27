@@ -10,7 +10,7 @@
 |----------|-------------|
 | [QUICK_START_en.md](QUICK_START_en.md) | Build & run entry point: prerequisites, build, minimal example run, and Python tooling setup |
 | [scratch/README.md](scratch/README.md) | Case execution and configuration guide: run `scratch/<case>` scenarios; define and validate case files |
-| [scratch/ns-3-ub-tools/README.md](scratch/ns-3-ub-tools/README.md) | Case generation & post-processing: Python scripts for topology/routing/TP/traffic and trace analysis |
+| [open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools) | Case generation & post-processing (submodule): Python scripts for topology/routing/TP/traffic and trace analysis |
 
 > This project is built on ns-3.44. For detailed platform support, installation steps, system requirements, and build options, see [ns-3.44 Documentation](https://www.nsnam.org/releases/ns-3-44/documentation/), [Installation Guide](https://www.nsnam.org/docs/release/3.44/installation/singlehtml/), and [ns-3.44 Source](https://gitlab.com/nsnam/ns-3-dev/-/tree/ns-3.44?ref_type=tags).
 >

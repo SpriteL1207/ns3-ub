@@ -1,6 +1,6 @@
 # USAGE — Running cases under `scratch/`
 
-Related docs: [../QUICK_START.md](../QUICK_START.md) | [../README.md](../README.md) | [ns-3-ub-tools](ns-3-ub-tools/README.md)
+Related docs: [../QUICK_START.md](../QUICK_START.md) | [../README.md](../README.md) | [open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools)
 
 `scratch/` provides a set of scenario cases. Each case can be executed quickly by preparing the case directory and editing its configuration files (TXT/CSVs).
 
@@ -240,7 +240,7 @@ Schema:
 taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases
 ```
 
-Recommendation: Generate `traffic.csv` (e.g., all-to-all, RDMA-like patterns, collective-like workloads) via `scratch/ns-3-ub-tools/traffic_maker/`. See: [ns-3-ub-tools/traffic_maker/README.md](ns-3-ub-tools/traffic_maker/README.md).
+Recommendation: Generate `traffic.csv` (e.g., all-to-all, RDMA-like patterns, collective-like workloads) via `scratch/ns-3-ub-tools/traffic_maker/`. See `traffic_maker/README.md` in the `open-usim/ns-3-ub-tools` submodule repository.
 - `taskId` — integer ID (unique per file).
 - `sourceNode` / `destNode` — end-host node IDs.
 - `dataSize(Byte)` — payload size in bytes.
