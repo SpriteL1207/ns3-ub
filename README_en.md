@@ -4,6 +4,14 @@
 
 **Quick Start**: [QUICK_START_en.md](QUICK_START_en.md)
 
+## 📚 Documentation Navigation
+
+| Document | Description |
+|----------|-------------|
+| [QUICK_START_en.md](QUICK_START_en.md) | Build & run entry point: prerequisites, build, minimal example run, and Python tooling setup |
+| [scratch/README.md](scratch/README.md) | Case execution and configuration guide: run `scratch/<case>` scenarios; define and validate case files |
+| [scratch/ns-3-ub-tools/README.md](scratch/ns-3-ub-tools/README.md) | Case generation & post-processing: Python scripts for topology/routing/TP/traffic and trace analysis |
+
 > This project is built on ns-3.44. For detailed platform support, installation steps, system requirements, and build options, see [ns-3.44 Documentation](https://www.nsnam.org/releases/ns-3-44/documentation/), [Installation Guide](https://www.nsnam.org/docs/release/3.44/installation/singlehtml/), and [ns-3.44 Source](https://gitlab.com/nsnam/ns-3-dev/-/tree/ns-3.44?ref_type=tags).
 >
 > This project integrates Unison for ns-3 multi-threaded parallel simulation ([EuroSys '24 paper](https://dl.acm.org/doi/10.1145/3627703.3629574)); see [UNISON_README.md](UNISON_README.md) and [QUICK_START_en.md](QUICK_START_en.md) for usage details .

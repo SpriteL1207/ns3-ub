@@ -4,6 +4,14 @@
 
 **快速开始**: [QUICK_START.md](QUICK_START.md)
 
+## 📚 文档导航
+
+| 文档 | 描述 |
+|------|------|
+| [QUICK_START.md](QUICK_START.md) | 构建与运行入口：依赖、拉取代码、编译、运行示例用例以及 Python 工具依赖安装 |
+| [scratch/README.md](scratch/README.md) | 用例运行与配置指南：运行 `scratch/<case>` 用例，与配置文件说明 |
+| [scratch/ns-3-ub-tools/README.md](scratch/ns-3-ub-tools/README.md) | 用例配置文件生成与后处理工具：生成拓扑/路由/TP/流量与 trace 分析 |
+
 > 本项目基于 ns-3.44 构建。详细的平台支持、安装步骤、系统要求及编译选项，请参阅 [ns-3.44 文档](https://www.nsnam.org/releases/ns-3-44/documentation/)、[安装指南](https://www.nsnam.org/docs/release/3.44/installation/singlehtml/) 及 [ns-3.44 源码](https://gitlab.com/nsnam/ns-3-dev/-/tree/ns-3.44?ref_type=tags)。
 >
 > 本项目已集成 Unison for ns-3 多线程并行仿真能力（[EuroSys '24 paper](https://dl.acm.org/doi/10.1145/3627703.3629574)），更多信息与使用方法参阅 [UNISON_README.md](UNISON_README.md) 和 [QUICK_START.md](QUICK_START.md)。

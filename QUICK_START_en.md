@@ -1,5 +1,7 @@
 # Quick Start
 
+**Language**: [English](QUICK_START_en.md) | [中文](QUICK_START.md)
+
 > This project is built on ns-3.44 and verified on Linux and Windows WSL. For detailed platform support, installation steps, system requirements, and build options, see [ns-3.44 Documentation](https://www.nsnam.org/releases/ns-3-44/documentation/), [Installation Guide](https://www.nsnam.org/docs/release/3.44/installation/singlehtml/), and [ns-3.44 Source](https://gitlab.com/nsnam/ns-3-dev/-/tree/ns-3.44?ref_type=tags).
 
 ## Prerequisites
@@ -51,7 +53,7 @@ global UB_PYTHON_SCRIPT_PATH "scratch/ns-3-ub-tools/trace_analysis/parse_trace.p
 
 ## Python Tools & Dependencies
 
-The project's Python toolset is located in `scratch/ns-3-ub-tools/`:
+The project's Python toolset is located in `scratch/ns-3-ub-tools/` (see: [scratch/ns-3-ub-tools/README.md](scratch/ns-3-ub-tools/README.md)):
 
 - Topology/Visualization: `net_sim_builder.py`, `topo_plot.py`, `user_topo_*.py`
 - Traffic Generation: `traffic_maker/*`
@@ -191,3 +193,12 @@ Each use case directory typically contains the following files (format can refer
 - `traffic.csv` - Traffic definitions
 
 For detailed scenario configuration and file formats, see: [scratch/README.md](scratch/README.md).
+---
+
+## Related Documentation
+
+| Document | Description |
+|----------|-------------|
+| [README_en.md](README_en.md) | Project overview: UB components, repo layout, and key concepts |
+| [scratch/README.md](scratch/README.md) | Case execution and configuration: run `scratch/<case>` scenarios; define and validate case configs |
+| [scratch/ns-3-ub-tools/README.md](scratch/ns-3-ub-tools/README.md) | Toolchain: generate inputs and perform trace post-processing/analysis |

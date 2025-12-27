@@ -1,5 +1,7 @@
 # 快速开始
 
+**语言**: [English](QUICK_START_en.md) | [中文](QUICK_START.md)
+
 > 本项目基于 ns-3.44 构建，已在 Linux 与 Windows WSL 系统下验证。详细的平台支持、安装步骤、系统要求及编译选项，请参阅 [ns-3.44 文档](https://www.nsnam.org/releases/ns-3-44/documentation/)、[安装指南](https://www.nsnam.org/docs/release/3.44/installation/singlehtml/) 及 [ns-3.44 源码](https://gitlab.com/nsnam/ns-3-dev/-/tree/ns-3.44?ref_type=tags)。
 
 ## 环境要求
@@ -51,7 +53,7 @@ global UB_PYTHON_SCRIPT_PATH "scratch/ns-3-ub-tools/trace_analysis/parse_trace.p
 
 ## Python 工具与依赖
 
-项目的 Python 工具集位于 `scratch/ns-3-ub-tools/`：
+项目的 Python 工具集位于 `scratch/ns-3-ub-tools/`（详见：[scratch/ns-3-ub-tools/README.md](scratch/ns-3-ub-tools/README.md)）：
 
 - 拓扑/可视化：`net_sim_builder.py`、`topo_plot.py`、`user_topo_*.py`
 - 流量生成：`traffic_maker/*`
@@ -191,3 +193,13 @@ ls scratch/2dfm4x4-multipath_a2a/output/
 - `traffic.csv` - 流量定义
 
 更多配置细节与场景文件格式说明，请参见：[scratch/README.md](scratch/README.md)。
+
+---
+
+## 相关文档
+
+| 文档 | 描述 |
+|------|------|
+| [README.md](README.md) | 项目总览：UB 模块能力、目录结构与核心概念 |
+| [scratch/README.md](scratch/README.md) | 用例执行与配置：运行 `scratch/<case>` 用例，与配置文件说明 |
+| [scratch/ns-3-ub-tools/README.md](scratch/ns-3-ub-tools/README.md) | 配套工具链：生成及 trace 后处理与分析 |

@@ -1,11 +1,13 @@
-# USAGE — Scenario configuration under `scratch/`
+# USAGE — Running cases under `scratch/`
 
-This document explains how to author, validate, and reason about all scenario configuration files under each case directory in `scratch/`. It ties together:
-- The CSV/TXT formats consumed by the runner (`scratch/ub-quick-example.cc`),
-- How the Python toolchain in the submodule `scratch/ns-3-ub-tools/` generates and analyzes them, and
-- How the Unified-Bus (UB) model in `src/unified-bus/model/` interprets these values via ns-3’s Attribute System.
+Related docs: [../QUICK_START.md](../QUICK_START.md) | [../README.md](../README.md) | [ns-3-ub-tools](ns-3-ub-tools/README.md)
 
-The goal is that you can confidently create new scenarios, know what each field means, which values are legal, and how to verify them.
+`scratch/` provides a set of scenario cases. Each case can be executed quickly by preparing the case directory and editing its configuration files (TXT/CSVs).
+
+This document describes:
+- The case directory layout and configuration file semantics (schema, constraints, and legal values).
+- How the example runner `scratch/ub-quick-example.cc` consumes these files to build an ns-3 simulation and schedule traffic.
+- How `scratch/ns-3-ub-tools/` can be used to generate case configurations (or you can author the TXT/CSVs manually by following the schemas below) and post-process traces.
 
 ---
 
@@ -21,11 +23,11 @@ Each case directory under `scratch/` usually contains:
 - `traffic.csv` — Application-level tasks (ops, size, priority, dependency, timing).
 - `fault.csv` — Optional, only if faults are enabled (see `UB_FAULT_ENABLE`).
 
-During a run, UB also emits:
+During a run, the example runner also emits:
 - `runlog/` — Packet and task traces.
 - `output/` (or `test/`) — Post-processed CSVs, e.g. `throughput.csv`, `task_statistics.csv`.
 
-The runner loads them in this order (see `scratch/ub-quick-example.cc`):
+The example runner (`scratch/ub-quick-example.cc`) builds a scenario by reading these files in the following order:
 1) `network_attribute.txt` → `UbUtils::SetComponentsAttribute`
 2) `node.csv` → `UbUtils::CreateNode`
 3) `topology.csv` → `UbUtils::CreateTopo`
@@ -43,7 +45,7 @@ The submodule contains helpers to synthesize config files:
   - `user_topo_*.py` — declarative topology definitions (e.g., `user_topo_4x4_2DFM.py`, `user_topo_2layer_clos.py`).
   - `net_sim_builder.py` — expands node ranges, renders `node.csv`, `topology.csv`, `routing_table.csv`, and `transport_channel.csv` according to a chosen topology.
   - `topo_plot.py` — draw `network_topology.png` for quick visual checks.
-- Traffic makers:
+- Traffic makers  [README.md](./ns-3-ub-tools/README.md):
   - `traffic_maker/*.py` — generate `traffic.csv` for workloads (e.g., all-to-all, RDMA write/read patterns, collective-like flows).
 - Trace analysis:
   - `trace_analysis/parse_trace.py` — orchestrates post-processing, runs:
@@ -237,6 +239,8 @@ Schema:
 ```
 taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases
 ```
+
+Recommendation: Generate `traffic.csv` (e.g., all-to-all, RDMA-like patterns, collective-like workloads) via `scratch/ns-3-ub-tools/traffic_maker/`. See: [ns-3-ub-tools/traffic_maker/README.md](ns-3-ub-tools/traffic_maker/README.md).
 - `taskId` — integer ID (unique per file).
 - `sourceNode` / `destNode` — end-host node IDs.
 - `dataSize(Byte)` — payload size in bytes.
@@ -417,7 +421,7 @@ Examples:
 ./ns3 run scratch/ub-quick-example -- --PrintHelp
 ```
 
-Tip: You can run the same flags against any other scratch program name. This avoids relying on doxygen and guarantees you see exactly what your build exposes.
+Note: You can run the same flags against any other scratch program name. This avoids relying on doxygen and guarantees you see exactly what your build exposes.
 
 ---
 
@@ -432,4 +436,16 @@ Tip: You can run the same flags against any other scratch program name. This avo
 
 ---
 
-Happy simulating — and if something’s unclear, open the corresponding tool script (`ns-3-ub-tools`) and the UB model class to see exactly how a field is parsed and applied.
+If anything is unclear, consult the corresponding tool script (`scratch/ns-3-ub-tools/`) and the UB model class to see exactly how a field is parsed and applied.
+
+---
+
+## Related Documentation
+
+| Document | Description |
+|----------|-------------|
+| [../README.md](../README.md) | Project overview (中文) |
+| [../README_en.md](../README_en.md) | Project overview (English) |
+| [../QUICK_START.md](../QUICK_START.md) | Quick start: build, run, and tooling setup (中文) |
+| [../QUICK_START_en.md](../QUICK_START_en.md) | Quick start: build, run, and tooling setup (English) |
+| [ns-3-ub-tools/README.md](ns-3-ub-tools/README.md) | Python tools: topology/routing/traffic generation (incl. `traffic_maker/`) and trace analysis |
