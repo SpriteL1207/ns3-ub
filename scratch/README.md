@@ -37,7 +37,7 @@ The example runner (`scratch/ub-quick-example.cc`) builds a scenario by reading 
 
 ---
 
-## How `ns-3-ub-tools` generates configurations
+## How [`ns-3-ub-tools`](https://gitcode.com/open-usim/ns-3-ub-tools) generates configurations
 
 The submodule contains helpers to synthesize config files:
 
