@@ -53,7 +53,7 @@ global UB_PYTHON_SCRIPT_PATH "scratch/ns-3-ub-tools/trace_analysis/parse_trace.p
 
 ## Python 工具与依赖
 
-项目的 Python 工具集位于 `scratch/ns-3-ub-tools/`（文档与脚本产物清单请参阅子模块仓库：[open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools)）：
+项目的 Python 工具集位于 `scratch/ns-3-ub-tools/`（[open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools)）：
 
 - 拓扑/可视化：`net_sim_builder.py`、`topo_plot.py`、`user_topo_*.py`
 - 流量生成：`traffic_maker/*`

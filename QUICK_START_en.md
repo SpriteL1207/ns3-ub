@@ -53,7 +53,7 @@ global UB_PYTHON_SCRIPT_PATH "scratch/ns-3-ub-tools/trace_analysis/parse_trace.p
 
 ## Python Tools & Dependencies
 
-The project's Python toolset is located in `scratch/ns-3-ub-tools/` (for docs and script outputs, see the submodule repository: [open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools)):
+The project's Python toolset is located in `scratch/ns-3-ub-tools/` ([open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools)):
 
 - Topology/Visualization: `net_sim_builder.py`, `topo_plot.py`, `user_topo_*.py`
 - Traffic Generation: `traffic_maker/*`
