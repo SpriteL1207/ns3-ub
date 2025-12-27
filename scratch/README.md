@@ -7,7 +7,7 @@ Related docs: [../QUICK_START.md](../QUICK_START.md) | [../README.md](../README.
 This document describes:
 - The case directory layout and configuration file semantics (schema, constraints, and legal values).
 - How the example runner `scratch/ub-quick-example.cc` consumes these files to build an ns-3 simulation and schedule traffic.
-- In most cases you do not need to write these configuration files from scratch; you can use the Python tools in `scratch/ns-3-ub-tools/` to generate them (see https://gitcode.com/open-usim/ns-3-ub-tools). Of course, you can also author the TXT/CSV files manually following the schemas below.
+- In most cases you **do not** need to write these configuration files from scratch; you can use the Python tools in `scratch/ns-3-ub-tools/` to generate them (see https://gitcode.com/open-usim/ns-3-ub-tools). Of course, you can also author the TXT/CSV files manually following the schemas below.
 
 ---
 
