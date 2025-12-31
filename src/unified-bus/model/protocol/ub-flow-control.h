@@ -35,7 +35,7 @@ class UbPort;
 
 enum class FcType {
     CBFC,
-    CBFCSHARED,
+    CBFC_SHARED_CRD,
     PFC,
     NONE  // No flow control
 };
@@ -115,11 +115,11 @@ protected:
 /**
  * @brief 端口Cbfc (Shared credit)
  */
-class UbCbfcSharedMode : public UbCbfc {
+class UbCbfcSharedCredit : public UbCbfc {
 public:
     static TypeId GetTypeId (void);
-    UbCbfcSharedMode() {}
-    ~UbCbfcSharedMode() override {}
+    UbCbfcSharedCredit() {}
+    ~UbCbfcSharedCredit() override {}
 
     FcType GetFcType() override;
 

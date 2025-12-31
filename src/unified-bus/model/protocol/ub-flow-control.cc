@@ -180,7 +180,7 @@ bool UbCbfc::CbfcRestoreCrd(Ptr<Packet> p)
     port->ResetCredits();
     UbDatalinkControlCreditHeader crdHeader = UbDataLink::ParseCreditHeader(p, port);
 
-    uint32_t ResumeCellGrainNum = 0;
+    uint32_t resumeCellGrainNum = 0;
     bool ret = false;
     IntegerValue val;
     g_ub_vl_num.GetValue(val);
@@ -192,9 +192,9 @@ bool UbCbfc::CbfcRestoreCrd(Ptr<Packet> p)
 
     for (int index = 0; index < ubVlNum; index++) {
         if (port->m_credits[index] > 0) {
-            ResumeCellGrainNum = port->m_credits[index];
+            resumeCellGrainNum = port->m_credits[index];
             NS_LOG_DEBUG("before resume m_crdTxfree[ " << (uint32_t)index << " ]: " << m_crdTxfree[index]);
-            m_crdTxfree[index] += ResumeCellGrainNum * m_cbfcCfg->m_retCellGrainControlPacket;  // 粒度数量 * 粒度大小
+            m_crdTxfree[index] += resumeCellGrainNum * m_cbfcCfg->m_retCellGrainControlPacket;  // 粒度数量 * 粒度大小
             NS_LOG_DEBUG("left m_crdTxfree[ " << (uint32_t)index << " ]: " << m_crdTxfree[index]);
             ret = true;
         }
@@ -268,15 +268,15 @@ FcType UbCbfc::GetFcType()
 }
 
 
-TypeId UbCbfcSharedMode::GetTypeId(void)
+TypeId UbCbfcSharedCredit::GetTypeId(void)
 {
-    static TypeId tid = TypeId("ns3::UbCbfcSharedMode")
+    static TypeId tid = TypeId("ns3::UbCbfcSharedCredit")
         .SetParent<UbCbfc>()
-        .AddConstructor<UbCbfcSharedMode>();
+        .AddConstructor<UbCbfcSharedCredit>();
     return tid;
 }
 
-void UbCbfcSharedMode::Init(uint8_t flitLen, uint8_t nFlitPerCell, uint8_t retCellGrainDataPacket,
+void UbCbfcSharedCredit::Init(uint8_t flitLen, uint8_t nFlitPerCell, uint8_t retCellGrainDataPacket,
                             uint8_t retCellGrainControlPacket, int32_t reservedPerVlCells,
                             int32_t sharedInitCells, uint32_t nodeId, uint32_t portId)
 {
@@ -290,12 +290,12 @@ void UbCbfcSharedMode::Init(uint8_t flitLen, uint8_t nFlitPerCell, uint8_t retCe
     NS_LOG_DEBUG("m_shareCrd: " << m_shareCrd << " reservedPerVlCells: " << m_reservedPerVlCells);
 }
 
-FcType UbCbfcSharedMode::GetFcType()
+FcType UbCbfcSharedCredit::GetFcType()
 {
-    return FcType::CBFCSHARED;
+    return FcType::CBFC_SHARED_CRD;
 }
 
-bool UbCbfcSharedMode::IsFcLimited(Ptr<UbIngressQueue> ingressQ)
+bool UbCbfcSharedCredit::IsFcLimited(Ptr<UbIngressQueue> ingressQ)
 {
     uint32_t nextPktSize = 0;
 
@@ -330,7 +330,7 @@ bool UbCbfcSharedMode::IsFcLimited(Ptr<UbIngressQueue> ingressQ)
     return false;
 }
 
-void UbCbfcSharedMode::HandleSentPacket(Ptr<Packet> p, Ptr<UbIngressQueue> ingressQ)
+void UbCbfcSharedCredit::HandleSentPacket(Ptr<Packet> p, Ptr<UbIngressQueue> ingressQ)
 {
     if ((ingressQ->GetIngressQueueType() == IngressQueueType::VOQ) &&
         (ingressQ->GetInPortId() != ingressQ->GetOutPortId())) {
@@ -344,12 +344,18 @@ void UbCbfcSharedMode::HandleSentPacket(Ptr<Packet> p, Ptr<UbIngressQueue> ingre
     }
 }
 
-void UbCbfcSharedMode::HandleReceivedControlPacket(Ptr<Packet> p)
+void UbCbfcSharedCredit::HandleReceivedControlPacket(Ptr<Packet> p)
 {
     CbfcSharedRestoreCrd(p);
 }
 
-bool UbCbfcSharedMode::CbfcSharedConsumeCrd(Ptr<Packet> p)
+// CBFC 信用共享模式：信用消耗（Consume）逻辑
+// 1. 计算当前报文需要消耗的 Cell 数量
+// 2. 优先尝试从共享信用池 (m_shareCrd) 中扣除
+// 3. 如果共享池信用充足，完成消耗并返回
+// 4. 如果共享池信用不足，将共享池清零，并从该 VL 独占的信用证 (m_crdTxfree[vlId]) 中补充扣除剩余部分
+// 5. 如果独占信用证依然不足，记录警告并归零
+bool UbCbfcSharedCredit::CbfcSharedConsumeCrd(Ptr<Packet> p)
 {
     const uint32_t pktSize = p->GetSize();
     NS_LOG_DEBUG("NodeId: " << m_nodeId << " PortId: " << m_portId << " pktSize: " << pktSize);
@@ -382,7 +388,14 @@ bool UbCbfcSharedMode::CbfcSharedConsumeCrd(Ptr<Packet> p)
     return false;
 }
 
-bool UbCbfcSharedMode::CbfcSharedRestoreCrd(Ptr<Packet> p)
+// CBFC 信用共享模式：信用归还（Restore）逻辑
+// 1. 解析控制报文，统计当前端口收到的所有 VL 归还的信用证总数
+// 2. 将所有归还的信用证统一填充到共享信用池 (m_shareCrd) 中
+// 3. 遍历所有优先级队列 (VL)，检查各 VL 的独占信用证是否达到预留阈值 (m_reservedPerVlCells)
+// 4. 若某个 VL 的独占信用不足，则从共享池中拨付信用进行补充，直到达到阈值或共享池耗尽
+// 4.1 补充顺序：可根据实际场景自定义。目前实现为按照 VL 优先级索引从小到大依次进行补充
+// 5. 触发端口的发送流程 (TriggerTransmit) 以尝试发送因信用不足而积压的报文
+bool UbCbfcSharedCredit::CbfcSharedRestoreCrd(Ptr<Packet> p)
 {
     Ptr<Node> node = NodeList::GetNode(m_nodeId);
     Ptr<UbPort> port = DynamicCast<UbPort>(node->GetDevice(m_portId));
@@ -391,7 +404,7 @@ bool UbCbfcSharedMode::CbfcSharedRestoreCrd(Ptr<Packet> p)
     port->ResetCredits();
     UbDatalinkControlCreditHeader crdHeader = UbDataLink::ParseCreditHeader(p, port);
 
-    uint32_t ResumeCellGrainNum = 0;
+    uint32_t resumeCellGrainNum = 0;
     bool ret = false;
     IntegerValue val;
     g_ub_vl_num.GetValue(val);
@@ -405,8 +418,8 @@ bool UbCbfcSharedMode::CbfcSharedRestoreCrd(Ptr<Packet> p)
 
     for (int index = 0; index < ubVlNum; index++) {
         if (port->m_credits[index] > 0) {
-            ResumeCellGrainNum = port->m_credits[index];
-            int32_t cells = ResumeCellGrainNum * m_cbfcCfg->m_retCellGrainControlPacket;
+            resumeCellGrainNum = port->m_credits[index];
+            int32_t cells = resumeCellGrainNum * m_cbfcCfg->m_retCellGrainControlPacket;
             totalReturned += cells;
         }
     }

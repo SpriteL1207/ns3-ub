@@ -34,7 +34,7 @@ class UbIngressQueue;
 class UbLink;
 class UbFlowControl;
 class UbCbfc;
-class UbCbfcSharedMode;
+class UbCbfcSharedCredit;
 class UbPfc;
 
 // Egress queue enqueue item: (inPortId, priority, packet)

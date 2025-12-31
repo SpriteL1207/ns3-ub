@@ -160,7 +160,7 @@ TypeId UbPort::GetTypeId(void)
                           MakeIntegerAccessor(&UbPort::m_cbfcPortTxfree),
                           MakeIntegerChecker<int32_t>())
             .AddAttribute("CbfcSharedInitCreditCell",
-                          "Initial shared credit pool for CBFC shared mode (unit: cell)",
+                          "Cbfc shared credit mode",
                           UintegerValue(8192),
                           MakeIntegerAccessor(&UbPort::m_cbfcSharedInitCells),
                           MakeIntegerChecker<int32_t>())
@@ -242,12 +242,12 @@ void UbPort::CreateAndInitFc(FcType type)
                 NS_LOG_DEBUG("[UbPort CreateAndInitFc] flowControl Cbfc Init");
             }
             break;
-        case FcType::CBFCSHARED:
-            m_flowControl = CreateObject<UbCbfcSharedMode>();
+        case FcType::CBFC_SHARED_CRD:
+            m_flowControl = CreateObject<UbCbfcSharedCredit>();
             if (m_flowControl == nullptr) {
-                NS_FATAL_ERROR("Failed to create UbCbfcSharedMode object for port " << m_portId);
+                NS_FATAL_ERROR("Failed to create UbCbfcSharedCredit object for port " << m_portId);
             } else {
-                auto flowControl = DynamicCast<UbCbfcSharedMode>(m_flowControl);
+                auto flowControl = DynamicCast<UbCbfcSharedCredit>(m_flowControl);
                 const int32_t reservedPerVlCells = m_cbfcPortTxfree;
                 const int32_t sharedInitCells = m_cbfcSharedInitCells;
 

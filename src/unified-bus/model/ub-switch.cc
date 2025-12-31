@@ -104,7 +104,7 @@ void UbSwitch::InitNodePortsFlowControl()
         Ptr<UbPort> port = DynamicCast<ns3::UbPort>(GetObject<Node>()->GetDevice(pidx));
         FcType fcType = FcType::NONE;  // Default: no flow control
         if (m_isCBFCSharedEnable) {
-            fcType = FcType::CBFCSHARED;
+            fcType = FcType::CBFC_SHARED_CRD;
         } else if (m_isCBFCEnable) {
             fcType = FcType::CBFC;
         } else if (m_isPFCEnable) {
@@ -239,7 +239,7 @@ void UbSwitch::SwitchHandlePacket(Ptr<UbPort> port, Ptr<Packet> packet)
 void UbSwitch::SinkControlFrame(Ptr<UbPort> port, Ptr<Packet> packet)
 {
     if (IsCBFCSharedEnable()) {
-        auto flowControl = DynamicCast<UbCbfcSharedMode>(port->GetFlowControl());
+        auto flowControl = DynamicCast<UbCbfcSharedCredit>(port->GetFlowControl());
         flowControl->CbfcSharedRestoreCrd(packet);
     } else if (IsCBFCEnable()) {
         auto flowControl = DynamicCast<UbCbfc>(port->GetFlowControl());
