@@ -12,12 +12,20 @@
 #include "ns3/ub-header.h"
 #include "ns3/ipv4-header.h"
 #include "ns3/udp-header.h"
+// #include "ns3/ub-flow-control.h"
 
 namespace ns3 {
 class UbSwitchCaqm;
 class UbPort;
 class UbSwitchAllocator;
 class UbCongestionControl;
+
+enum class FcType {
+    CBFC,
+    CBFC_SHARED_CRD,
+    PFC,
+    NONE  // No flow control
+};
 
 using VirtualOutputQueue_t = std::vector<std::vector<std::vector<Ptr<UbPacketQueue>>>>;
 
@@ -131,11 +139,7 @@ private:
 
     Ipv4Address m_Ipv4Addr;
     bool m_isECNEnable;
-    // cbfc
-    bool m_isCBFCEnable;
-    bool m_isCBFCSharedEnable;
-    // pfc
-    bool m_isPFCEnable;
+    FcType m_flowControlType { FcType::NONE };
     enum VlScheduler {
         SP = 0,
         DWRR = 1

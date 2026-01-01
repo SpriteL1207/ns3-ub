@@ -22,21 +22,14 @@ TypeId UbSwitch::GetTypeId (void)
         .SetParent<Object> ()
         .SetGroupName("UnifiedBus")
         .AddConstructor<UbSwitch> ()
-        .AddAttribute("EnableCBFC",
-                      "Enable CBFC.",
-                      BooleanValue(false),
-                      MakeBooleanAccessor(&UbSwitch::m_isCBFCEnable),
-                      MakeBooleanChecker())
-        .AddAttribute("EnableCBFCShared",
-                      "Enable CBFC shared credit mode.",
-                      BooleanValue(false),
-                      MakeBooleanAccessor(&UbSwitch::m_isCBFCSharedEnable),
-                      MakeBooleanChecker())
-        .AddAttribute("EnablePFC",
-                      "Enable PFC.",
-                      BooleanValue(false),
-                      MakeBooleanAccessor(&UbSwitch::m_isPFCEnable),
-                      MakeBooleanChecker())
+        .AddAttribute("FlowControl",
+                      "The flow control mechanism to use (NONE, CBFC, CBFC_SHARED, or PFC).",
+                      EnumValue(FcType::NONE),
+                      MakeEnumAccessor<FcType>(&UbSwitch::m_flowControlType),
+                      MakeEnumChecker(FcType::NONE, "NONE",
+                                      FcType::CBFC, "CBFC",
+                                      FcType::CBFC_SHARED_CRD, "CBFC_SHARED",
+                                      FcType::PFC, "PFC"))
         .AddAttribute("VlScheduler",
                       "VL inter-scheduling algorithm (SP or DWRR).",
                       EnumValue(SP),
@@ -97,20 +90,12 @@ void UbSwitch::DoDispose()
  */
 void UbSwitch::InitNodePortsFlowControl()
 {
-    NS_LOG_DEBUG("[UbSwitch InitNodePortsFlowControl] m_portsNum: " << m_portsNum << " m_isCBFCEnable: " << m_isCBFCEnable
-                << " m_isPFCEnable: " << m_isPFCEnable << " m_isCBFCSharedEnable: " << m_isCBFCSharedEnable);
+    NS_LOG_DEBUG("[UbSwitch InitNodePortsFlowControl] m_portsNum: " << m_portsNum
+                << " m_flowControlType: " << static_cast<int>(m_flowControlType));
 
     for (uint32_t pidx = 0; pidx < m_portsNum; pidx++) {
         Ptr<UbPort> port = DynamicCast<ns3::UbPort>(GetObject<Node>()->GetDevice(pidx));
-        FcType fcType = FcType::NONE;  // Default: no flow control
-        if (m_isCBFCSharedEnable) {
-            fcType = FcType::CBFC_SHARED_CRD;
-        } else if (m_isCBFCEnable) {
-            fcType = FcType::CBFC;
-        } else if (m_isPFCEnable) {
-            fcType = FcType::PFC;
-        }
-        port->CreateAndInitFc(fcType);
+        port->CreateAndInitFc(m_flowControlType);
     }
 }
 
@@ -576,17 +561,17 @@ void UbSwitch::NotifySwitchDequeue(uint16_t inPortId, uint32_t outPort, uint32_t
 
 bool UbSwitch::IsCBFCEnable()
 {
-    return m_isCBFCEnable;
+    return m_flowControlType == FcType::CBFC;
 }
 
 bool UbSwitch::IsCBFCSharedEnable()
 {
-    return m_isCBFCSharedEnable;
+    return m_flowControlType == FcType::CBFC_SHARED_CRD;
 }
 
 bool UbSwitch::IsPFCEnable()
 {
-    return m_isPFCEnable;
+    return m_flowControlType == FcType::PFC;
 }
 
 Ptr<UbQueueManager> UbSwitch::GetQueueManager()
