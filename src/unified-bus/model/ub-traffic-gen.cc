@@ -60,6 +60,16 @@ void UbTrafficGen::AddTask(TrafficRecord record)
     NS_LOG_DEBUG("Added task " << taskId << " with " << m_dependencies[taskId].size() << " dependencies");
 }
 
+TrafficRecord UbTrafficGen::GetTaskById(uint32_t taskId)
+{
+    auto it = m_tasks.find(taskId);
+    if (it != m_tasks.end()) {
+        return it->second;
+    } else {
+        NS_ASSERT_MSG(0, "Can't find task from TrafficRecord.");
+    }
+}
+
 void UbTrafficGen::MarkTaskCompleted(uint32_t taskId)
 {
     // 检查任务是否正在运行

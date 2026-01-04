@@ -17,6 +17,7 @@
 
 using namespace utils;
 namespace ns3 {
+
 /**
  * @brief 任务图应用,管理多个wqe任务及依赖关系
  */
@@ -67,13 +68,6 @@ private:
     void WqeTaskStartsNotify(uint32_t nodeId, uint32_t jettyNum, uint32_t taskId);
     void WqeTaskCompletesNotify(uint32_t nodeId, uint32_t jettyNum, uint32_t taskId);
 
-    void CreateTPs(uint32_t src, uint32_t dst, uint32_t priority, std::vector<uint32_t> &tpns);
-
-    // 创建TP
-    void CreateTP(uint32_t src, uint32_t dst, uint8_t sport,
-                  uint8_t dport, UbPriority priority, uint32_t srcTpn,
-                  uint32_t dstTpn, uint32_t metric, std::vector<uint32_t> &tpns);
-
     map<std::string, TaOpcode> TaOpcodeMap = {
         {"URMA_WRITE", TaOpcode::TA_OPCODE_WRITE},
         {"MEM_STORE", TaOpcode::TA_OPCODE_WRITE},
@@ -90,6 +84,7 @@ private:
 
     uint32_t m_jettyNum = 0;       // 当前节点维护的jettynum,不会重复
     Ptr<UniformRandomVariable> m_random;
+
 };
 
 } // namespace ns3

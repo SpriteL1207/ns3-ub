@@ -3,9 +3,6 @@
 
 namespace utils {
 
-std::map<uint32_t, uint32_t> TpConnectionManager::m_nextTpn;
-std::mutex TpConnectionManager::m_lock;
-
 void UbUtils::PrintTimestamp(const std::string &message)
 {
     // 获取当前系统时间点
@@ -666,12 +663,11 @@ TpConnectionManager UbUtils::CreateTp(const string &filename)
     // key1:node1 key2:node2 value:Connection
     TpConnectionManager retTpConnectionManager;
     ifstream file(filename);
-    if (!file.is_open()) {
+    if (!file.is_open()) { // 没有TP文件则使用实时创建TP模式
         PrintTimestamp("File transport_channel.csv not found."
                        " Unable to preload TP channels. TP channels will be created on demand.");
         return retTpConnectionManager;
     }
-
     string line;
     // 跳过标题行
     getline(file, line);

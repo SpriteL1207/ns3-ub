@@ -6,7 +6,7 @@
 #include <chrono>
 #include <iomanip>
 #include "ns3/core-module.h"
-
+#include "ns3/ipv4-address.h"
 using namespace std;
 using namespace ns3;
 

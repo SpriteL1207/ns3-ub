@@ -138,6 +138,16 @@ void UbSwitch::RegisterTpWithAllocator(Ptr<UbIngressQueue> tp, uint32_t outPort,
     m_allocator->RegisterUbIngressQueue(tp, outPort, priority);
 }
 
+/**
+ * @brief 将tp从调度算法中删除
+ */
+void UbSwitch::RemoveTpFromAllocator(Ptr<UbIngressQueue> tp)
+{
+    uint32_t outPort = tp->GetOutPortId();
+    uint32_t priority = tp->GetIngressPriority();
+    m_allocator->UnregisterUbIngressQueue(tp, outPort, priority);
+}
+
 UbSwitch::UbSwitch()
 {
 }
@@ -250,7 +260,7 @@ void UbSwitch::HandleURMADataPacket(Ptr<UbPort> port, Ptr<Packet> packet)
     // Parse headers once for efficient reuse
     ParsedURMAHeaders headers;
     ParseURMAPacketHeader(packet, headers);
-    
+
     switch (GetNodeType()) {
         case UB_DEVICE:
             if (!SinkTpDataPacket(port, packet, headers)) {
@@ -273,7 +283,7 @@ void UbSwitch::HandleLdstDataPacket(Ptr<UbPort> port, Ptr<Packet> packet)
     // Parse headers once for efficient reuse
     ParsedLdstHeaders headers;
     ParseLdstPacketHeader(packet, headers);
-    
+
     switch (GetNodeType()) {
         case UB_DEVICE:
             if (!SinkLdstDataPacket(port, packet, headers)) {
@@ -370,11 +380,11 @@ void UbSwitch::ForwardDataPacket(Ptr<UbPort> port, Ptr<Packet> packet, const Par
 {
     // Log packet traversal
     LastPacketTraversesNotify(GetObject<Node>()->GetId(), headers.transportHeader);
-    
+
     // Get routing key from parsed headers
     RoutingKey rtKey;
     GetURMARoutingKey(headers, rtKey);
-    
+
     // Route
     bool selectedShortestPath = false;
     int outPort = m_routingProcess->GetOutPort(rtKey, selectedShortestPath, port->GetIfIndex());
@@ -382,23 +392,23 @@ void UbSwitch::ForwardDataPacket(Ptr<UbPort> port, Ptr<Packet> packet, const Par
         NS_LOG_WARN("The route cannot be found. Packet Dropped!");
         return;
     }
-    
+
     // If packet routed via non-shortest path, force subsequent hops to use shortest path
     if (!selectedShortestPath) {
         ForceShortestPathRouting(packet, headers.datalinkPacketHeader);
     }
-    
+
     // Buffer management: check input port buffer space
     uint32_t inPort = port->GetIfIndex();
     uint8_t priority = headers.datalinkPacketHeader.GetPacketVL();
     uint32_t pSize = packet->GetSize();
-    
+
     if (!m_queueManager->CheckInPortSpace(inPort, priority, pSize)) {
-        NS_LOG_WARN("NodeId " << GetObject<Node>()->GetId() << " InPort " << inPort << " pri=" << (uint32_t)priority 
+        NS_LOG_WARN("NodeId " << GetObject<Node>()->GetId() << " InPort " << inPort << " pri=" << (uint32_t)priority
                     << " buffer full. Packet Dropped!");
         return;
     }
-    
+
     SendPacket(packet, inPort, outPort, priority);
 }
 
@@ -410,7 +420,7 @@ void UbSwitch::ForwardDataPacket(Ptr<UbPort> port, Ptr<Packet> packet, const Par
     // Get routing key from parsed headers
     RoutingKey rtKey;
     GetLdstRoutingKey(headers, rtKey);
-    
+
     // Route
     bool selectedShortestPath = false;
     int outPort = m_routingProcess->GetOutPort(rtKey, selectedShortestPath, port->GetIfIndex());
@@ -418,23 +428,23 @@ void UbSwitch::ForwardDataPacket(Ptr<UbPort> port, Ptr<Packet> packet, const Par
         NS_LOG_WARN("The route cannot be found. Packet Dropped!");
         return;
     }
-    
+
     // If packet routed via non-shortest path, force subsequent hops to use shortest path
     if (!selectedShortestPath) {
         ForceShortestPathRouting(packet, headers.datalinkPacketHeader);
     }
-    
+
     // Buffer management: check input port buffer space
     uint32_t inPort = port->GetIfIndex();
     uint8_t priority = headers.datalinkPacketHeader.GetPacketVL();
     uint32_t pSize = packet->GetSize();
-    
+
     if (!m_queueManager->CheckInPortSpace(inPort, priority, pSize)) {
-        NS_LOG_WARN("NodeId " << GetObject<Node>()->GetId() << " InPort " << inPort << " pri=" << (uint32_t)priority 
+        NS_LOG_WARN("NodeId " << GetObject<Node>()->GetId() << " InPort " << inPort << " pri=" << (uint32_t)priority
                     << " buffer full. Packet Dropped!");
         return;
     }
-    
+
     SendPacket(packet, inPort, outPort, priority);
 }
 
@@ -442,7 +452,7 @@ void UbSwitch::ForceShortestPathRouting(Ptr<Packet> packet, const UbDatalinkPack
 {
     UbDatalinkPacketHeader modifiedHeader = parsedHeader;
     modifiedHeader.SetRoutingPolicy(true);  // Force shortest path
-    
+
     UbDatalinkPacketHeader tempHeader;
     packet->RemoveHeader(tempHeader);
     packet->AddHeader(modifiedHeader);
@@ -512,7 +522,7 @@ void UbSwitch::SendPacket(Ptr<Packet> packet, uint32_t inPort, uint32_t outPort,
 {
     auto node = GetObject<Node>();
     Ptr<UbPort> recvPort = DynamicCast<ns3::UbPort>(node->GetDevice(inPort));
-    
+
     m_voq[outPort][priority][inPort]->Push(packet);
 
     // Update both InPort and OutPort view buffer statistics
@@ -521,7 +531,7 @@ void UbSwitch::SendPacket(Ptr<Packet> packet, uint32_t inPort, uint32_t outPort,
     if (IsPFCEnable()) {
         recvPort->m_flowControl->HandleReceivedPacket(packet);
     }
-    
+
     Ptr<UbPort> port = DynamicCast<ns3::UbPort>(node->GetDevice(outPort));
     port->TriggerTransmit();
 }
@@ -534,13 +544,13 @@ void UbSwitch::SendControlFrame(Ptr<Packet> packet, uint32_t portId)
 {
     // Control frames: inPort = outPort, priority = 0
     uint32_t priority = 0;
-    
+
     // Check if high priority buffer has space (should rarely be full)
     if (!m_queueManager->CheckInPortSpace(portId, priority, packet->GetSize())) {
         NS_LOG_WARN("High priority buffer full! Port=" << portId
                     << " This should rarely happen for control frames.");
     }
-    
+
     SendPacket(packet, portId, portId, priority);
 }
 
@@ -553,7 +563,7 @@ void UbSwitch::NotifySwitchDequeue(uint16_t inPortId, uint32_t outPort, uint32_t
 {
     // Update buffer statistics for all packets (including control frames)
     m_queueManager->PopFromVoq(inPortId, outPort, priority, packet->GetSize());
-    
+
     // Only data packets trigger congestion control
     UbPacketType_t packetType = GetPacketType(packet);
     if (packetType != UB_CONTROL_FRAME) {
