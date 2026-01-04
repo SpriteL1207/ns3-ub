@@ -1,7 +1,5 @@
 # USAGE — Running cases under `scratch/`
 
-Related docs: [../QUICK_START.md](../QUICK_START.md) | [../README.md](../README.md) | [open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools)
-
 `scratch/` provides a set of scenario cases. Each case can be executed quickly by preparing the case directory and editing its configuration files (TXT/CSVs).
 
 This document describes:
@@ -219,6 +217,24 @@ Constraints and tips:
 - TPNs are looked up per port in controllers (TPN→`UbTransportChannel` map). Ensure uniqueness per (node, port); duplicates will collide in demux.
 - `priority` should be within `UB_PRIORITY_NUM`.
 - `metric` is an unsigned integer; lower is preferred when selecting among multiple TPNs.
+
+### Automatic TP Generation (Optional)
+
+If `transport_channel.csv` is missing or empty, or if no matching TP is found for a specific traffic task, the simulator (specifically `UbApp`) will attempt to automatically generate TP configurations on demand.
+
+- **Mechanism**:
+  1. It queries the routing table (`UbRoutingProcess`) to find all reachable paths from source to destination.
+  2. It respects the `UseShortestPaths` attribute (default `true`) to filter for shortest paths or allow non-shortest ones.
+  3. If `EnableMultiPath` (in `UbApp`) is `true`, it creates TPs for **all** discovered paths.
+  4. If `EnableMultiPath` is `false`, it **randomly selects one** path to create a single TP.
+  5. TPNs are automatically assigned.
+
+- **Usage**:
+  This is useful for simple scenarios where manual TP configuration is tedious. You can simply omit this file. However, for complex scenarios requiring specific TP mappings, fixed path selection, or specific multi-path policies, providing this file is recommended.
+
+- **Performance Note**:
+  - **CSV Configuration (Pre-instantiated)**: The simulator reads `transport_channel.csv` at startup and **immediately creates all TP objects** defined in it. In large-scale topologies (e.g., thousands of nodes), this file can be huge, and creating millions of TP objects upfront consumes significant memory and initialization time, even for TPs that may never carry traffic.
+  - **Automatic Generation (On-demand)**: TPs are created dynamically only when a traffic task actually requires them. This avoids the overhead of parsing a massive CSV and instantiating unused TPs, making it **highly recommended** for large-scale simulations to reduce initialization time and memory usage.
 
 ### TPN in the code (what it does and how to set it)
 

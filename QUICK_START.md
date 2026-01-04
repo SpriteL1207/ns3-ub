@@ -53,7 +53,7 @@ global UB_PYTHON_SCRIPT_PATH "scratch/ns-3-ub-tools/trace_analysis/parse_trace.p
 
 ## Python 工具与依赖
 
-项目的 Python 工具集位于 `scratch/ns-3-ub-tools/`（[open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools)）：
+Python 工具集位于 `scratch/ns-3-ub-tools/`（[open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools)），该项目提供仿真拓扑、路由表、网络流量等配置文件工具与仿真后日志解析工具，更多信息请参阅该项目主页README。工具集包括：
 
 - 拓扑/可视化：`net_sim_builder.py`、`topo_plot.py`、`user_topo_*.py`
 - 流量生成：`traffic_maker/*`
@@ -100,6 +100,8 @@ conda install pandas matplotlib seaborn
 提示：主程序示例 [scratch/ub-quick-example.cc](scratch/ub-quick-example.cc) 已包含 Unison/MTP 的示例代码片段（默认注释掉），如需使用可按需取消注释并设置线程数。
 
 ## 运行简单示例
+
+`ub-quick-example` 是本项目提供的仿真入口程序，本质上是一个标准的 ns-3 应用程序。它遵循 ns-3 的标准运行方式，即通过 `./ns3 run` 命令调用，并将**配置文件所在的目录路径**作为参数传递给它。程序启动后会读取指定目录下的配置文件（如 `topology.csv`, `traffic.csv` 等）来自动构建网络拓扑、配置协议栈并生成流量。这种设计使得用户无需修改 C++ 源码，仅需通过命令行参数切换不同的配置目录，即可运行多种仿真场景。
 
 ```bash
 # 如使用 Conda，请确保其 bin 在 PATH 前（或先激活环境）
