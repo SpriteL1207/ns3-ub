@@ -83,6 +83,7 @@ public:
     void SetPortsNum(uint32_t portsNum) {m_portsNum = portsNum;}
     void RegisterTpWithAllocator(Ptr<UbIngressQueue> tp, uint32_t outPort, uint32_t priority);
     void PushPacketToVoq(Ptr<Packet> p, uint32_t outPort, uint32_t priority, uint32_t inPort);
+    void RemoveTpFromAllocator(Ptr<UbIngressQueue> tp);
     Ptr<UbSwitchAllocator> GetAllocator();
     Ipv4Address GetNodeIpv4Addr(){return m_Ipv4Addr;}
     Ptr<UbRoutingProcess> GetRoutingProcess() {return m_routingProcess;}

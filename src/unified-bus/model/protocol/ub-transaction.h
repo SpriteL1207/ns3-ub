@@ -61,6 +61,8 @@ namespace ns3 {
 
         void TpInit(Ptr<UbTransportChannel> tp);
 
+        void TpDeinit(uint32_t tpn);
+
         // 判断wqe是否能发送
         bool IsOrderedByInitiator(uint32_t jettyNum, Ptr<UbWqe> wqe);
         // TODO: support ROT
@@ -78,6 +80,13 @@ namespace ns3 {
         // 某个wqe完成，刷新状态
         void WqeFinish(uint32_t jettyNum, Ptr<UbWqe> wqe);
 
+        // 判断本地tp是否处于使用状态
+        bool IsTpInUse(uint32_t tpn);
+
+        // 判断与本地tp配对的远程tp是否处于使用状态
+        bool IsPeerTpInUse(uint32_t tpn);
+
+        std::vector<uint32_t> GetUselessTpns();
     private:
 
         void DoDispose() override;

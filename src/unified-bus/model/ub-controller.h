@@ -7,11 +7,13 @@
 #include <map>
 #include <unordered_map>
 #include <shared_mutex> // For std::shared_mutex
+#include <mutex>
 #include "ub-datatype.h"
 #include "ns3/ub-switch-allocator.h"
 #include "protocol/ub-function.h"
 #include "protocol/ub-datalink.h"
 #include "ns3/ub-tp-connection-manager.h"
+
 
 using namespace utils;
 namespace ns3 {
@@ -47,8 +49,16 @@ public:
     bool CreateTp(uint32_t src, uint32_t dest, uint8_t sport, uint8_t dport, UbPriority priority,
                   uint32_t srcTpn, uint32_t dstTpn, Ptr<UbCongestionControl> congestionCtrl);
 
+    /**
+     * @brief Get tp by tpn
+     * @param tpn tpn number
+     **/
     Ptr<UbTransportChannel> GetTp(uint32_t tpn);
 
+    /**
+     * @brief destroy tp instance
+     * @param tpn tpn number
+     **/
     void DestroyTp(uint32_t tpn);
 
     // Transport channel Group management
@@ -140,14 +150,21 @@ public:
 
     std::map<uint32_t, Ptr<UbTransportChannel>> GetTpnMap() const;
 
-    void SetTpConnManager(TpConnectionManager conn) { m_tpnConn = conn; }
-    TpConnectionManager GetTpConnManager() { return m_tpnConn; }
+    void SetTpConnManager(Ptr<TpConnectionManager> conn)
+    {
+        m_tpnConn = conn;
+    }
+    Ptr<TpConnectionManager> GetTpConnManager() { return m_tpnConn; }
 
-    uint32_t GetTpUserNum(uint32_t tpn);
-    uint32_t SetTpUserNum(uint32_t tpn, uint32_t num);
-    uint32_t AddTpUserNum(uint32_t tpn);
-    uint32_t DecreaseTpUserNum(uint32_t tpn);
+    /**
+     * @brief 获取下一个新建TP的tpn号
+     */
+    uint32_t GetNextTpn();
 
+    /**
+     * @brief 判断TP实例是否存在
+     */
+    bool IsTPExists(uint32_t tpn);
 private:
     Ptr<UbFunction> m_function; // 功能层
     Ptr<UbTransaction> m_transaction; // 事务层
@@ -166,8 +183,12 @@ private:
     std::vector<std::vector<std::vector<uint32_t>>> m_dstPriToTp{}; // level_0 dst_node, level_1 priority, level_2 tpns
     std::vector<std::vector<uint8_t>> m_dstPriToTpRrIndex{}; // level_0 dst_node, level_1 priority, level_2 iteration
 
-    TpConnectionManager m_tpnConn; // 当前节点维护的tpnConn
-    std::map<uint32_t, uint32_t> m_tpnUserNum;
+    Ptr<TpConnectionManager> m_tpnConn; // 当前节点维护的tpnConn
+
+    uint32_t m_nextTpn = 0;
+
+    std::mutex m_nextTpnLock;
+
 };
 
 } // namespace ns3

@@ -41,11 +41,28 @@ UbTransaction::UbTransaction(Ptr<Node> node)
 
 void UbTransaction::TpInit(Ptr<UbTransportChannel> tp)
 {
-    m_tpnMap[tp->GetTpn()] = tp;
-    m_tpRRIndex[tp->GetTpn()] = 0;
-    m_tpSchedulingStatus[tp->GetTpn()] = false;
+    uint32_t tpn = tp->GetTpn();
+    m_tpnMap[tpn] = tp;
+    m_tpRRIndex[tpn] = 0;
+    m_tpSchedulingStatus[tpn] = false;
 }
 
+void UbTransaction::TpDeinit(uint32_t tpn)
+{
+    // 删除与该tp绑定的jetty
+    m_tpRelatedJetties.erase(tpn);
+    for (auto it = m_jettyTpGroup.begin(); it != m_jettyTpGroup.end(); ++it) {
+        // 删除所有jetty中该tp的绑定关系
+        auto tpIt = std::find(it->second.begin(), it->second.end(), m_tpnMap[tpn]);
+        if (tpIt != it->second.end()) {
+            it->second.erase(tpIt);
+        }
+    }
+    m_tpnMap.erase(tpn);
+    m_tpRRIndex.erase(tpn);
+    m_tpSchedulingStatus.erase(tpn);
+    m_tpRelatedRemoteRequests.erase(tpn);
+}
 
 Ptr<UbFunction> UbTransaction::GetFunction()
 {
@@ -88,7 +105,6 @@ bool UbTransaction::JettyBindTp(uint32_t src, uint32_t dest, uint32_t jettyNum,
                           m_tpRelatedJetties[tpns[i]].end(),
                           ubJetty) == m_tpRelatedJetties[tpns[i]].end()) {
                 m_tpRelatedJetties[tpns[i]].push_back(ubJetty);
-                NodeList::GetNode(m_nodeId)->GetObject<UbController>()->AddTpUserNum(tpns[i]);
             }
         }
     } else {
@@ -99,7 +115,6 @@ bool UbTransaction::JettyBindTp(uint32_t src, uint32_t dest, uint32_t jettyNum,
                       m_tpRelatedJetties[tpns[pos]].end(),
                       ubJetty) == m_tpRelatedJetties[tpns[pos]].end()) {
             m_tpRelatedJetties[tpns[pos]].push_back(ubJetty);
-            NodeList::GetNode(m_nodeId)->GetObject<UbController>()->AddTpUserNum(tpns[pos]);
         }
     }
 
@@ -119,9 +134,11 @@ void UbTransaction::DestroyJettyTpMap(uint32_t jettyNum)
     }
 
     for (auto it = m_tpRelatedJetties.begin(); it != m_tpRelatedJetties.end(); it++) {
-        for (size_t i = 0; i < it->second.size(); i++) {
-            if (it->second[i]->GetJettyNum() == jettyNum) {
-                it->second.erase(it->second.begin() + i);
+        for (auto jettyIt = it->second.begin(); jettyIt != it->second.end();) {
+            if ((*jettyIt)->GetJettyNum() == jettyNum) {
+                jettyIt = it->second.erase(jettyIt);
+            } else {
+                ++jettyIt;
             }
         }
     }
@@ -167,8 +184,16 @@ void UbTransaction::ApplyScheduleWqeSegment(Ptr<UbTransportChannel> tp)
 
 void UbTransaction::ScheduleWqeSegment(Ptr<UbTransportChannel> tp)
 {
+    if (tp == nullptr) {
+        NS_LOG_DEBUG("TP not exist, Stop schedule.");
+        return;
+    }
     uint32_t tpn = tp->GetTpn();
-
+    // 若tpnmap中没有该tp记录，表示该tp对应的traffic已经完成，TP即将删除
+    if (m_tpnMap.find(tpn) == m_tpnMap.end()) {
+        NS_LOG_DEBUG("TP already delete, WQE finished. Stop schedule.");
+        return;
+    }
     // 若当前TP正处于调度状态，则结束，否则继续进行，并将状态设置为true
     if (m_tpSchedulingStatus[tpn]) {
         return;
@@ -266,7 +291,7 @@ void UbTransaction::OnScheduleWqeSegmentFinish(Ptr<UbWqeSegment> segment)
     segment->SetTpMsn(tp->GetMsnCnt());
     segment->SetPsnStart(tp->GetPsnCnt());
     tp->UpdatePsnCnt(segment->GetPsnSize());
-    tp->UpdateMsnCnt(1);
+    tp->UpDateMsnCnt(1);
     tp->PushWqeSegment(segment);
     NS_LOG_INFO("WQE Segment Sends, taskId:" << segment->GetTaskId()
         << "TASSN: "<< segment->GetTaSsn());
@@ -414,6 +439,53 @@ void UbTransaction::DoDispose()
     }
     m_jettyOrderedWqe.clear();
     Object::DoDispose();
+}
+
+std::vector<uint32_t> UbTransaction::GetUselessTpns()
+{
+    std::vector<uint32_t> tpns;
+    // 遍历tp，找出所有本地和对端都不再使用的tp
+    for (auto it = m_tpnMap.begin(); it != m_tpnMap.end(); it++) {
+        uint32_t tpn = it->first;
+        if (!IsTpInUse(tpn) && !IsPeerTpInUse(tpn)) {
+            tpns.push_back(tpn);
+        }
+    }
+    return tpns;
+}
+
+bool UbTransaction::IsTpInUse(uint32_t tpn)
+{
+    auto tpIt = m_tpnMap.find(tpn);
+    if (tpIt != m_tpnMap.end()) {
+        auto localTp = tpIt->second;
+        auto it = m_tpRelatedJetties.find(tpn);
+        if (it != m_tpRelatedJetties.end()) {
+            if (it->second.size() == 0) { // 若存在记录且对应jetty数目为0，表示使用完毕
+                return false;
+            } else { // 若存在记录且对应jetty数目非0，表示正在使用
+                return true;
+            }
+        } else { // 不存在记录表示无jetty使用
+            return false;
+        }
+    } else {
+        NS_ASSERT_MSG(0, "no such tp.");
+    }
+}
+
+bool UbTransaction::IsPeerTpInUse(uint32_t tpn)
+{
+    auto localTpIt = m_tpnMap.find(tpn);
+    if (localTpIt != m_tpnMap.end()) {
+        auto localTp = localTpIt->second;
+        uint32_t dst = localTp->GetDest();
+        uint32_t dstTpn = localTp->GetDstTpn();
+        auto peerTa = NodeList::GetNode(dst)->GetObject<UbController>()->GetUbTransaction();
+        return peerTa->IsTpInUse(dstTpn);
+    } else {
+        NS_ASSERT_MSG(0, "can't find local tpn");
+    }
 }
 
 } // namespace ns3

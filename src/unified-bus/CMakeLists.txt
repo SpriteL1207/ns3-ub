@@ -42,6 +42,7 @@ build_lib(
 	model/protocol/ub-flow-control.cc
 	model/ub-queue-manager.cc
 	model/ub-fault.cc
+	model/ub-tp-connection-manager.cc
   HEADER_FILES
     ${mpi_headers}
 	model/ub-traffic-gen.h

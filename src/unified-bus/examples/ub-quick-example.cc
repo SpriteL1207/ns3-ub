@@ -14,6 +14,50 @@
 
 using namespace utils;
 
+std::string FormatTime(double time_us)
+{
+    double val = time_us;
+    const char* unit = " us";
+    int precision = 0;
+    if (time_us >= 1e6) {
+        val = time_us / 1e6;
+        unit = " s";
+        precision = 6;
+    } else if (time_us >= 1e3) {
+        val = time_us / 1e3;
+        unit = " ms";
+        precision = 3;
+    }
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(precision) << val << unit;
+    return oss.str();
+}
+
+void CheckNoProgress(double sim_time_us, std::ostringstream& oss)
+{
+    static uint32_t last_completed_tasks = 0;
+    static double last_progress_time_us = 0;
+    uint32_t completed_tasks = 0;
+    
+    // 统计已完成任务数
+    for (auto& task : UbTrafficGen::Get()->m_taskStates) {
+        if (task.second == UbTrafficGen::TaskState::COMPLETED) {
+            completed_tasks++;
+        }
+    }
+
+    // 如果有新任务完成，更新状态
+    if (completed_tasks > last_completed_tasks) {
+        last_completed_tasks = completed_tasks;
+        last_progress_time_us = sim_time_us;
+    }
+
+    // 如果超过10ms没有新任务完成，且总时间超过10ms，提示可能死锁或拥塞
+    if (sim_time_us - last_progress_time_us > 10000 && sim_time_us > 10000) {
+         oss << " [WARNING: No task completed for " << FormatTime(sim_time_us - last_progress_time_us) << "]";
+    }
+}
+
 void CheckExampleProcess()
 {
     double sim_time_us = Simulator::Now().GetMicroSeconds();
@@ -21,22 +65,13 @@ void CheckExampleProcess()
     std::time_t t = std::chrono::system_clock::to_time_t(now);
     std::tm tm_buf{};
     localtime_r(&t, &tm_buf);
-    double val = sim_time_us;
-    const char* unit = " us";
-    int precision = 0;
-    if (sim_time_us >= 1e6) {
-        val = sim_time_us / 1e6;
-        unit = " s";
-        precision = 6;
-    } else if (sim_time_us >= 1e3) {
-        val = sim_time_us / 1e3;
-        unit = " ms";
-        precision = 3;
-    }
+
     std::ostringstream oss;
-    oss.setf(std::ios::fixed);
     oss << "[" << std::put_time(&tm_buf, "%H:%M:%S") << "] "
-        << "Simulation time progress: " << std::setprecision(precision) << val << unit;
+        << "Simulation time progress: " << FormatTime(sim_time_us);
+
+    CheckNoProgress(sim_time_us, oss);
+
     std::cout << "\r" << oss.str() << std::flush;
     if (!UbTrafficGen::Get()->IsCompleted()) {
             Simulator::Schedule(MicroSeconds(100), &CheckExampleProcess);
@@ -84,6 +119,8 @@ void RunCase(const string& configPath)
         UbTrafficGen::Get()->AddTask(record);
         Ptr<UbController> ctrl = node->GetObject<ns3::UbController>();
         ctrl->SetTpConnManager(retConnectionManager.GetConnectionManagerByNode(record.sourceNode));
+        auto recvCtrl = NodeList::GetNode(record.destNode)->GetObject<ns3::UbController>();
+        recvCtrl->SetTpConnManager(retConnectionManager.GetConnectionManagerByNode(record.destNode));
     }
     UbTrafficGen::Get()->ScheduleNextTasks();
     CheckExampleProcess();
@@ -125,34 +162,34 @@ int main(int argc, char* argv[])
     Time::SetResolution(Time::PS);
 
     // 日志中添加时间前缀
-    //ns3::LogComponentEnableAll(LOG_PREFIX_TIME);
+    ns3::LogComponentEnableAll(LOG_PREFIX_TIME);
 
     // 示例：设置指定组件日志级别，设置指定组件打印时间前缀
     // LogComponentEnable("UbApp", LOG_LEVEL_INFO);
     // LogComponentEnable("UbApp", LOG_PREFIX_TIME);
 
     // 激活日志
-    // LogComponentEnable("UbSwitchAllocator", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbQueueManager", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbCaqm", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbTrafficGen", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbApp", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbCongestionControl", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbController", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbDataLink", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbFlowControl", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbHeader", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbLink", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbLdstInstance", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbLdstThread", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbLdstApi", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbPort", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbRoutingProcess", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbSwitch", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbFunction", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbTransportChannel", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbFault", LOG_LEVEL_ALL);
-    // LogComponentEnable("UbTransaction", LOG_LEVEL_ALL);
+    LogComponentEnable("UbSwitchAllocator", LOG_LEVEL_WARN);
+    LogComponentEnable("UbQueueManager", LOG_LEVEL_WARN);
+    LogComponentEnable("UbCaqm", LOG_LEVEL_WARN);
+    LogComponentEnable("UbTrafficGen", LOG_LEVEL_WARN);
+    LogComponentEnable("UbApp", LOG_LEVEL_WARN);
+    LogComponentEnable("UbCongestionControl", LOG_LEVEL_WARN);
+    LogComponentEnable("UbController", LOG_LEVEL_WARN);
+    LogComponentEnable("UbDataLink", LOG_LEVEL_WARN);
+    LogComponentEnable("UbFlowControl", LOG_LEVEL_WARN);
+    LogComponentEnable("UbHeader", LOG_LEVEL_WARN);
+    LogComponentEnable("UbLink", LOG_LEVEL_WARN);
+    LogComponentEnable("UbLdstInstance", LOG_LEVEL_WARN);
+    LogComponentEnable("UbLdstThread", LOG_LEVEL_WARN);
+    LogComponentEnable("UbLdstApi", LOG_LEVEL_WARN);
+    LogComponentEnable("UbPort", LOG_LEVEL_WARN);
+    LogComponentEnable("UbRoutingProcess", LOG_LEVEL_WARN);
+    LogComponentEnable("UbSwitch", LOG_LEVEL_WARN);
+    LogComponentEnable("UbFunction", LOG_LEVEL_WARN);
+    LogComponentEnable("UbTransportChannel", LOG_LEVEL_WARN);
+    LogComponentEnable("UbFault", LOG_LEVEL_WARN);
+    LogComponentEnable("UbTransaction", LOG_LEVEL_WARN);
 
     // 配置文件路径
     string configPath = "scratch/2nodes_single-tp";

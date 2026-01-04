@@ -108,7 +108,7 @@ public:
      * @param tpack Transport acknowledgment message to process
      */
     void RecvDataPacket(Ptr<Packet> p);
-    
+
     /**
      * @brief apply ta for next wqesegment
      */
@@ -223,9 +223,9 @@ public:
     uint32_t GetSrc() { return m_src; }
     uint32_t GetDest() { return m_dest; }
 
-    uint64_t GetMsnCnt() { return m_tpMsnCnt; }
-
-    void UpdateMsnCnt(uint32_t num) { m_tpMsnCnt += num; }
+    uint32_t GetMsnCnt() { return m_tpMsnCnt; }
+    uint32_t GetDstTpn() { return m_dstTpn; }
+    void UpDateMsnCnt(uint32_t num) { m_tpMsnCnt += num; }
 
     uint64_t GetPsnCnt() { return m_tpPsnCnt; }
 

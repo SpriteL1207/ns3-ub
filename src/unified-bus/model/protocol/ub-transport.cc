@@ -111,12 +111,13 @@ UbTransportChannel::UbTransportChannel()
     } else {
         m_pktTraceEnabled = false;
     }
-    NS_LOG_DEBUG("m_pktTraceEnabled:" << m_pktTraceEnabled);
+    NS_LOG_FUNCTION(this);
 }
 
 UbTransportChannel::~UbTransportChannel()
 {
     // Clear WQE queues and release resources
+    NS_LOG_INFO("tp release, node:" << m_src << " tpn:" << m_tpn);
     NS_LOG_FUNCTION(this);
 }
 
@@ -364,7 +365,6 @@ void UbTransportChannel::RecvTpAck(Ptr<Packet> p)
             p->PeekPacketTag(flowTag);
             UbPacketTraceTag traceTag;
             p->PeekPacketTag(traceTag);
-            NS_LOG_DEBUG("record trace.");
             TpRecvNotify(p->GetUid(), m_psnSndUna - 1, m_dest, m_src, m_dstTpn, m_tpn,
                          PacketType::ACK, p->GetSize(), flowTag.GetFlowId(), traceTag);
         }

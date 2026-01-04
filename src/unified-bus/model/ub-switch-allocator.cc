@@ -45,7 +45,7 @@ void UbSwitchAllocator::TriggerAllocator(Ptr<UbPort> outPort)
     NS_LOG_DEBUG("[" << typeName << " TriggerAllocator] portId: " << outPort->GetIfIndex());
 
     auto outPortId = outPort->GetIfIndex();
-    
+
     if (outPortId >= m_isRunning.size()) {
          NS_LOG_WARN("Port ID out of range in Allocator");
          return;
@@ -89,9 +89,9 @@ void UbSwitchAllocator::CheckDeadlock()
                 if (queue && !queue->IsEmpty()) {
                     if (now - queue->GetHeadArrivalTime() > threshold) {
                         std::stringstream ss;
-                        ss << "Potential Deadlock in Node " << m_nodeId 
+                        ss << "Potential Deadlock in Node " << m_nodeId
                            << " OutPort:" << outPort << " Pri:" << pri;
-                        
+
                         if (queue->GetIngressQueueType() == IngressQueueType::VOQ) {
                             ss << " QueueType:VOQ InPort:" << queue->GetInPortId();
                         } else if (queue->GetIngressQueueType() == IngressQueueType::TP) {
@@ -113,6 +113,13 @@ void UbSwitchAllocator::CheckDeadlock()
         }
     }
     Simulator::Schedule(MilliSeconds(10), &UbSwitchAllocator::CheckDeadlock, this);
+}
+
+void UbSwitchAllocator::UnregisterUbIngressQueue(Ptr<UbIngressQueue> ingressQueue, uint32_t outPort, uint32_t priority)
+{
+    m_ingressSources[outPort][priority].erase(
+        std::remove(m_ingressSources[outPort][priority].begin(), m_ingressSources[outPort][priority].end(), ingressQueue),
+        m_ingressSources[outPort][priority].end());
 }
 
 void UbSwitchAllocator::RegisterEgressStauts(uint32_t portsNum)
@@ -171,7 +178,7 @@ void UbRoundRobinAllocator::AllocateNextPacket(Ptr<UbPort> outPort)
         auto packetEntry = std::make_tuple(inPortId, priority, packet);
         outPort->GetFlowControl()->HandleSentPacket(packet, ingressQueue);
         outPort->GetUbQueue()->DoEnqueue(packetEntry);
-        
+
         // Packet moved from VOQ to EgressQueue, notify Switch to update buffer statistics
         if (ingressQueue->GetIngressQueueType() != IngressQueueType::TP) { // Forwarded packet (not locally generated)
             auto node = NodeList::GetNode(m_nodeId);
@@ -382,7 +389,7 @@ void UbDwrrAllocator::AllocateNextPacket(Ptr<UbPort> outPort)
                 // 第一个包就发不出去：不扣赤字，并回滚 m_rrIdx
                 if (pktSize > deficit) {
                     if (!sentAny) {
-                        m_rrIdx[outPortId][pi] = qidx;  
+                        m_rrIdx[outPortId][pi] = qidx;
                     }
                     break;
                 }

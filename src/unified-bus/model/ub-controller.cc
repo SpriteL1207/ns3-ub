@@ -6,6 +6,7 @@
 #include "protocol/ub-datalink.h"
 #include "protocol/ub-transaction.h"
 #include "ns3/ub-network-address.h"
+
 using namespace utils;
 namespace ns3 {
 
@@ -88,8 +89,6 @@ bool UbController::CreateTp(uint32_t src, uint32_t dest, uint8_t sport,
     m_transportsCount++;
     currentNode->GetObject<UbSwitch>()->RegisterTpWithAllocator(tp, sport, priority);  // register TP with allocator
 
-    SetTpUserNum(srcTpn, 0);
-
     NS_LOG_DEBUG("Created transport channel success");
     return true;
 }
@@ -108,12 +107,13 @@ Ptr<UbTransportChannel> UbController::GetTp(uint32_t tpn)
 
 void UbController::DestroyTp(uint32_t tpn)
 {
-    auto it = m_numToTp.find(tpn);
-    if (it != m_numToTp.end()) {
-        m_numToTp.erase(it);
-    } else {
-        NS_LOG_WARN("Transport channel not found for destruction");
-    }
+    // 算法中删除tp记录
+    GetObject<Node>()->GetObject<UbSwitch>()->RemoveTpFromAllocator(m_numToTp[tpn]);
+    // 事务层删除tp记录
+    m_transaction->TpDeinit(tpn);
+    // 删除本地记录
+    m_numToTp.erase(tpn);
+    m_transportsCount--;
 }
 
 // Transport channel Group management
@@ -271,41 +271,22 @@ Ptr<UbTransportChannel> UbController::GetTpByMap(uint32_t key)
     return nullptr;
 }
 
-uint32_t UbController::GetTpUserNum(uint32_t tpn)
+uint32_t UbController::GetNextTpn()
 {
-    auto it = m_tpnUserNum.find(tpn);
-    if (it != m_tpnUserNum.end()) {
-        return it->second;
-    } else {
-        NS_ASSERT_MSG(0, "Cannot find Tpn from m_tpnUserNum! TP not created before.");
-    }
+    m_nextTpnLock.lock();
+    uint32_t res = m_nextTpn;
+    ++m_nextTpn;
+    m_nextTpnLock.unlock();
+    return res;
 }
 
-uint32_t UbController::SetTpUserNum(uint32_t tpn, uint32_t num)
+bool UbController::IsTPExists(uint32_t tpn)
 {
-    m_tpnUserNum[tpn] = num;
-    return num;
-}
-
-uint32_t UbController::AddTpUserNum(uint32_t tpn)
-{
-    auto it = m_tpnUserNum.find(tpn);
-    if (it != m_tpnUserNum.end()) {
-        it->second += 1;
-        return it->second;
-    } else {
-        NS_ASSERT_MSG(0, "Cannot Add Tp user num! TP not created before.");
-    }
-}
-
-uint32_t UbController::DecreaseTpUserNum(uint32_t tpn)
-{
-    auto it = m_tpnUserNum.find(tpn);
-    if (it != m_tpnUserNum.end()) {
-        it->second -= 1;
-        return it->second;
-    } else {
-        NS_ASSERT_MSG(0, "Cannot Decrease Tp user num! TP not created before.");
+    auto it = m_numToTp.find(tpn);
+    if (it != m_numToTp.end()) { // 能再ctrl的tp map中找到，已存在
+        return true;
+    } else { // ctrl的tp map中找不到，不存在
+        return false;
     }
 }
 } // namespace ns3

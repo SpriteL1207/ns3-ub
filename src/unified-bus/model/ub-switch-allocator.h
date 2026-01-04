@@ -31,6 +31,7 @@ public:
     virtual void Init();
     void SetNodeId(uint32_t nodeId) {m_nodeId = nodeId;}
     void RegisterUbIngressQueue(Ptr<UbIngressQueue> ingressQueue, uint32_t outPort, uint32_t priority);
+    void UnregisterUbIngressQueue(Ptr<UbIngressQueue> ingressQueue, uint32_t outPort, uint32_t priority);
     void RegisterEgressStauts(uint32_t portsNum);
     void SetEgressStatus(uint32_t portId, bool status);
     bool GetEgressStatus(uint32_t portId);
