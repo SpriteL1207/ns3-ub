@@ -180,7 +180,7 @@ bool UbCbfc::CbfcRestoreCrd(Ptr<Packet> p)
     port->ResetCredits();
     UbDatalinkControlCreditHeader crdHeader = UbDataLink::ParseCreditHeader(p, port);
 
-    uint32_t ResumeCellGrainNum = 0;
+    uint32_t resumeCellGrainNum = 0;
     bool ret = false;
     IntegerValue val;
     g_ub_vl_num.GetValue(val);
@@ -192,9 +192,9 @@ bool UbCbfc::CbfcRestoreCrd(Ptr<Packet> p)
 
     for (int index = 0; index < ubVlNum; index++) {
         if (port->m_credits[index] > 0) {
-            ResumeCellGrainNum = port->m_credits[index];
+            resumeCellGrainNum = port->m_credits[index];
             NS_LOG_DEBUG("before resume m_crdTxfree[ " << (uint32_t)index << " ]: " << m_crdTxfree[index]);
-            m_crdTxfree[index] += ResumeCellGrainNum * m_cbfcCfg->m_retCellGrainControlPacket;  // 粒度数量 * 粒度大小
+            m_crdTxfree[index] += resumeCellGrainNum * m_cbfcCfg->m_retCellGrainControlPacket;  // 粒度数量 * 粒度大小
             NS_LOG_DEBUG("left m_crdTxfree[ " << (uint32_t)index << " ]: " << m_crdTxfree[index]);
             ret = true;
         }
@@ -266,6 +266,189 @@ FcType UbCbfc::GetFcType()
 {
     return m_fcType;
 }
+
+
+TypeId UbCbfcSharedCredit::GetTypeId(void)
+{
+    static TypeId tid = TypeId("ns3::UbCbfcSharedCredit")
+        .SetParent<UbCbfc>()
+        .AddConstructor<UbCbfcSharedCredit>();
+    return tid;
+}
+
+void UbCbfcSharedCredit::Init(uint8_t flitLen, uint8_t nFlitPerCell, uint8_t retCellGrainDataPacket,
+                            uint8_t retCellGrainControlPacket, int32_t reservedPerVlCells,
+                            int32_t sharedInitCells, uint32_t nodeId, uint32_t portId)
+{
+    UbCbfc::Init(flitLen, nFlitPerCell, retCellGrainDataPacket, retCellGrainControlPacket,
+                 reservedPerVlCells, nodeId, portId);
+
+    m_shareCrd = sharedInitCells;
+    m_reservedPerVlCells = reservedPerVlCells;
+
+    NS_LOG_DEBUG("NodeId: " << m_nodeId << "PortId: " << m_portId << "Init CbfcSharedMode");
+    NS_LOG_DEBUG("m_shareCrd: " << m_shareCrd << " reservedPerVlCells: " << m_reservedPerVlCells);
+}
+
+FcType UbCbfcSharedCredit::GetFcType()
+{
+    return FcType::CBFC_SHARED_CRD;
+}
+
+bool UbCbfcSharedCredit::IsFcLimited(Ptr<UbIngressQueue> ingressQ)
+{
+    uint32_t nextPktSize = 0;
+
+    if (ingressQ->GetIngressQueueType() == IngressQueueType::VOQ) {
+        if (ingressQ->GetInPortId() == ingressQ->GetOutPortId()) {
+            NS_LOG_DEBUG("is crd pkt");
+            return false;
+        }
+        nextPktSize = ingressQ->GetNextPacketSize();
+        NS_LOG_DEBUG("is forward pkt nextPktSize: " << nextPktSize);
+    } else if (ingressQ->GetIngressQueueType() == IngressQueueType::TP) {
+        nextPktSize = ingressQ->GetNextPacketSize();
+        NS_LOG_DEBUG("is tp pkt nextPktSize:" << nextPktSize);
+    }
+
+    const int32_t consumeCellNum =
+        ceil((float)nextPktSize / (m_cbfcCfg->m_flitLen * m_cbfcCfg->m_nFlitPerCell));
+
+    const uint8_t vlId = ingressQ->GetIngressPriority();
+    const int32_t totalAvail = m_shareCrd + m_crdTxfree[vlId];
+
+    if (totalAvail < consumeCellNum) {
+        NS_LOG_INFO("Flow Control Credit Limited,outPort:{" << ingressQ->GetOutPortId()
+                                                            << "} VL:{" << (uint32_t)vlId << "}");
+        NS_LOG_DEBUG("TotalAvailable[ " << (uint32_t)vlId << " ]: " << totalAvail
+                                     << " is insufficient. Need: " << consumeCellNum);
+        return true;
+    }
+    NS_LOG_DEBUG("TotalAvailable[ " << (uint32_t)vlId << " ]: " << totalAvail
+                                 << " is enough. Need: " << consumeCellNum);
+
+    return false;
+}
+
+void UbCbfcSharedCredit::HandleSentPacket(Ptr<Packet> p, Ptr<UbIngressQueue> ingressQ)
+{
+    if ((ingressQ->GetIngressQueueType() == IngressQueueType::VOQ) &&
+        (ingressQ->GetInPortId() != ingressQ->GetOutPortId())) {
+        CbfcSharedConsumeCrd(p);
+    } else if ((ingressQ->GetIngressQueueType() == IngressQueueType::VOQ) &&
+               (ingressQ->GetInPortId() == ingressQ->GetOutPortId())) {
+        NS_LOG_DEBUG("is crd pkt");
+    } else if (ingressQ->GetIngressQueueType() == IngressQueueType::TP) {
+        NS_LOG_DEBUG("is pkt from Transport");
+        CbfcSharedConsumeCrd(p);
+    }
+}
+
+void UbCbfcSharedCredit::HandleReceivedControlPacket(Ptr<Packet> p)
+{
+    CbfcSharedRestoreCrd(p);
+}
+
+// CBFC 信用共享模式：信用消耗（Consume）逻辑
+// 1. 计算当前报文需要消耗的 Cell 数量
+// 2. 优先尝试从共享信用池 (m_shareCrd) 中扣除
+// 3. 如果共享池信用充足，完成消耗并返回
+// 4. 如果共享池信用不足，将共享池清零，并从该 VL 独占的信用证 (m_crdTxfree[vlId]) 中补充扣除剩余部分
+// 5. 如果独占信用证依然不足，记录警告并归零
+bool UbCbfcSharedCredit::CbfcSharedConsumeCrd(Ptr<Packet> p)
+{
+    const uint32_t pktSize = p->GetSize();
+    NS_LOG_DEBUG("NodeId: " << m_nodeId << " PortId: " << m_portId << " pktSize: " << pktSize);
+    UbDatalinkPacketHeader pktHeader;
+    p->PeekHeader(pktHeader);
+    const uint8_t vlId = pktHeader.GetPacketVL();
+
+    const int32_t consumeCellNum =
+        ceil((float)pktSize / (m_cbfcCfg->m_flitLen * m_cbfcCfg->m_nFlitPerCell));
+    
+    NS_LOG_DEBUG("befor consume, m_shareCrd: " << m_shareCrd << " m_crdTxfree[ " << (uint32_t)vlId << " ]: " << m_crdTxfree[vlId]);
+
+    if (m_shareCrd >= consumeCellNum) {
+        m_shareCrd -= consumeCellNum;
+        NS_LOG_DEBUG("left m_shareCrd: " << m_shareCrd << " left m_crdTxfree[ " << (uint32_t)vlId << " ]: " << m_crdTxfree[vlId]);
+        return true;
+    }
+
+    const int32_t remainder = consumeCellNum - m_shareCrd;
+    m_shareCrd = 0;
+
+    if (m_crdTxfree[vlId] >= remainder) {
+        m_crdTxfree[vlId] -= remainder;
+        NS_LOG_DEBUG("left m_shareCrd: " << m_shareCrd << " left m_crdTxfree[ " << (uint32_t)vlId << " ]: " << m_crdTxfree[vlId]);
+        return true;
+    }
+
+    NS_LOG_WARN("CbfcSharedConsumeCrd underflow, vlId: " << (uint32_t)vlId);
+    m_crdTxfree[vlId] = 0;
+    return false;
+}
+
+// CBFC 信用共享模式：信用归还（Restore）逻辑
+// 1. 解析控制报文，统计当前端口收到的所有 VL 归还的信用证总数
+// 2. 将所有归还的信用证统一填充到共享信用池 (m_shareCrd) 中
+// 3. 遍历所有优先级队列 (VL)，检查各 VL 的独占信用证是否达到预留阈值 (m_reservedPerVlCells)
+// 4. 若某个 VL 的独占信用不足，则从共享池中拨付信用进行补充，直到达到阈值或共享池耗尽
+// 4.1 补充顺序：可根据实际场景自定义。目前实现为按照 VL 优先级索引从小到大依次进行补充
+// 5. 触发端口的发送流程 (TriggerTransmit) 以尝试发送因信用不足而积压的报文
+bool UbCbfcSharedCredit::CbfcSharedRestoreCrd(Ptr<Packet> p)
+{
+    Ptr<Node> node = NodeList::GetNode(m_nodeId);
+    Ptr<UbPort> port = DynamicCast<UbPort>(node->GetDevice(m_portId));
+
+    NS_LOG_DEBUG("NodeId: " << m_nodeId << " PortId: " << m_portId);
+    port->ResetCredits();
+    UbDatalinkControlCreditHeader crdHeader = UbDataLink::ParseCreditHeader(p, port);
+
+    uint32_t resumeCellGrainNum = 0;
+    bool ret = false;
+    IntegerValue val;
+    g_ub_vl_num.GetValue(val);
+    int ubVlNum = val.Get();
+
+    for (int index = 0; index < ubVlNum; index++) {
+        NS_LOG_DEBUG("port m_credits[ " << (uint32_t)index << " ]: " << (uint32_t)port->m_credits[index]);
+    }
+
+    int32_t totalReturned = 0;
+
+    for (int index = 0; index < ubVlNum; index++) {
+        if (port->m_credits[index] > 0) {
+            resumeCellGrainNum = port->m_credits[index];
+            int32_t cells = resumeCellGrainNum * m_cbfcCfg->m_retCellGrainControlPacket;
+            totalReturned += cells;
+        }
+    }
+
+    if (totalReturned > 0) {
+        NS_LOG_DEBUG("before resume Share: " << m_shareCrd << " TotalReturned: " << totalReturned);
+        m_shareCrd += totalReturned;
+        
+        for (int vl = 0; vl < ubVlNum; vl++) {
+            if (m_shareCrd <= 0) break;
+
+            if (m_crdTxfree[vl] < m_reservedPerVlCells) {
+                int32_t needed = m_reservedPerVlCells - m_crdTxfree[vl];
+                int32_t canGive = std::min(needed, m_shareCrd);
+                
+                NS_LOG_DEBUG("Refill VL " << vl << " before: " << m_crdTxfree[vl] << " add: " << canGive);
+                m_crdTxfree[vl] += canGive;
+                m_shareCrd -= canGive;
+                NS_LOG_DEBUG("Refill VL " << vl << " after: " << m_crdTxfree[vl]);
+            }
+        }
+        NS_LOG_DEBUG("left Share: " << m_shareCrd);
+        ret = true;
+    }
+
+    Simulator::ScheduleNow(&UbPort::TriggerTransmit, port);
+    return ret;
+}
+
 
 TypeId UbPfc::GetTypeId(void)
 {
