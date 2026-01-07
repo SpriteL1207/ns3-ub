@@ -657,11 +657,11 @@ void UbUtils::ParseLine(const std::string &line, Connection &conn)
     }
 }
 
-TpConnectionManager UbUtils::CreateTp(const string &filename)
+Ptr<TpConnectionManager> UbUtils::CreateTp(const string &filename)
 {
     std::unordered_map<uint32_t, std::vector<uint32_t>> NodeTpns;
     // key1:node1 key2:node2 value:Connection
-    TpConnectionManager retTpConnectionManager;
+    Ptr<TpConnectionManager> retTpConnectionManager = CreateObject<TpConnectionManager>();
     ifstream file(filename);
     if (!file.is_open()) { // 没有TP文件则使用实时创建TP模式
         PrintTimestamp("File transport_channel.csv not found."
@@ -679,27 +679,7 @@ TpConnectionManager UbUtils::CreateTp(const string &filename)
         }
         Connection conn;
         ParseLine(line, conn);
-        Ptr<Node> sN = NodeList::GetNode(conn.node1);
-        Ptr<Node> rN = NodeList::GetNode(conn.node2);
-
-        Ptr<ns3::UbController> sendCtrl = sN->GetObject<ns3::UbController>();
-        Ptr<ns3::UbController> receiveCtrl = rN->GetObject<ns3::UbController>();
-        auto it = NodeTpns.find(conn.node1);
-        if (it != NodeTpns.end()) {
-            it->second.push_back(conn.tpn1);
-        } else {
-            NodeTpns[conn.node1].push_back(conn.tpn1);
-        }
-        auto sendHostCaqm = UbCongestionControl::Create(UB_DEVICE);
-        auto recvHostCaqm = UbCongestionControl::Create(UB_DEVICE);
-        bool retSendCtrl = sendCtrl->CreateTp(
-            conn.node1, conn.node2, conn.port1, conn.port2, conn.priority, conn.tpn1, conn.tpn2, sendHostCaqm);
-        bool retReceiveCtrl = receiveCtrl->CreateTp(
-            conn.node2, conn.node1, conn.port2, conn.port1, conn.priority, conn.tpn2, conn.tpn1, recvHostCaqm);
-        if (!retSendCtrl || !retReceiveCtrl) {
-            NS_ASSERT_MSG(0, "CreateTp failed!");
-        }
-        retTpConnectionManager.AddConnection(conn);
+        retTpConnectionManager->AddConnection(conn);
     }
     file.close();
     return retTpConnectionManager;

@@ -456,36 +456,25 @@ std::vector<uint32_t> UbTransaction::GetUselessTpns()
 
 bool UbTransaction::IsTpInUse(uint32_t tpn)
 {
-    auto tpIt = m_tpnMap.find(tpn);
-    if (tpIt != m_tpnMap.end()) {
-        auto localTp = tpIt->second;
-        auto it = m_tpRelatedJetties.find(tpn);
-        if (it != m_tpRelatedJetties.end()) {
-            if (it->second.size() == 0) { // 若存在记录且对应jetty数目为0，表示使用完毕
-                return false;
-            } else { // 若存在记录且对应jetty数目非0，表示正在使用
-                return true;
-            }
-        } else { // 不存在记录表示无jetty使用
-            return false;
-        }
-    } else {
-        NS_ASSERT_MSG(0, "no such tp.");
+    NS_ASSERT_MSG(m_tpnMap.find(tpn) != m_tpnMap.end(), "no such tp.");
+    auto it = m_tpRelatedJetties.find(tpn);
+    if (it == m_tpRelatedJetties.end()) {
+        // 不存在记录表示无jetty使用
+        return false;
     }
+    // 若存在记录且对应jetty数目为0，表示使用完毕，非0，表示正在使用
+    return (it->second.size() != 0);
 }
 
 bool UbTransaction::IsPeerTpInUse(uint32_t tpn)
 {
     auto localTpIt = m_tpnMap.find(tpn);
-    if (localTpIt != m_tpnMap.end()) {
-        auto localTp = localTpIt->second;
-        uint32_t dst = localTp->GetDest();
-        uint32_t dstTpn = localTp->GetDstTpn();
-        auto peerTa = NodeList::GetNode(dst)->GetObject<UbController>()->GetUbTransaction();
-        return peerTa->IsTpInUse(dstTpn);
-    } else {
-        NS_ASSERT_MSG(0, "can't find local tpn");
-    }
+    NS_ASSERT_MSG(localTpIt != m_tpnMap.end(), "can't find local tpn");
+    auto localTp = localTpIt->second;
+    uint32_t dst = localTp->GetDest();
+    uint32_t dstTpn = localTp->GetDstTpn();
+    auto peerTa = NodeList::GetNode(dst)->GetObject<UbController>()->GetUbTransaction();
+    return peerTa->IsTpInUse(dstTpn);
 }
 
 } // namespace ns3

@@ -6,8 +6,6 @@
 #include <vector>
 #include <map>
 #include <unordered_map>
-#include <shared_mutex> // For std::shared_mutex
-#include <mutex>
 #include "ub-datatype.h"
 #include "ns3/ub-switch-allocator.h"
 #include "protocol/ub-function.h"
@@ -157,11 +155,6 @@ public:
     Ptr<TpConnectionManager> GetTpConnManager() { return m_tpnConn; }
 
     /**
-     * @brief 获取下一个新建TP的tpn号
-     */
-    uint32_t GetNextTpn();
-
-    /**
      * @brief 判断TP实例是否存在
      */
     bool IsTPExists(uint32_t tpn);
@@ -184,10 +177,6 @@ private:
     std::vector<std::vector<uint8_t>> m_dstPriToTpRrIndex{}; // level_0 dst_node, level_1 priority, level_2 iteration
 
     Ptr<TpConnectionManager> m_tpnConn; // 当前节点维护的tpnConn
-
-    uint32_t m_nextTpn = 0;
-
-    std::mutex m_nextTpnLock;
 
 };
 

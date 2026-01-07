@@ -56,7 +56,7 @@ bool UbEgressQueue::DoEnqueue(PacketEntry packetEntry)
 
     // Check byte limit
     if (m_currentBytes + pktSize > m_maxEgressBytes) {
-        NS_LOG_WARN ("[UbEgressQueue DoEnqueue] Buffer full: " 
+        NS_LOG_WARN ("Buffer full, packet dropped: " 
                      << (m_currentBytes + pktSize) << " bytes > limit " << m_maxEgressBytes 
                      << " bytes. Packet dropped (inPort=" << inPortId 
                      << " priority=" << (uint32_t)priority << ")");
@@ -275,8 +275,6 @@ void UbPort::TransmitComplete()
     m_sendState = SendState::READY;
     NS_ASSERT_MSG(
         m_currentPkt != nullptr, "UbPort::TransmitComplete(): m_currentPkt zero");
-
-    m_flowControl->HandleReleaseOccupiedFlowControl(m_currentPkt, m_currentInPortId, m_portId);
 
     m_currentPkt = nullptr;
     m_currentInPortId = 0;

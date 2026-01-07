@@ -271,22 +271,8 @@ Ptr<UbTransportChannel> UbController::GetTpByMap(uint32_t key)
     return nullptr;
 }
 
-uint32_t UbController::GetNextTpn()
-{
-    m_nextTpnLock.lock();
-    uint32_t res = m_nextTpn;
-    ++m_nextTpn;
-    m_nextTpnLock.unlock();
-    return res;
-}
-
 bool UbController::IsTPExists(uint32_t tpn)
 {
-    auto it = m_numToTp.find(tpn);
-    if (it != m_numToTp.end()) { // 能再ctrl的tp map中找到，已存在
-        return true;
-    } else { // ctrl的tp map中找不到，不存在
-        return false;
-    }
+    return (m_numToTp.find(tpn) != m_numToTp.end());
 }
 } // namespace ns3
