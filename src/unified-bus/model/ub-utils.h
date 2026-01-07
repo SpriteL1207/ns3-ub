@@ -68,7 +68,7 @@ public:
     // 读取路由
     void AddRoutingTable(const string &filename);
 
-    TpConnectionManager CreateTp(const string &filename);
+    Ptr<TpConnectionManager> CreateTp(const string &filename);
 
     // 从TXT文件加载配置
     void SetComponentsAttribute(const string &filename);

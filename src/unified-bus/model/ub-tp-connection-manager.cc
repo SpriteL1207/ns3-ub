@@ -15,7 +15,7 @@ TypeId TpConnectionManager::GetTypeId()
         .SetGroupName("UnifiedBus")
         .AddAttribute("RemoveUselessTp",
                       "remove useless tp instance",
-                      BooleanValue(true),
+                      BooleanValue(false),
                       MakeBooleanAccessor(&TpConnectionManager::m_removeUselessTp),
                       MakeBooleanChecker());
     return tid;
@@ -289,23 +289,17 @@ Connection TpConnectionManager::GetConnection(uint32_t tpn, uint32_t src, uint32
 {
     auto key = std::make_tuple(src, dst, priority);
     auto it = m_peerNodePriorityIndex.find(key);
-    bool exits = false;
+    bool exists = false;
     Connection connection;
-    if (it != m_peerNodePriorityIndex.end()) {
-        for (const auto& conn : it->second) {
-            if (conn.node1 == src && conn.tpn1 == tpn) {
-                exits = true;
-                connection = conn;
-            }
+    NS_ASSERT_MSG(it != m_peerNodePriorityIndex.end(), "Could not find (src, dst, priority) record.");
+    for (const auto& conn : it->second) {
+        if (conn.node1 == src && conn.tpn1 == tpn) {
+            exists = true;
+            connection = conn;
         }
-    } else {
-        NS_ASSERT_MSG(0, "Could not find (src, dst, priority) record.");
     }
-    if (exits) {
-        return connection;
-    } else {
-        NS_ASSERT_MSG(0, "Could not find tpn record.");
-    }
+    NS_ASSERT_MSG(exists, "Could not find tpn record.");
+    return connection;
 }
 
 // 获取与该tp相关的conn,不限优先级
@@ -313,24 +307,18 @@ Connection TpConnectionManager::GetConnection(uint32_t tpn, uint32_t src, uint32
 {
     auto key = std::make_pair(src, dst);
     auto it = m_peerNodeIndex.find(key);
-    bool exits = false;
+    bool exists = false;
     Connection connection;
-    if (it != m_peerNodeIndex.end()) {
-        for (const auto& conn : it->second) {
-            if (conn.node1 == src && conn.tpn1 == tpn) {
-                exits = true;
-                connection = conn;
-                break;
-            }
+    NS_ASSERT_MSG(it != m_peerNodeIndex.end(), "Could not find (src, dst) record.");
+    for (const auto& conn : it->second) {
+        if (conn.node1 == src && conn.tpn1 == tpn) {
+            exists = true;
+            connection = conn;
+            break;
         }
-    } else {
-        NS_ASSERT_MSG(0, "Could not find (src, dst) record.");
     }
-    if (exits) {
-        return connection;
-    } else {
-        NS_ASSERT_MSG(0, "Could not find tpn record.");
-    }
+    NS_ASSERT_MSG(exists, "Could not find tpn record.");
+    return connection;
 }
 
 // 清空指定节点的连接
@@ -405,6 +393,8 @@ void TpConnectionManager::BuildIndexesForNode(uint32_t localNodeId, Connection c
 
     // 索引5: 对端节点+本端端口+对端端口
     m_bothPortsIndex[{localNodeId, peerNodeId, localPort, peerPort}].push_back(conn);
+
+    m_tpnList.insert(localTpn);
 }
 
 // 从索引中清理指定节点
@@ -494,10 +484,10 @@ std::vector<uint32_t> TpConnectionManager::CreateNewTps(uint32_t src, uint32_t d
             Connection conn;
             conn.node1 = src;
             conn.port1 = outPortIt->first;
-            conn.tpn1 = sendCtrl->GetNextTpn();
+            conn.tpn1 = GetNextTpn();
             conn.node2 = dst;
             conn.port2 = dstPort;
-            conn.tpn2 = recvCtrl->GetNextTpn();
+            conn.tpn2 = recvCtrl->GetTpConnManager()->GetNextTpn();
             conn.priority = priority;
             conn.metrics = outPortIt->second;
             // connection添加tpnConn
@@ -583,21 +573,31 @@ uint32_t TpConnectionManager::ReconstructTp(Connection conn)
 
 void TpConnectionManager::RemoveUselessTps(uint32_t jettyNum, uint32_t src, uint32_t dst, uint32_t priority)
 {
-    if (m_removeUselessTp) { // 仅在开启了删除无用tp模式下才进行此操作
-        auto ctrl = NodeList::GetNode(src)->GetObject<UbController>();
-        auto sendTa = ctrl->GetUbTransaction();
-        // 事务层删除与该jetty绑定的tp记录
-        sendTa->DestroyJettyTpMap(jettyNum);
-        // 获取当前已经没有jetty与之绑定的tp
-        auto tpns = sendTa->GetUselessTpns();
-        for (uint32_t i = 0; i < tpns.size(); i++) {
-            ctrl->DestroyTp(tpns[i]);
-            Connection conn = GetConnection(tpns[i], src, dst);
-            NodeList::GetNode(dst)->GetObject<UbController>()->DestroyTp(conn.tpn2);
-            NS_LOG_DEBUG("Delete node: " << src << " tpn: " << tpns[i] <<
-                         " node: " << dst << " tpn:" << conn.tpn2);
-        }
+    if (!m_removeUselessTp) { // 仅在开启了删除无用tp模式下才进行此操作
+        return;
     }
+    auto ctrl = NodeList::GetNode(src)->GetObject<UbController>();
+    auto sendTa = ctrl->GetUbTransaction();
+    // 事务层删除与该jetty绑定的tp记录
+    sendTa->DestroyJettyTpMap(jettyNum);
+    // 获取当前已经没有jetty与之绑定的tp
+    auto tpns = sendTa->GetUselessTpns();
+    for (uint32_t i = 0; i < tpns.size(); i++) {
+        ctrl->DestroyTp(tpns[i]);
+        Connection conn = GetConnection(tpns[i], src, dst);
+        NodeList::GetNode(dst)->GetObject<UbController>()->DestroyTp(conn.tpn2);
+        NS_LOG_DEBUG("Delete node: " << src << " tpn: " << tpns[i] <<
+                        " node: " << dst << " tpn:" << conn.tpn2);
+    }
+}
+
+uint32_t TpConnectionManager::GetNextTpn()
+{
+    std::lock_guard<std::mutex> lock(m_nextTpnLock);
+    while (m_tpnList.find(m_nextTpn) != m_tpnList.end()) {
+        ++m_nextTpn;
+    }
+    return m_nextTpn;
 }
 
 }

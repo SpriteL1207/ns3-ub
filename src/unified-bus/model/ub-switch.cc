@@ -318,7 +318,14 @@ bool UbSwitch::SinkTpDataPacket(Ptr<UbPort> port, Ptr<Packet> packet, const Pars
 
     uint32_t dstTpn = headers.transportHeader.GetDestTpn();
     auto targetTp = GetObject<UbController>()->GetTpByTpn(dstTpn);
-    NS_ASSERT_MSG(targetTp != nullptr, "Port Cannot Get TP By Tpn!");
+    if (targetTp == nullptr) {
+        if (GetObject<UbController>()->GetTpConnManager()->IsTpRemoveMode()) {
+            NS_LOG_WARN("Auto remove tp mode, drop this packet.");
+            return true;
+        } else {
+            NS_ASSERT_MSG(0, "Port Cannot Get Tp By Tpn!");
+        }
+    }
     if (headers.transportHeader.GetTPOpcode() == static_cast<uint8_t>(TpOpcode::TP_OPCODE_ACK_WITH_CETPH)
         || headers.transportHeader.GetTPOpcode() == static_cast<uint8_t>(TpOpcode::TP_OPCODE_ACK_WITHOUT_CETPH)) {
         NS_LOG_DEBUG("[UbPort recv] is ACK");

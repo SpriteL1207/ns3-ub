@@ -96,7 +96,7 @@ void RunCase(const string& configPath)
     string RouterConfigFile = configPath + "/routing_table.csv";
     UbUtils::Get()->AddRoutingTable(RouterConfigFile);
     string TpConfigFile = configPath + "/transport_channel.csv";
-    TpConnectionManager retConnectionManager = UbUtils::Get()->CreateTp(TpConfigFile);
+    Ptr<TpConnectionManager> retConnectionManager = UbUtils::Get()->CreateTp(TpConfigFile);
     UbUtils::Get()->TopoTraceConnect();
     string TrafficConfigFile = configPath + "/traffic.csv";
     auto trafficData = UbUtils::Get()->ReadTrafficCSV(TrafficConfigFile);
@@ -118,9 +118,9 @@ void RunCase(const string& configPath)
         }
         UbTrafficGen::Get()->AddTask(record);
         Ptr<UbController> ctrl = node->GetObject<ns3::UbController>();
-        ctrl->SetTpConnManager(retConnectionManager.GetConnectionManagerByNode(record.sourceNode));
+        ctrl->SetTpConnManager(retConnectionManager->GetConnectionManagerByNode(record.sourceNode));
         auto recvCtrl = NodeList::GetNode(record.destNode)->GetObject<ns3::UbController>();
-        recvCtrl->SetTpConnManager(retConnectionManager.GetConnectionManagerByNode(record.destNode));
+        recvCtrl->SetTpConnManager(retConnectionManager->GetConnectionManagerByNode(record.destNode));
     }
     UbTrafficGen::Get()->ScheduleNextTasks();
     CheckExampleProcess();

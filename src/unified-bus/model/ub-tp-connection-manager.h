@@ -9,6 +9,7 @@
 #include "ub-network-address.h"
 #include "ns3/log.h"
 #include "ns3/random-variable-stream.h"
+#include <mutex>
 namespace utils {
 /**
  * @brief tp-config.csv 中定义的数据结构
@@ -125,6 +126,13 @@ public:
 
     // 删除无用tp
     void RemoveUselessTps(uint32_t jettyNum, uint32_t src, uint32_t dst, uint32_t priority);
+
+    uint32_t GetNextTpn();
+
+    bool IsTpRemoveMode()
+    {
+        return m_removeUselessTp;
+    }
 private:
     // 为指定节点建立各种索引
     void BuildIndexesForNode(uint32_t localNodeId, Connection conn);
@@ -162,10 +170,15 @@ private:
     // 索引5: (localNodeId, peerNodeId, localPort, peerPort) -> connections
     std::map<std::tuple<uint32_t, uint32_t, uint32_t, uint32_t>, std::vector<Connection>> m_bothPortsIndex;
 
+    std::set<uint32_t> m_tpnList;
+
+    uint32_t m_nextTpn = 0;
+
     Ptr<UniformRandomVariable> m_random;
 
     bool m_removeUselessTp = false;
 
+    std::mutex m_nextTpnLock;
 };
 
 } // namespace utils

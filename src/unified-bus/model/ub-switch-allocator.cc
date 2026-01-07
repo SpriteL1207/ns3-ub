@@ -178,6 +178,7 @@ void UbRoundRobinAllocator::AllocateNextPacket(Ptr<UbPort> outPort)
         auto packetEntry = std::make_tuple(inPortId, priority, packet);
         outPort->GetFlowControl()->HandleSentPacket(packet, ingressQueue);
         outPort->GetUbQueue()->DoEnqueue(packetEntry);
+        outPort->GetFlowControl()->HandleReleaseOccupiedFlowControl(packet, inPortId, outPortId);
 
         // Packet moved from VOQ to EgressQueue, notify Switch to update buffer statistics
         if (ingressQueue->GetIngressQueueType() != IngressQueueType::TP) { // Forwarded packet (not locally generated)
@@ -399,6 +400,7 @@ void UbDwrrAllocator::AllocateNextPacket(Ptr<UbPort> outPort)
                 auto packetEntry = std::make_tuple(inPortId, priority, packet);
                 outPort->GetFlowControl()->HandleSentPacket(packet, q);
                 outPort->GetUbQueue()->DoEnqueue(packetEntry);
+                outPort->GetFlowControl()->HandleReleaseOccupiedFlowControl(packet, inPortId, outPortId);
 
                 // Packet moved from VOQ to EgressQueue, notify Switch to update buffer statistics
                 if (ingressQueue->GetIngressQueueType() != IngressQueueType::TP) { // Forwarded packet (not locally generated)
