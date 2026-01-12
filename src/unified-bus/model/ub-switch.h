@@ -12,7 +12,6 @@
 #include "ns3/ub-header.h"
 #include "ns3/ipv4-header.h"
 #include "ns3/udp-header.h"
-// #include "ns3/ub-flow-control.h"
 
 namespace ns3 {
 class UbSwitchCaqm;

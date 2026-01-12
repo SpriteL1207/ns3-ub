@@ -32,14 +32,6 @@ class UbCbfc;
 class UbPfc;
 class UbPort;
 
-
-// enum class FcType {
-//     CBFC,
-//     CBFC_SHARED_CRD,
-//     PFC,
-//     NONE  // No flow control
-// };
-
 /**
  * @brief 端口流量控制
  */
