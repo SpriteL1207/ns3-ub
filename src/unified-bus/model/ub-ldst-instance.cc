@@ -57,6 +57,7 @@ void UbLdstInstance::Init(uint32_t nodeId)
 {
     for (uint32_t threadId = 0; threadId < m_threadNum; threadId++) {
         auto ldstThread = CreateObject<UbLdstThread>();
+        ldstThread->Init();
         ldstThread->SetNode(nodeId);
         ldstThread->SetThreadId(threadId);
         m_threads.push_back(ldstThread);

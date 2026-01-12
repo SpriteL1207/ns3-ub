@@ -72,8 +72,8 @@ uint32_t UbLdstThread::CalcLength(uint32_t size)
 
 void UbLdstThread::Init()
 {
-    m_loadRspLength = CalcLength(m_storeReqSize);
-    m_storeReqLength = CalcLength(m_loadRspSize);
+    m_loadRspLength = CalcLength(m_loadRspSize);
+    m_storeReqLength = CalcLength(m_storeReqSize);
     // Reset Size
     m_loadRspSize = 64 * (1 << m_loadRspLength);
     m_storeReqSize = 64 * (1 << m_storeReqLength);
