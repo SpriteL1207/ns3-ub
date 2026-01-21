@@ -243,4 +243,5 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 
 ## 答疑交流
 欢迎加入OpenUSim仿真答疑交流微信群
+
 <img src="https://raw.gitcode.com/user-images/assets/7654616/4129ab17-1253-4e1a-8c0c-1078d51dddc0/群二维码.png" width="300" height="300" alt="Logo">
