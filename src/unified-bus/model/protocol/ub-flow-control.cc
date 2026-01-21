@@ -88,7 +88,7 @@ void UbCbfc::HandleReleaseOccupiedFlowControl(Ptr<Packet> p, uint32_t inPortId, 
 
 void UbCbfc::HandleSentPacket(Ptr<Packet> p, Ptr<UbIngressQueue> ingressQ)
 {
-    if (ingress->IsControlFrame()) {
+    if (ingressQ->IsControlFrame()) {
         NS_LOG_DEBUG("is crd pkt");
         return;
     }

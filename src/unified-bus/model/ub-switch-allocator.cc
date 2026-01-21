@@ -182,7 +182,7 @@ void UbRoundRobinAllocator::AllocateNextPacket(Ptr<UbPort> outPort)
         outPort->GetFlowControl()->HandleReleaseOccupiedFlowControl(packet, inPortId, outPortId);
 
         // Packet moved from VOQ to EgressQueue, notify Switch to update buffer statistics
-        if (ingressQueue->GetIngressQueueType() != IngressQueueType::TP
+        if (ingressQueue->GetIngressQueueType() != IngressQueueType::TP &&
             !ingressQueue->IsGeneratedDataPacket()) {
             // Forwarded packet (not locally generated)
             auto node = NodeList::GetNode(m_nodeId);
