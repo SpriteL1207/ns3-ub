@@ -240,3 +240,7 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 }
 ```
 <a href='https://mapmyvisitors.com/web/1c1da'  title='Visit tracker'><img src='https://mapmyvisitors.com/map.png?cl=ffffff&w=a&t=tt&d=Ctk3Fz1wWGpnv9Or15k53KwUJ5GPcNoSRETpXtl4GF4&co=2d78ad&ct=ffffff'/></a>
+
+## 答疑交流
+欢迎加入OpenUSim仿真答疑交流微信群
+<img src="https://raw.gitcode.com/user-images/assets/7654616/4129ab17-1253-4e1a-8c0c-1078d51dddc0/群二维码.png" width="300" height="300" alt="Logo">
