@@ -40,6 +40,21 @@ uint32_t UbIngressQueue::GetNextPacketSize()
     return 0;
 }
 
+bool UbIngressQueue::IsControlFrame()
+{
+    return m_ingressPriority == 0 && m_inPortId == m_outPortId;
+}
+
+bool UbIngressQueue::IsForwardedDataPacket()
+{
+    return m_inPortId != m_outPortId;
+}
+
+bool UbIngressQueue::IsGeneratedDataPacket()
+{
+    return m_ingressPriority != 0 && m_inPortId == m_outPortId;
+}
+
 /*----------------------------------------- UbPacketQueue ----------------------------------------------*/
 bool UbPacketQueue::IsEmpty()
 {

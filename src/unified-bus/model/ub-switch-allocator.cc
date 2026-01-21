@@ -94,7 +94,8 @@ void UbSwitchAllocator::CheckDeadlock()
 
                         if (queue->GetIngressQueueType() == IngressQueueType::VOQ) {
                             ss << " QueueType:VOQ InPort:" << queue->GetInPortId();
-                        } else if (queue->GetIngressQueueType() == IngressQueueType::TP) {
+                        } else if (queue->GetIngressQueueType() == IngressQueueType::TP &&
+                                   !queue->IsGeneratedDataPacket()) {
                             auto tp = DynamicCast<UbTransportChannel>(queue);
                             if (tp) {
                                 ss << " QueueType:TP TPN:" << tp->GetTpn();
@@ -181,7 +182,9 @@ void UbRoundRobinAllocator::AllocateNextPacket(Ptr<UbPort> outPort)
         outPort->GetFlowControl()->HandleReleaseOccupiedFlowControl(packet, inPortId, outPortId);
 
         // Packet moved from VOQ to EgressQueue, notify Switch to update buffer statistics
-        if (ingressQueue->GetIngressQueueType() != IngressQueueType::TP) { // Forwarded packet (not locally generated)
+        if (ingressQueue->GetIngressQueueType() != IngressQueueType::TP
+            !ingressQueue->IsGeneratedDataPacket()) {
+            // Forwarded packet (not locally generated)
             auto node = NodeList::GetNode(m_nodeId);
             node->GetObject<UbSwitch>()->NotifySwitchDequeue(inPortId, outPortId, priority, packet);
         }
@@ -403,7 +406,9 @@ void UbDwrrAllocator::AllocateNextPacket(Ptr<UbPort> outPort)
                 outPort->GetFlowControl()->HandleReleaseOccupiedFlowControl(packet, inPortId, outPortId);
 
                 // Packet moved from VOQ to EgressQueue, notify Switch to update buffer statistics
-                if (ingressQueue->GetIngressQueueType() != IngressQueueType::TP) { // Forwarded packet (not locally generated)
+                if (ingressQueue->GetIngressQueueType() != IngressQueueType::TP &&
+                    !ingressQueue->IsGeneratedDataPacket()) {
+                    // Forwarded packet (not locally generated)
                     auto node = NodeList::GetNode(m_nodeId);
                     node->GetObject<UbSwitch>()->NotifySwitchDequeue(inPortId, outPortId, priority, packet);
                 }

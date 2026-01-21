@@ -43,6 +43,9 @@ public:
     uint32_t GetIngressPriority() { return m_ingressPriority; }
     uint32_t GetOutPortId() { return m_outPortId; }
     Time GetHeadArrivalTime() { return m_headArrivalTime; }
+    bool IsControlFrame();
+    bool IsForwardedDataPacket();
+    bool IsGeneratedDataPacket();
 
 protected:
     Time m_headArrivalTime = Seconds(0);
