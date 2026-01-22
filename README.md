@@ -2,6 +2,10 @@
 
 **语言**: [English](README_en.md) | [中文](README.md)
 
+> **[NEW] 版本 1.1.0 已发布** · 查看 [发布说明](RELEASE_NOTES_UB.md) 了解主要改动
+
+**版本**: 1.1.0 · **发布说明**: [RELEASE_NOTES_UB.md](RELEASE_NOTES_UB.md)
+
 **快速开始**: [QUICK_START.md](QUICK_START.md)
 
 > 本项目基于 ns-3.44 构建。详细的平台支持、安装步骤、系统要求及编译选项，请参阅 [ns-3.44 文档](https://www.nsnam.org/releases/ns-3-44/documentation/)、[安装指南](https://www.nsnam.org/docs/release/3.44/installation/singlehtml/) 及 [ns-3.44 源码](https://gitlab.com/nsnam/ns-3-dev/-/tree/ns-3.44?ref_type=tags)。
@@ -99,13 +103,13 @@
     </tr>
     <tr>
       <td>路由查找</td>
-  <td>基于目的地址 + 包头 RT 域段的基础路由策略、基于路径 Cost 的路由策略、基于 Hash 的 ECMP、基于负载均衡因子的逐流/逐包 Hash</td>
-      <td>用户可自定义自适应路由等策略</td>
+  <td>基于目的地址 + 包头 RT 域段的基础路由策略、基于路径 Cost 的路由策略、基于 Hash 的 ECMP、基于负载均衡因子的逐流/逐包 Hash、基于端口负载的自适应路由</td>
+      <td>用户可自定义路由策略</td>
     </tr>
     <tr>
       <td>服务质量</td>
-      <td>SL-VL 映射、基于 SP 的 VL 间调度</td>
-      <td>用户可自定义的 VL 间调度策略（如 DWRR 等）</td>
+      <td>SL-VL 映射、基于 SP/DWRR 的 VL 间调度</td>
+      <td>用户可自定义的 VL 间调度策略</td>
     </tr>
     <tr>
       <td>拥塞标记</td>
@@ -120,8 +124,8 @@
     </tr>
     <tr>
       <td>虚通道</td>
-      <td>点到点链路最多支持 16 个 VL、基于 SP 的 VL 间调度</td>
-      <td>基于 DWRR 的 VL 间调度</td>
+      <td>点到点链路最多支持 16 个 VL、基于 SP/DWRR 的 VL 间调度</td>
+      <td>用户可自定义的 VL 间调度策略</td>
     </tr>
     <tr>
       <td>信用流控</td>

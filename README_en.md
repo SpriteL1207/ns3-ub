@@ -2,6 +2,10 @@
 
 **Language**: [English](README_en.md) | [中文](README.md)
 
+> **[NEW] Version 1.1.0 Released** · Check [Release Notes](RELEASE_NOTES_UB.md) for major updates
+
+**Version**: 1.1.0 · **Release Notes**: [RELEASE_NOTES_UB.md](RELEASE_NOTES_UB.md)
+
 **Quick Start**: [QUICK_START_en.md](QUICK_START_en.md)
 
 ## Project Overview
@@ -95,13 +99,13 @@ The **typical simulation functionalities** supported by this project are shown i
     </tr>
     <tr>
       <td>Routing</td>
-      <td>Basic routing strategy based on destination address + header RT field, routing strategy based on path Cost, Hash-based ECMP, per-flow / per-packet Hash based on load balancing factors</td>
-      <td>User-customizable adaptive routing and other strategies</td>
+      <td>Basic routing strategy based on destination address + header RT field, routing strategy based on path Cost, Hash-based ECMP, per-flow / per-packet Hash based on load balancing factors, load-aware adaptive routing</td>
+      <td>User-customizable routing strategies</td>
     </tr>
     <tr>
       <td>Quality of Service</td>
-      <td>SL-VL mapping, SP-based inter-VL scheduling</td>
-      <td>User-customizable inter-VL scheduling strategies (such as DWRR, etc.)</td>
+      <td>SL-VL mapping, SP/DWRR-based inter-VL scheduling</td>
+      <td>User-customizable inter-VL scheduling strategies</td>
     </tr>
     <tr>
       <td>Congestion Notification</td>
@@ -116,8 +120,8 @@ The **typical simulation functionalities** supported by this project are shown i
     </tr>
     <tr>
       <td>Virtual Channels</td>
-      <td>Point-to-point links support up to 16 VLs, SP-based inter-VL scheduling</td>
-      <td>DWRR-based inter-VL scheduling</td>
+      <td>Point-to-point links support up to 16 VLs, SP/DWRR-based inter-VL scheduling</td>
+      <td>User-customizable inter-VL scheduling strategies</td>
     </tr>
     <tr>
       <td>Credit Flow Control</td>
