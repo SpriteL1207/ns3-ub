@@ -2,7 +2,7 @@
 
 **语言**: [English](README_en.md) | [中文](README.md)
 
-> **[NEW] 版本 1.1.0 已发布** · 查看 [发布说明](RELEASE_NOTES_UB.md) 了解主要改动
+> **[NEW] 2026/01/22 版本 1.1.0 已发布** · 查看 [发布说明](RELEASE_NOTES_UB.md) 了解主要改动
 
 **快速开始**: [QUICK_START.md](QUICK_START.md)
 
