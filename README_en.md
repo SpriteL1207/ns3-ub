@@ -4,8 +4,6 @@
 
 > **[NEW] Version 1.1.0 Released** · Check [Release Notes](RELEASE_NOTES_UB.md) for major updates
 
-**Version**: 1.1.0 · **Release Notes**: [RELEASE_NOTES_UB.md](RELEASE_NOTES_UB.md)
-
 **Quick Start**: [QUICK_START_en.md](QUICK_START_en.md)
 
 ## Project Overview

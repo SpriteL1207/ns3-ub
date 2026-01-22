@@ -4,8 +4,6 @@
 
 > **[NEW] 版本 1.1.0 已发布** · 查看 [发布说明](RELEASE_NOTES_UB.md) 了解主要改动
 
-**版本**: 1.1.0 · **发布说明**: [RELEASE_NOTES_UB.md](RELEASE_NOTES_UB.md)
-
 **快速开始**: [QUICK_START.md](QUICK_START.md)
 
 > 本项目基于 ns-3.44 构建。详细的平台支持、安装步骤、系统要求及编译选项，请参阅 [ns-3.44 文档](https://www.nsnam.org/releases/ns-3-44/documentation/)、[安装指南](https://www.nsnam.org/docs/release/3.44/installation/singlehtml/) 及 [ns-3.44 源码](https://gitlab.com/nsnam/ns-3-dev/-/tree/ns-3.44?ref_type=tags)。
