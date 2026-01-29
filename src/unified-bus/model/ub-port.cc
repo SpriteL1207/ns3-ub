@@ -288,16 +288,16 @@ void UbPort::CreateAndInitFc(FcType type)
 
 void UbPort::TransmitComplete()
 {
+    NS_LOG_FUNCTION(this);
+    
+    NS_ASSERT_MSG(m_currentPkt, "UbPort::TransmitComplete(): m_currentPkt zero");
+
     NS_LOG_DEBUG("[UbPort TransmitComplete] complete at: "
         << " NodeId: " << GetNode()->GetId()
         << " PortId: " << GetIfIndex()
         << " PacketUid: " << m_currentPkt->GetUid());
-    NS_LOG_FUNCTION(this);
 
     m_sendState = SendState::READY;
-    NS_ASSERT_MSG(
-        m_currentPkt != nullptr, "UbPort::TransmitComplete(): m_currentPkt zero");
-
     m_currentPkt = nullptr;
     m_currentInPortId = 0;
     m_currentPriority = 0;
@@ -346,14 +346,24 @@ void UbPort::TransmitPacket(Ptr<Packet> packet, Time delay)
 
     Time txTime = m_bps.CalculateBytesTxTime(packet->GetSize()) + delay;
     Time txCompleteTime = txTime + m_tInterframeGap;
-    TraComEventNotify(packet, txCompleteTime);
 
-    Simulator::Schedule(txCompleteTime, &UbPort::TransmitComplete, this);
+    // Try to start transmission on the channel first. Only if it succeeds
+    // should we schedule the TransmitComplete event and notify traces.
     bool result = m_channel->TransmitStart(packet, this, txTime);
     if (result == false) {
         NS_LOG_WARN("Channel transmission failed! Packet dropped at Node " << GetNode()->GetId() << " Port " << m_portId);
+        // Reset port state so it won't remain BUSY and try next packet
+        m_sendState = SendState::READY;
+        m_currentPkt = nullptr;
+        m_currentInPortId = 0;
+        m_currentPriority = 0;
+        Simulator::ScheduleNow(&UbPort::TriggerTransmit, this);
+        return;
     }
-    // 记录本端口发送的数据量
+
+    // Transmission started successfully: notify and schedule completion
+    TraComEventNotify(packet, txCompleteTime);
+    Simulator::Schedule(txCompleteTime, &UbPort::TransmitComplete, this);
     NS_LOG_DEBUG("[UbFc DequeueAndTransmit] will send pkt size: " << packet->GetSize());
     UpdateTxBytes(packet->GetSize());
 
