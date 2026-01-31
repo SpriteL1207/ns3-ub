@@ -112,12 +112,22 @@ private:
 
     string g_config_path;
 
-    bool TaskEnable = false;
+    bool TraceEnable = false;
+    bool TaskTraceEnable = true;
+    bool PacketTraceEnable = true;
+    bool PortTraceEnable = true;
+    bool RecordTraceEnabled = false;
 
     bool isTest = false;
 
     // 设置Trace全局变量
-    GlobalValue g_task_enable = GlobalValue("UB_TRACE_ENABLE", "enable trace", BooleanValue(false), MakeBooleanChecker());
+    GlobalValue g_trace_enable = GlobalValue("UB_TRACE_ENABLE", "Master switch for all traces", BooleanValue(false), MakeBooleanChecker());
+
+    GlobalValue g_task_trace_enable = GlobalValue("UB_TASK_TRACE_ENABLE", "Enable task and WQE level traces", BooleanValue(true), MakeBooleanChecker());
+
+    GlobalValue g_packet_trace_enable = GlobalValue("UB_PACKET_TRACE_ENABLE", "Enable packet send/ack/receive traces", BooleanValue(true), MakeBooleanChecker());
+
+    GlobalValue g_port_trace_enable = GlobalValue("UB_PORT_TRACE_ENABLE", "Enable port-level Tx/Rx traces (very noisy)", BooleanValue(true), MakeBooleanChecker());
 
     GlobalValue g_parse_enable = GlobalValue("UB_PARSE_TRACE_ENABLE", "enable parse trace", BooleanValue(false), MakeBooleanChecker());
 

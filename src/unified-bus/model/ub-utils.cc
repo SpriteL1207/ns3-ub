@@ -776,40 +776,61 @@ void UbUtils::SetComponentsAttribute(const string &filename)
 void UbUtils::TopoTraceConnect()
 {
     BooleanValue val;
-    g_task_enable.GetValue(val);
-    TaskEnable = val.Get();
+    g_trace_enable.GetValue(val);
+    TraceEnable = val.Get();
 
-    BooleanValue recordPktTraceEnableVal;
-    g_record_pkt_trace_enable.GetValue(recordPktTraceEnableVal);
-    bool recordTraceEnabled = recordPktTraceEnableVal.Get();
-    if (!TaskEnable) {
-        return;  // 若不开启trace则直接返回
+    if (!TraceEnable) {
+        return; // 若不开启总开关则直接返回
     }
-    for (uint32_t i = 0; i < NodeList::GetNNodes(); ++i) {
-        // 若某个node不需要添加trace，可以在此处添加判断条件
-        // if (i == 0) { // node0不需要添加trace
-        //     continue;
-        // }
 
+    g_task_trace_enable.GetValue(val);
+    TaskTraceEnable = val.Get();
+
+    g_packet_trace_enable.GetValue(val);
+    PacketTraceEnable = val.Get();
+
+    g_port_trace_enable.GetValue(val);
+    PortTraceEnable = val.Get();
+
+    g_record_pkt_trace_enable.GetValue(val);
+    RecordTraceEnabled = val.Get();
+
+    NS_LOG_UNCOND("--- UnifiedBus Trace System Configuration ---");
+    NS_LOG_UNCOND("UB_TRACE_ENABLE: " << (TraceEnable ? "ON" : "OFF"));
+    if (TraceEnable) {
+        NS_LOG_UNCOND("  UB_TASK_TRACE_ENABLE:   " << (TaskTraceEnable ? "ON" : "OFF") << "  (Task level events)");
+        NS_LOG_UNCOND("  UB_PACKET_TRACE_ENABLE: " << (PacketTraceEnable ? "ON" : "OFF") << "  (Packet Send/ACK timestamps, essential for detailed task latency breakdown)");
+        NS_LOG_UNCOND("  UB_PORT_TRACE_ENABLE:   " << (PortTraceEnable ? "ON" : "OFF") << "  (All port traffic, high volume, for throughput)");
+        NS_LOG_UNCOND("  UB_RECORD_PKT_TRACE:    " << (RecordTraceEnabled ? "ON" : "OFF") << "  (Per-hop packet path tracking)");
+    }
+    NS_LOG_UNCOND("-------------------------------------------");
+
+    for (uint32_t i = 0; i < NodeList::GetNNodes(); ++i) {
         Ptr<Node> node = NodeList::GetNode(i);
         Ptr<UbController> ubCtrl = node->GetObject<ns3::UbController>();
         Ptr<UbSwitch> sw = node->GetObject<ns3::UbSwitch>();
-        sw->TraceConnectWithoutContext("LastPacketTraversesNotify", MakeCallback(SwitchLastPacketTraversesNotify));
+        
+        if (PacketTraceEnable) {
+            sw->TraceConnectWithoutContext("LastPacketTraversesNotify", MakeCallback(SwitchLastPacketTraversesNotify));
+        }
+
         std::map<uint32_t, Ptr<UbTransportChannel>> tpnMap;
         if (ubCtrl) {
             tpnMap = ubCtrl->GetTpnMap();
-            for (const auto &pair : tpnMap) {  // 设置 TP的trace callback
+            for (const auto &pair : tpnMap) { // 设置 TP的trace callback
                 auto tp = pair.second;
                 if (tp) {
-                    tp->TraceConnectWithoutContext("FirstPacketSendsNotify", MakeCallback(TpFirstPacketSendsNotify));
-                    tp->TraceConnectWithoutContext("LastPacketSendsNotify", MakeCallback(TpLastPacketSendsNotify));
-                    tp->TraceConnectWithoutContext("LastPacketACKsNotify", MakeCallback(TpLastPacketACKsNotify));
-                    tp->TraceConnectWithoutContext(
-                        "LastPacketReceivesNotify", MakeCallback(TpLastPacketReceivesNotify));
-                    tp->TraceConnectWithoutContext("WqeSegmentSendsNotify", MakeCallback(TpWqeSegmentSendsNotify));
-                    tp->TraceConnectWithoutContext(
-                        "WqeSegmentCompletesNotify", MakeCallback(TpWqeSegmentCompletesNotify));
-                    if (recordTraceEnabled) {
+                    if (PacketTraceEnable) {
+                        tp->TraceConnectWithoutContext("FirstPacketSendsNotify", MakeCallback(TpFirstPacketSendsNotify));
+                        tp->TraceConnectWithoutContext("LastPacketSendsNotify", MakeCallback(TpLastPacketSendsNotify));
+                        tp->TraceConnectWithoutContext("LastPacketACKsNotify", MakeCallback(TpLastPacketACKsNotify));
+                        tp->TraceConnectWithoutContext("LastPacketReceivesNotify", MakeCallback(TpLastPacketReceivesNotify));
+                    }
+                    if (TaskTraceEnable) {
+                        tp->TraceConnectWithoutContext("WqeSegmentSendsNotify", MakeCallback(TpWqeSegmentSendsNotify));
+                        tp->TraceConnectWithoutContext("WqeSegmentCompletesNotify", MakeCallback(TpWqeSegmentCompletesNotify));
+                    }
+                    if (RecordTraceEnabled) {
                         tp->TraceConnectWithoutContext("TpRecvNotify", MakeCallback(TpRecvNotify));
                     }
                 } else {
@@ -817,32 +838,29 @@ void UbUtils::TopoTraceConnect()
                 }
             }
             Ptr<UbLdstInstance> ldstInstance = node->GetObject<UbLdstInstance>();
-            if (ldstInstance != nullptr) {
-                ldstInstance->TraceConnectWithoutContext(
-                    "MemTaskCompletesNotify", MakeCallback(LdstMemTaskCompletesNotify));
-                ldstInstance->TraceConnectWithoutContext("LastPacketACKsNotify",
-                    MakeCallback(LdstLastPacketACKsNotify));
-                ldstInstance->TraceConnectWithoutContext(
-                    "MemTaskStartsNotify", MakeCallback(LdstThreadMemTaskStartsNotify));
-                ldstInstance->TraceConnectWithoutContext(
-                    "FirstPacketSendsNotify", MakeCallback(LdstThreadFirstPacketSendsNotify));
-                ldstInstance->TraceConnectWithoutContext(
-                    "LastPacketSendsNotify", MakeCallback(LdstThreadLastPacketSendsNotify));
+            if (ldstInstance != nullptr && TaskTraceEnable) {
+                ldstInstance->TraceConnectWithoutContext("MemTaskCompletesNotify", MakeCallback(LdstMemTaskCompletesNotify));
+                ldstInstance->TraceConnectWithoutContext("LastPacketACKsNotify", MakeCallback(LdstLastPacketACKsNotify));
+                ldstInstance->TraceConnectWithoutContext("MemTaskStartsNotify", MakeCallback(LdstThreadMemTaskStartsNotify));
+                ldstInstance->TraceConnectWithoutContext("FirstPacketSendsNotify", MakeCallback(LdstThreadFirstPacketSendsNotify));
+                ldstInstance->TraceConnectWithoutContext("LastPacketSendsNotify", MakeCallback(LdstThreadLastPacketSendsNotify));
             }
-            if (recordTraceEnabled) {
+            if (RecordTraceEnabled) {
                 auto ldstApi = ubCtrl->GetUbFunction()->GetUbLdstApi();
                 ldstApi->TraceConnectWithoutContext("LdstRecvNotify", MakeCallback(LdstRecvNotify));
             }
         }
 
-        uint32_t DevicesNum = node->GetNDevices();
-        for (uint32_t i = 0; i < DevicesNum; i++) {  // 设置 port的trace callback
-            Ptr<UbPort> port = DynamicCast<UbPort>(node->GetDevice(i));
-            if (port) {
-                port->TraceConnectWithoutContext("PortTxNotify", MakeCallback(PortTxNotify));
-                port->TraceConnectWithoutContext("PortRxNotify", MakeCallback(PortRxNotify));
-            } else {
-                NS_ASSERT_MSG(0, "port is null");
+        if (PortTraceEnable) {
+            uint32_t DevicesNum = node->GetNDevices();
+            for (uint32_t i = 0; i < DevicesNum; i++) { // 设置 port的trace callback
+                Ptr<UbPort> port = DynamicCast<UbPort>(node->GetDevice(i));
+                if (port) {
+                    port->TraceConnectWithoutContext("PortTxNotify", MakeCallback(PortTxNotify));
+                    port->TraceConnectWithoutContext("PortRxNotify", MakeCallback(PortRxNotify));
+                } else {
+                    NS_ASSERT_MSG(0, "port is null");
+                }
             }
         }
     }
@@ -851,35 +869,46 @@ void UbUtils::TopoTraceConnect()
 void UbUtils::SingleTpTraceConnect(uint32_t nodeId, uint32_t tpn)
 {
     BooleanValue val;
-    g_task_enable.GetValue(val);
-    TaskEnable = val.Get();
+    g_trace_enable.GetValue(val);
+    TraceEnable = val.Get();
 
-    BooleanValue recordPktTraceEnableVal;
-    g_record_pkt_trace_enable.GetValue(recordPktTraceEnableVal);
-    bool recordTraceEnabled = recordPktTraceEnableVal.Get();
-    if (!TaskEnable) {
-        return; // 若不开启trace则直接返回
+    if (!TraceEnable) {
+        return; // 若不开启总开关则直接返回
     }
+
+    g_task_trace_enable.GetValue(val);
+    TaskTraceEnable = val.Get();
+
+    g_packet_trace_enable.GetValue(val);
+    PacketTraceEnable = val.Get();
+
+    g_record_pkt_trace_enable.GetValue(val);
+    RecordTraceEnabled = val.Get();
+
     Ptr<Node> node = NodeList::GetNode(nodeId);
     Ptr<UbController> ubCtrl = node->GetObject<ns3::UbController>();
     Ptr<UbTransportChannel> tp = ubCtrl->GetTpByTpn(tpn);
-    tp->TraceConnectWithoutContext("FirstPacketSendsNotify", MakeCallback(TpFirstPacketSendsNotify));
-    tp->TraceConnectWithoutContext("LastPacketSendsNotify", MakeCallback(TpLastPacketSendsNotify));
-    tp->TraceConnectWithoutContext("LastPacketACKsNotify", MakeCallback(TpLastPacketACKsNotify));
-    tp->TraceConnectWithoutContext(
-        "LastPacketReceivesNotify", MakeCallback(TpLastPacketReceivesNotify));
-    tp->TraceConnectWithoutContext("WqeSegmentSendsNotify", MakeCallback(TpWqeSegmentSendsNotify));
-    tp->TraceConnectWithoutContext(
-        "WqeSegmentCompletesNotify", MakeCallback(TpWqeSegmentCompletesNotify));
-    if (recordTraceEnabled) {
-        tp->TraceConnectWithoutContext("TpRecvNotify", MakeCallback(TpRecvNotify));
+    if (tp) {
+        if (PacketTraceEnable) {
+            tp->TraceConnectWithoutContext("FirstPacketSendsNotify", MakeCallback(TpFirstPacketSendsNotify));
+            tp->TraceConnectWithoutContext("LastPacketSendsNotify", MakeCallback(TpLastPacketSendsNotify));
+            tp->TraceConnectWithoutContext("LastPacketACKsNotify", MakeCallback(TpLastPacketACKsNotify));
+            tp->TraceConnectWithoutContext("LastPacketReceivesNotify", MakeCallback(TpLastPacketReceivesNotify));
+        }
+        if (TaskTraceEnable) {
+            tp->TraceConnectWithoutContext("WqeSegmentSendsNotify", MakeCallback(TpWqeSegmentSendsNotify));
+            tp->TraceConnectWithoutContext("WqeSegmentCompletesNotify", MakeCallback(TpWqeSegmentCompletesNotify));
+        }
+        if (RecordTraceEnabled) {
+            tp->TraceConnectWithoutContext("TpRecvNotify", MakeCallback(TpRecvNotify));
+        }
     }
 }
 
 void UbUtils::ClientTraceConnect(int srcNode)
 {
-    if (!TaskEnable) {
-        return;  // 若不开启trace则直接返回
+    if (!TraceEnable || !TaskTraceEnable) {
+        return; // 若不开启trace或不开启task trace则直接返回
     }
     Ptr<ns3::UbApp> client = DynamicCast<ns3::UbApp>(NodeList::GetNode(srcNode)->GetApplication(0));
     client->TraceConnectWithoutContext("MemTaskStartsNotify", MakeCallback(DagMemTaskStartsNotify));

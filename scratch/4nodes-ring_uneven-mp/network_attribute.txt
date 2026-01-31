@@ -50,7 +50,12 @@ global UB_PRIORITY_NUM "16"
 global UB_VL_NUM "16"
 global UB_CC_ALGO "CAQM"
 global UB_CC_ENABLED "false"
+
 global UB_TRACE_ENABLE "true"
-global UB_PARSE_TRACE_ENABLE "true"
+global UB_TASK_TRACE_ENABLE "true"
+global UB_PACKET_TRACE_ENABLE "true"
+global UB_PORT_TRACE_ENABLE "true"
 global UB_RECORD_PKT_TRACE "true"
+
+global UB_PARSE_TRACE_ENABLE "true"
 global UB_PYTHON_SCRIPT_PATH "scratch/ns-3-ub-tools/trace_analysis/parse_trace.py"

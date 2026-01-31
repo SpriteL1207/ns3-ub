@@ -104,7 +104,7 @@ Project-level `global` keys (defined as `GlobalValue` in code and read by UB):
 - `UB_PRIORITY_NUM`/`UB_VL_NUM` (int) — QoS/virtual lanes sizing.
 - `UB_CC_ALGO` (string) — e.g., `CAQM`.
 - `UB_CC_ENABLED` (bool) — enable/disable CC.
-- Trace toggles: `UB_TRACE_ENABLE`, `UB_PARSE_TRACE_ENABLE`, `UB_RECORD_PKT_TRACE` (bool).
+- Trace toggles: `UB_TRACE_ENABLE`, `UB_TASK_TRACE_ENABLE`, `UB_PACKET_TRACE_ENABLE`, `UB_PORT_TRACE_ENABLE`, `UB_PARSE_TRACE_ENABLE`, `UB_RECORD_PKT_TRACE` (bool).
 - `UB_PYTHON_SCRIPT_PATH` — Path to the Python post-processing entry (`parse_trace.py`).
 
 Legal values and discovery:
