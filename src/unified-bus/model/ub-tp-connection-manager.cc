@@ -516,7 +516,7 @@ uint32_t TpConnectionManager::CreateNewTp(Connection conn)
     sendCtrl->CreateTp(conn.node1, conn.node2, conn.port1, conn.port2,
                        conn.priority, conn.tpn1, conn.tpn2, sendHostCaqm);
     // for thread safety
-    Simulator::ScheduleWithContext(conn.node2, Time(0), &TbController::CreateTp, recvCtrl,
+    Simulator::ScheduleWithContext(conn.node2, Time(0), &UbController::CreateTp, recvCtrl,
                                    conn.node2, conn.node1, conn.port2, conn.port1,
                                    conn.priority, conn.tpn2, conn.tpn1, recvHostCaqm);
     return conn.tpn1;
@@ -553,7 +553,7 @@ uint32_t TpConnectionManager::ReconstructTp(Connection conn)
     if (!recvCtrl->IsTPExists(conn.tpn2)) {
         auto recvHostCaqm = UbCongestionControl::Create(UB_DEVICE);
         // for thread safety
-        Simulator::ScheduleWithContext(conn.node2, Time(0), &TbController::CreateTp, recvCtrl,
+        Simulator::ScheduleWithContext(conn.node2, Time(0), &UbController::CreateTp, recvCtrl,
                                        conn.node2, conn.node1, conn.port2, conn.port1,
                                        conn.priority, conn.tpn2, conn.tpn1, recvHostCaqm);
     }

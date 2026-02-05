@@ -83,7 +83,7 @@ void CheckExampleProcess()
 }
 
 // 根据配置文件路径执行用例
-void RunCase(const string& configPath)
+void ConfigCase(const string& configPath)
 {
     RngSeedManager::SetSeed(10);
     string LoadConfigFilePath = configPath + "/network_attribute.txt";
@@ -96,11 +96,14 @@ void RunCase(const string& configPath)
     string RouterConfigFile = configPath + "/routing_table.csv";
     UbUtils::Get()->AddRoutingTable(RouterConfigFile);
     string TpConfigFile = configPath + "/transport_channel.csv";
-    Ptr<TpConnectionManager> retConnectionManager = UbUtils::Get()->CreateTp(TpConfigFile);
+    UbUtils::Get()->CreateTp(TpConfigFile);
     UbUtils::Get()->TopoTraceConnect();
+}
+
+void InitiateTasks(const string& configPath)
+{
     string TrafficConfigFile = configPath + "/traffic.csv";
     auto trafficData = UbUtils::Get()->ReadTrafficCSV(TrafficConfigFile);
-
     BooleanValue gFaultEnable;
     UbUtils::Get()->g_fault_enable.GetValue(gFaultEnable);
     if (gFaultEnable.Get()) {
@@ -117,10 +120,6 @@ void RunCase(const string& configPath)
             UbUtils::Get()->ClientTraceConnect(record.sourceNode);
         }
         UbTrafficGen::Get()->AddTask(record);
-        Ptr<UbController> ctrl = node->GetObject<ns3::UbController>();
-        ctrl->SetTpConnManager(retConnectionManager->GetConnectionManagerByNode(record.sourceNode));
-        auto recvCtrl = NodeList::GetNode(record.destNode)->GetObject<ns3::UbController>();
-        recvCtrl->SetTpConnManager(retConnectionManager->GetConnectionManagerByNode(record.destNode));
     }
     UbTrafficGen::Get()->ScheduleNextTasks();
     CheckExampleProcess();
@@ -190,6 +189,7 @@ int main(int argc, char* argv[])
     LogComponentEnable("UbTransportChannel", LOG_LEVEL_WARN);
     LogComponentEnable("UbFault", LOG_LEVEL_WARN);
     LogComponentEnable("UbTransaction", LOG_LEVEL_WARN);
+    LogComponentEnable("TpConnectionManager", LOG_LEVEL_WARN);
 
     // 配置文件路径
     string configPath = "scratch/2nodes_single-tp";
@@ -200,7 +200,8 @@ int main(int argc, char* argv[])
     // 读取配置文件并执行用例
     string runCase = "Run case: " + configPath;
     UbUtils::Get()->PrintTimestamp(runCase);
-    RunCase(configPath);
+    ConfigCase(configPath);
+    Simulator::Schedule(Time(0), InitiateTasks, configPath);
     auto sim_wall_start = std::chrono::high_resolution_clock::now();
     Simulator::Run();
     auto sim_wall_end = std::chrono::high_resolution_clock::now();

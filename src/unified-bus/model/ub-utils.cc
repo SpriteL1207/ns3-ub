@@ -681,10 +681,10 @@ void UbUtils::CreateTp(const string &filename)
         auto sendCtrl = NodeList::GetNode(conn.node1)->GetObject<UbController>();
         auto recvCtrl = NodeList::GetNode(conn.node2)->GetObject<UbController>();
         sendCtrl->GetTpConnManager()->AddUnilateralConnection(conn, conn.node1);
-        recvCtrl->GetTpConnManager()->AddUnilateralConnection(conn, conn,node2);
+        recvCtrl->GetTpConnManager()->AddUnilateralConnection(conn, conn.node2);
     }
     file.close();
-    return retTpConnectionManager;
+    return ;
 }
 
 void UbUtils::SetRecord(int fieldCount, string field, TrafficRecord &record)
