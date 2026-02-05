@@ -6,6 +6,7 @@
 #include "protocol/ub-datalink.h"
 #include "protocol/ub-transaction.h"
 #include "ns3/ub-network-address.h"
+#include "ns3/ub-utils.h"
 
 using namespace utils;
 namespace ns3 {
@@ -25,6 +26,7 @@ TypeId UbController::GetTypeId()
 UbController::UbController()
 {
     NS_LOG_FUNCTION(this);
+    m_tpnConn = CreateObject<TpConnectionManager>();
 }
 
 void UbController::CreateUbFunction()
@@ -61,10 +63,9 @@ bool UbController::CreateTp(uint32_t src, uint32_t dest, uint8_t sport,
                             uint32_t dstTpn, Ptr<UbCongestionControl> congestionCtrl)
 {
     NS_LOG_FUNCTION(this << src << dest << sport << dport  << priority << srcTpn);
-
     // 检查是否已存在
     if (m_numToTp.find(srcTpn) != m_numToTp.end()) {
-        NS_LOG_ERROR("Transport channel  already exists");
+        NS_LOG_DEBUG("Transport channel already exists");
         return false;
     }
 
@@ -89,6 +90,7 @@ bool UbController::CreateTp(uint32_t src, uint32_t dest, uint8_t sport,
     m_transportsCount++;
     currentNode->GetObject<UbSwitch>()->RegisterTpWithAllocator(tp, sport, priority);  // register TP with allocator
 
+    utils::UbUtils::Get()->SingleTpTraceConnect(src, srcTpn);
     NS_LOG_DEBUG("Created transport channel success");
     return true;
 }
