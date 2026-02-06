@@ -146,7 +146,7 @@ void UbTrafficGen::ScheduleNextTasks()
                 if (!taskIt->second.delay.empty()) {
                     taskDelay = Time(taskIt->second.delay);
                 }
-                Simulator::Schedule(taskDelay, &UbApp::SendTraffic, app, taskIt->second);
+                Simulator::ScheduleWithContext(app->GetNode()->GetId(), taskDelay, &UbApp::SendTraffic, app, taskIt->second);
                 NS_LOG_DEBUG("Scheduled task " << taskId);
             }
         }

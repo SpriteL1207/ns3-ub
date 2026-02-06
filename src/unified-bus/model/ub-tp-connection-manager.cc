@@ -394,6 +394,7 @@ void TpConnectionManager::BuildIndexesForNode(uint32_t localNodeId, Connection c
     // 索引5: 对端节点+本端端口+对端端口
     m_bothPortsIndex[{localNodeId, peerNodeId, localPort, peerPort}].push_back(conn);
 
+    NS_ASSERT_MSG(m_tpnList.find(localTpn) == m_tpnList.end(), "Tpn already exists!");
     m_tpnList.insert(localTpn);
 }
 
@@ -512,16 +513,12 @@ uint32_t TpConnectionManager::CreateNewTp(Connection conn)
 
     auto sendHostCaqm = UbCongestionControl::Create(UB_DEVICE);
     auto recvHostCaqm = UbCongestionControl::Create(UB_DEVICE);
-    bool retSendCtrl = sendCtrl->CreateTp(
-        conn.node1, conn.node2, conn.port1, conn.port2, conn.priority, conn.tpn1, conn.tpn2, sendHostCaqm);
-    bool retReceiveCtrl = recvCtrl->CreateTp(
-        conn.node2, conn.node1, conn.port2, conn.port1, conn.priority, conn.tpn2, conn.tpn1, recvHostCaqm);
-    if (!retSendCtrl || !retReceiveCtrl) {
-        NS_ASSERT_MSG(0, "CreateTp failed!");
-    }
-    // 为两个tp绑定trace回调函数
-    utils::UbUtils::Get()->SingleTpTraceConnect(conn.node1, conn.tpn1);
-    utils::UbUtils::Get()->SingleTpTraceConnect(conn.node2, conn.tpn2);
+    sendCtrl->CreateTp(conn.node1, conn.node2, conn.port1, conn.port2,
+                       conn.priority, conn.tpn1, conn.tpn2, sendHostCaqm);
+    // for thread safety
+    Simulator::ScheduleWithContext(conn.node2, Time(0), &UbController::CreateTp, recvCtrl,
+                                   conn.node2, conn.node1, conn.port2, conn.port1,
+                                   conn.priority, conn.tpn2, conn.tpn1, recvHostCaqm);
     return conn.tpn1;
 }
 
@@ -550,23 +547,15 @@ uint32_t TpConnectionManager::ReconstructTp(Connection conn)
     Ptr<UbController> recvCtrl = NodeList::GetNode(conn.node2)->GetObject<UbController>();
     if (!sendCtrl->IsTPExists(conn.tpn1)) { // 不存在，创建
         auto sendHostCaqm = UbCongestionControl::Create(UB_DEVICE);
-        bool res = sendCtrl->CreateTp(conn.node1, conn.node2, conn.port1, conn.port2,
-            conn.priority, conn.tpn1, conn.tpn2, sendHostCaqm);
-        if (!res) {
-            NS_ASSERT_MSG(0, "Create send Tp failed!");
-        }
-        // tp绑定trace回调函数
-        utils::UbUtils::Get()->SingleTpTraceConnect(conn.node1, conn.tpn1);
+        sendCtrl->CreateTp(conn.node1, conn.node2, conn.port1, conn.port2,
+                           conn.priority, conn.tpn1, conn.tpn2, sendHostCaqm);
     }
     if (!recvCtrl->IsTPExists(conn.tpn2)) {
         auto recvHostCaqm = UbCongestionControl::Create(UB_DEVICE);
-        bool res = recvCtrl->CreateTp(
-            conn.node2, conn.node1, conn.port2, conn.port1, conn.priority, conn.tpn2, conn.tpn1, recvHostCaqm);
-        if (!res) {
-            NS_ASSERT_MSG(0, "Create recv Tp failed!");
-        }
-        // tp绑定trace回调函数
-        utils::UbUtils::Get()->SingleTpTraceConnect(conn.node2, conn.tpn2);
+        // for thread safety
+        Simulator::ScheduleWithContext(conn.node2, Time(0), &UbController::CreateTp, recvCtrl,
+                                       conn.node2, conn.node1, conn.port2, conn.port1,
+                                       conn.priority, conn.tpn2, conn.tpn1, recvHostCaqm);
     }
     return conn.tpn1;
 }

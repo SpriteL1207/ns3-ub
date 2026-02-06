@@ -657,16 +657,15 @@ void UbUtils::ParseLine(const std::string &line, Connection &conn)
     }
 }
 
-Ptr<TpConnectionManager> UbUtils::CreateTp(const string &filename)
+void UbUtils::CreateTp(const string &filename)
 {
     std::unordered_map<uint32_t, std::vector<uint32_t>> NodeTpns;
     // key1:node1 key2:node2 value:Connection
-    Ptr<TpConnectionManager> retTpConnectionManager = CreateObject<TpConnectionManager>();
     ifstream file(filename);
     if (!file.is_open()) { // 没有TP文件则使用实时创建TP模式
         PrintTimestamp("File transport_channel.csv not found."
                        " Unable to preload TP channels. TP channels will be created on demand.");
-        return retTpConnectionManager;
+        return ;
     }
     string line;
     // 跳过标题行
@@ -679,10 +678,13 @@ Ptr<TpConnectionManager> UbUtils::CreateTp(const string &filename)
         }
         Connection conn;
         ParseLine(line, conn);
-        retTpConnectionManager->AddConnection(conn);
+        auto sendCtrl = NodeList::GetNode(conn.node1)->GetObject<UbController>();
+        auto recvCtrl = NodeList::GetNode(conn.node2)->GetObject<UbController>();
+        sendCtrl->GetTpConnManager()->AddUnilateralConnection(conn, conn.node1);
+        recvCtrl->GetTpConnManager()->AddUnilateralConnection(conn, conn.node2);
     }
     file.close();
-    return retTpConnectionManager;
+    return ;
 }
 
 void UbUtils::SetRecord(int fieldCount, string field, TrafficRecord &record)
