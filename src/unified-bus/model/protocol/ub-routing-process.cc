@@ -45,7 +45,7 @@ void UbRoutingProcess::AddShortestRoute(const uint32_t destIP, const std::vector
         target.insert(target.end(), (*(itRt->second)).begin(), (*(itRt->second)).end());
     }
     target.insert(target.end(), outPorts.begin(), outPorts.end());
-    std::vector<uint16_t> normalized = normalizePorts(outPorts);
+    std::vector<uint16_t> normalized = normalizePorts(target);
     
     // 查找或创建共享端口集合
     auto it = m_portSetPool.find(normalized);

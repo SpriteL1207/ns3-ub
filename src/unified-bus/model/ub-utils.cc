@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "ub-utils.h"
+#include <filesystem>
 
+using namespace std;
+using namespace ns3;
 namespace utils {
 
 void UbUtils::PrintTimestamp(const std::string &message)
@@ -63,10 +66,14 @@ void UbUtils::CreateTraceDir()
     else
         NS_ASSERT_MSG(0, "Not find testcase dir");
     trace_path = std::string(dir_path);
-    std::string command = "rm -rf " + dir_path + "runlog && mkdir " + dir_path + "runlog";
-    // 执行系统命令
-    if (system(command.c_str()) != 0)
-        NS_ASSERT_MSG(0, "Failed to execute command: " << command);
+    namespace fs = std::filesystem;
+    fs::path runlog = fs::path(dir_path) / "runlog";
+    std::error_code ec;
+    fs::remove_all(runlog, ec);
+    NS_ASSERT_MSG(!ec, "Failed to remove runlog dir: " << ec.message());
+    ec.clear();
+    fs::create_directories(runlog, ec);
+    NS_ASSERT_MSG(!ec, "Failed to recreate runlog dir: " << ec.message());
 }
 
 inline void UbUtils::PrintTraceInfo(string fileName, string info)
@@ -142,7 +149,7 @@ inline void UbUtils::TpLastPacketReceivesNotify(
 {
     std::ostringstream oss;
     oss << "Last Packet Receives,srcTpn: " << srcTpn << " destTpn: " << dstTpn << " tpMsn: " << tpMsn
-        << " tpMsn: " << tpMsn << " psn: " << psn << " inportId: " << dPort << " lastPacket: 1";
+        << " psn: " << psn << " inportId: " << dPort << " lastPacket: 1";
     string info = oss.str();
     string fileName = trace_path + "runlog/PacketTrace_node_" + to_string(nodeId) + ".tr";
     PrintTraceInfo(fileName, info);

@@ -771,7 +771,7 @@ IngressQueueType UbTransportChannel::GetIngressQueueType()
 void UbTransportChannel::FirstPacketSendsNotify(uint32_t nodeId, uint32_t taskId, uint32_t mTpn,
                                                 uint32_t mDstTpn, uint32_t tpMsn, uint32_t mPsnSndNxt, uint32_t mSport)
 {
-    m_traceFirstPacketSendsNotify(nodeId, taskId, mTpn, mDstTpn, tpMsn, tpMsn, mSport);
+    m_traceFirstPacketSendsNotify(nodeId, taskId, mTpn, mDstTpn, tpMsn, mPsnSndNxt, mSport);
 }
 
 void UbTransportChannel::LastPacketSendsNotify(uint32_t nodeId, uint32_t taskId, uint32_t mTpn,
@@ -789,7 +789,7 @@ void UbTransportChannel::LastPacketACKsNotify(uint32_t nodeId, uint32_t taskId, 
 void UbTransportChannel::LastPacketReceivesNotify(uint32_t nodeId, uint32_t srcTpn, uint32_t dstTpn,
                                                   uint32_t tpMsn, uint32_t psn, uint32_t mDport)
 {
-    m_traceLastPacketReceivesNotify(nodeId, srcTpn, dstTpn, dstTpn, tpMsn, mDport);
+    m_traceLastPacketReceivesNotify(nodeId, srcTpn, dstTpn, tpMsn, psn, mDport);
 }
 
 void UbTransportChannel::WqeSegmentSendsNotify(uint32_t nodeId, uint32_t taskId, uint32_t taSsn)

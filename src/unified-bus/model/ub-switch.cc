@@ -186,10 +186,15 @@ void UbSwitch::VoqInit()
  */
 void UbSwitch::PushPacketToVoq(Ptr<Packet> p, uint32_t outPort, uint32_t priority, uint32_t inPort)
 {
-    if ((outPort > m_portsNum) || (priority > m_vlNum) || (inPort > m_portsNum)) { // 不合理请求
+    if (!IsValidVoqIndices(outPort, priority, inPort, m_portsNum, m_vlNum)) {
         NS_ASSERT_MSG(0, "Invalid VOQ indices (outPort, priority, inPort)!");
     }
     m_voq[outPort][priority][inPort]->Push(p);
+}
+
+bool UbSwitch::IsValidVoqIndices(uint32_t outPort, uint32_t priority, uint32_t inPort, uint32_t portsNum, uint32_t vlNum)
+{
+    return outPort < portsNum && priority < vlNum && inPort < portsNum;
 }
 
 UbPacketType_t UbSwitch::GetPacketType(Ptr<Packet> packet)
