@@ -73,7 +73,8 @@ build_lib(
 	model/ub-fault.h
   LIBRARIES_TO_LINK ${libnetwork}
                     ${libinternet}
+                    ${libpoint-to-point}
+                    ${libconfig-store}
                     ${mpi_libraries}
   TEST_SOURCES test/ub-test.cc
 )
-
