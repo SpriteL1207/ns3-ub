@@ -21,9 +21,9 @@ jobs:
 
       - name: Sync and update submodules
         run: |
-          git config -f .gitmodules submodule.scratch/ns-3-ub-tools.url https://github.com/netisim-dev-group/ns-3-ub-tools.git
           git submodule sync --recursive
           git submodule update --init --recursive
+          git submodule status --recursive
 
       - name: Install required packages
         run: |
