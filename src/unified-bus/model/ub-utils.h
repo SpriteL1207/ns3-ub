@@ -55,6 +55,8 @@ public:
 
     void CreateTraceDir();
 
+    static std::string PrepareTraceDir(const std::string &configPath);
+
     // 创建node
     void CreateNode(const std::string &filename);
 

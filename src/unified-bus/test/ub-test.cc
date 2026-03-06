@@ -15,6 +15,10 @@
 #include "ns3/config.h"
 #include "ns3/rng-seed-manager.h"
 #include "ns3/node-container.h"
+#include "ns3/ub-utils.h"
+
+#include <chrono>
+#include <filesystem>
 
 using namespace ns3;
 
@@ -87,6 +91,45 @@ void UbFunctionalityTest::DoRun()
     NS_LOG_INFO("All basic tests completed successfully");
 }
 
+class UbTraceDirSetupTest : public TestCase
+{
+  public:
+    UbTraceDirSetupTest()
+        : TestCase("UnifiedBus - Trace directory setup tolerates missing runlog")
+    {
+    }
+
+    void DoRun() override
+    {
+        namespace fs = std::filesystem;
+
+        auto uniqueSuffix = std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count());
+        fs::path caseDir = fs::temp_directory_path() / ("ub-trace-dir-test-" + uniqueSuffix);
+        std::error_code ec;
+        fs::remove_all(caseDir, ec);
+        ec.clear();
+        fs::create_directories(caseDir, ec);
+        NS_TEST_ASSERT_MSG_EQ(ec.value(), 0, "Temporary case directory creation should succeed");
+
+        fs::path configPath = caseDir / "network_attribute.txt";
+        std::string tracePath = utils::UbUtils::PrepareTraceDir(configPath.string());
+
+        NS_TEST_ASSERT_MSG_EQ(fs::exists(caseDir / "runlog"), true, "runlog directory should be created");
+        NS_TEST_ASSERT_MSG_EQ(tracePath.empty(), false, "Returned trace path should not be empty");
+
+        std::ofstream staleFile((caseDir / "runlog" / "stale.tr").string());
+        staleFile << "stale";
+        staleFile.close();
+
+        tracePath = utils::UbUtils::PrepareTraceDir(configPath.string());
+        NS_TEST_ASSERT_MSG_EQ(fs::exists(caseDir / "runlog" / "stale.tr"), false, "Existing runlog contents should be removed");
+        NS_TEST_ASSERT_MSG_EQ(fs::exists(caseDir / "runlog"), true, "runlog directory should be recreated");
+
+        fs::remove_all(caseDir, ec);
+    }
+};
+
 /**
  * @brief Unified-bus test suite
  */
@@ -100,6 +143,7 @@ UbTestSuite::UbTestSuite()
     : TestSuite("unified-bus", Type::UNIT)
 {
     AddTestCase(new UbFunctionalityTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbTraceDirSetupTest(), TestCase::Duration::QUICK);
 }
 
 // Register the test suite

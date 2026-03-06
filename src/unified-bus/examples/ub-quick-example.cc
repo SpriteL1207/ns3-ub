@@ -141,8 +141,12 @@ int main(int argc, char* argv[])
     // 多线程加速配置（需编译时启用：./ns3 configure --enable-mtp）
     // 运行时通过 --mtp-threads=N 指定线程数（0-1=禁用，>=2 启用）
     uint32_t mtpThreads = 0;
+    std::string casePathArg;
+    std::string positionalCasePath;
     CommandLine cmd;
     cmd.AddValue("mtp-threads", "Number of MTP threads (0-1 to disable, >=2 to enable)", mtpThreads);
+    cmd.AddValue("case-path", "Path to the unified-bus case directory", casePathArg);
+    cmd.AddNonOption("casePath", "Optional unified-bus case directory", positionalCasePath);
     cmd.Parse(argc, argv);
 
 #ifdef NS3_MTP
@@ -192,9 +196,9 @@ int main(int argc, char* argv[])
     LogComponentEnable("TpConnectionManager", LOG_LEVEL_WARN);
 
     // 配置文件路径
-    string configPath = "scratch/2nodes_single-tp";
-    if (argc > 1) {
-        configPath = string(argv[1]);
+    string configPath = casePathArg.empty() ? positionalCasePath : casePathArg;
+    if (configPath.empty()) {
+        configPath = "scratch/2nodes_single-tp";
     }
 
     // 读取配置文件并执行用例

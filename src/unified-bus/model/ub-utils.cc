@@ -57,23 +57,43 @@ void UbUtils::Destroy()
     files.clear();
 }
 
-void UbUtils::CreateTraceDir()
+std::string UbUtils::PrepareTraceDir(const std::string &configPath)
 {
-    size_t last_slash_pos = g_config_path.find_last_of('/');
-    string dir_path;
-    if (last_slash_pos != std::string::npos)
-        dir_path = g_config_path.substr(0, last_slash_pos + 1);
-    else
-        NS_ASSERT_MSG(0, "Not find testcase dir");
-    trace_path = std::string(dir_path);
     namespace fs = std::filesystem;
-    fs::path runlog = fs::path(dir_path) / "runlog";
+
+    fs::path caseDir = fs::path(configPath).parent_path();
+    if (caseDir.empty()) {
+        caseDir = fs::current_path();
+    }
+
+    std::string dirPath = caseDir.string();
+    if (dirPath.empty()) {
+        NS_ASSERT_MSG(0, "Not find testcase dir");
+    }
+    if (dirPath.back() != fs::path::preferred_separator) {
+        dirPath.push_back(fs::path::preferred_separator);
+    }
+
+    fs::path runlog = caseDir / "runlog";
     std::error_code ec;
-    fs::remove_all(runlog, ec);
-    NS_ASSERT_MSG(!ec, "Failed to remove runlog dir: " << ec.message());
-    ec.clear();
+    if (fs::exists(runlog, ec)) {
+        NS_ASSERT_MSG(!ec, "Failed to query runlog dir: " << ec.message());
+        ec.clear();
+        fs::remove_all(runlog, ec);
+        NS_ASSERT_MSG(!ec, "Failed to remove runlog dir: " << ec.message());
+        ec.clear();
+    } else {
+        NS_ASSERT_MSG(!ec, "Failed to query runlog dir: " << ec.message());
+    }
+
     fs::create_directories(runlog, ec);
     NS_ASSERT_MSG(!ec, "Failed to recreate runlog dir: " << ec.message());
+    return dirPath;
+}
+
+void UbUtils::CreateTraceDir()
+{
+    trace_path = PrepareTraceDir(g_config_path);
 }
 
 inline void UbUtils::PrintTraceInfo(string fileName, string info)
