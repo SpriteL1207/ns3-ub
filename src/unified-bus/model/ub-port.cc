@@ -5,6 +5,9 @@
 #include "ns3/ub-network-address.h"
 #include "ns3/ub-caqm.h"
 #include "ns3/ub-tag.h"
+#ifdef NS3_MPI
+#include "ns3/mpi-receiver.h"
+#endif
 using namespace utils;
 
 namespace ns3 {
@@ -199,6 +202,7 @@ UbPort::UbPort()
     m_ubEQ = CreateObject<UbEgressQueue>();
     m_sendState = SendState::READY;
     m_txBytes = 0;
+    m_mpiReceiveEnabled = false;
     BooleanValue val;
     if (GlobalValue::GetValueByNameFailSafe("UB_RECORD_PKT_TRACE", val)) {
         GlobalValue::GetValueByName("UB_RECORD_PKT_TRACE", val);
@@ -211,6 +215,35 @@ UbPort::UbPort()
 UbPort::~UbPort()
 {
     NS_LOG_FUNCTION(this);
+}
+
+void
+UbPort::EnableMpiReceive()
+{
+#ifdef NS3_MPI
+    if (m_mpiReceiveEnabled)
+    {
+        return;
+    }
+
+    Ptr<MpiReceiver> mpiReceiver = GetObject<MpiReceiver>();
+    if (mpiReceiver == nullptr)
+    {
+        mpiReceiver = CreateObject<MpiReceiver>();
+        AggregateObject(mpiReceiver);
+    }
+
+    mpiReceiver->SetReceiveCallback(MakeCallback(&UbPort::Receive, this));
+    m_mpiReceiveEnabled = true;
+#else
+    NS_LOG_WARN("EnableMpiReceive called without MPI support");
+#endif
+}
+
+bool
+UbPort::HasMpiReceive() const
+{
+    return m_mpiReceiveEnabled;
 }
 
 void UbPort::SetIfIndex(const uint32_t portId)
@@ -631,6 +664,7 @@ void UbPort::DoDispose()
     m_currentPkt = nullptr;
     m_datalink = nullptr;
     m_flowControl = nullptr;
+    m_mpiReceiveEnabled = false;
     m_revQueueSize.clear();
     NetDevice::DoDispose();
 }

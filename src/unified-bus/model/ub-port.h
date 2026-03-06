@@ -94,6 +94,10 @@ public:
 
     void Receive(Ptr<Packet> p);
 
+    void EnableMpiReceive();
+
+    bool HasMpiReceive() const;
+
     bool Attach(Ptr<UbLink> ch);
 
     void NotifyLinkUp(void);
@@ -208,6 +212,8 @@ private:
     SendState m_sendState;  // Current transmission state
 
     bool m_linkUp;
+
+    bool m_mpiReceiveEnabled;
 
     Time m_tInterframeGap;
 
