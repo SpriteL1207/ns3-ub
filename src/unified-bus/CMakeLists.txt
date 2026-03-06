@@ -4,14 +4,14 @@ set(mpi_libraries)
 
 if(${ENABLE_MPI})
   set(mpi_sources
-      # model/point-to-point-remote-channel.cc
+      model/ub-remote-link.cc
   )
   set(mpi_headers
-      # model/point-to-point-remote-channel.h
+      model/ub-remote-link.h
   )
   set(mpi_libraries
-      # ${libmpi}
-      # ${MPI_CXX_LIBRARIES}
+      ${libmpi}
+      MPI::MPI_CXX
   )
 endif()
 

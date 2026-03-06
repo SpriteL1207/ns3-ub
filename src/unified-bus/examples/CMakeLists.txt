@@ -1,7 +1,15 @@
+set(ub_quick_example_libraries
+    ${libcore}
+    ${libconfig-store}
+    ${libpoint-to-point}
+)
+
+if(${ENABLE_MTP})
+  list(APPEND ub_quick_example_libraries ${libmtp})
+endif()
+
 build_lib_example(
   NAME ub-quick-example
   SOURCE_FILES ub-quick-example.cc
-  LIBRARIES_TO_LINK ${libcore}
-                    ${libconfig-store}
-                    ${libpoint-to-point}
+  LIBRARIES_TO_LINK ${ub_quick_example_libraries}
 )
