@@ -12,30 +12,6 @@ using namespace ns3;
 namespace
 {
 
-uint32_t
-ExtractMpiRank(uint32_t systemId)
-{
-#ifdef NS3_MTP
-    return systemId & 0xFFFF;
-#else
-    return systemId;
-#endif
-}
-
-bool
-ShouldCreateLocalPreloadedTp(Ptr<Node> node)
-{
-#ifdef NS3_MPI
-    if (!MpiInterface::IsEnabled() || MpiInterface::GetSize() <= 1)
-    {
-        return true;
-    }
-    return ExtractMpiRank(node->GetSystemId()) == MpiInterface::GetSystemId();
-#else
-    return true;
-#endif
-}
-
 void
 PreloadLocalTpIfOwned(Ptr<Node> node,
                       uint32_t src,
@@ -46,7 +22,7 @@ PreloadLocalTpIfOwned(Ptr<Node> node,
                       uint32_t srcTpn,
                       uint32_t dstTpn)
 {
-    if (!ShouldCreateLocalPreloadedTp(node))
+    if (!utils::UbUtils::IsNodeOwnedByCurrentRank(node))
     {
         return;
     }
@@ -67,7 +43,8 @@ CreateUbChannelBetween(Ptr<UbPort> p1, Ptr<UbPort> p2, const string& delay)
 {
     Ptr<UbLink> channel;
 #ifdef NS3_MPI
-    if (ExtractMpiRank(p1->GetNode()->GetSystemId()) != ExtractMpiRank(p2->GetNode()->GetSystemId()))
+    if (!utils::UbUtils::IsSameMpiRank(p1->GetNode()->GetSystemId(),
+                                       p2->GetNode()->GetSystemId()))
     {
         channel = CreateObject<UbRemoteLink>();
         p1->EnableMpiReceive();
@@ -88,6 +65,42 @@ CreateUbChannelBetween(Ptr<UbPort> p1, Ptr<UbPort> p2, const string& delay)
 } // namespace
 
 namespace utils {
+
+uint32_t
+UbUtils::ExtractMpiRank(uint32_t systemId)
+{
+#ifdef NS3_MTP
+    return systemId & 0xFFFF;
+#else
+    return systemId;
+#endif
+}
+
+bool
+UbUtils::IsSameMpiRank(uint32_t lhsSystemId, uint32_t rhsSystemId)
+{
+    return ExtractMpiRank(lhsSystemId) == ExtractMpiRank(rhsSystemId);
+}
+
+bool
+UbUtils::IsSystemOwnedByRank(uint32_t systemId, uint32_t currentRank)
+{
+    return ExtractMpiRank(systemId) == currentRank;
+}
+
+bool
+UbUtils::IsNodeOwnedByCurrentRank(Ptr<Node> node)
+{
+#ifdef NS3_MPI
+    if (!MpiInterface::IsEnabled() || MpiInterface::GetSize() <= 1)
+    {
+        return true;
+    }
+    return IsSystemOwnedByRank(node->GetSystemId(), MpiInterface::GetSystemId());
+#else
+    return true;
+#endif
+}
 
 void UbUtils::PrintTimestamp(const std::string &message)
 {

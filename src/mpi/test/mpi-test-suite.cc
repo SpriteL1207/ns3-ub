@@ -8,6 +8,8 @@
 
 #include "ns3/example-as-test.h"
 
+#include <cstdlib>
+#include <fstream>
 #include <sstream>
 
 using namespace ns3;
@@ -114,6 +116,49 @@ class MpiTestSuite : public TestSuite
 
 }; // class MpiTestSuite
 
+class MpiHybridSmokeInterceptorRemovedTestCase : public TestCase
+{
+  public:
+    MpiHybridSmokeInterceptorRemovedTestCase()
+        : TestCase("mpi-example-ub-hybrid-smoke-2-interceptor-removed")
+    {
+    }
+
+    void DoRun() override
+    {
+        SetDataDir(NS_TEST_SOURCEDIR);
+        const std::string testFile = CreateTempDirFilename(GetName() + ".log");
+        const std::string command =
+            "python3 ./ns3 run ub-hybrid-smoke --no-build "
+            "--command-template=\"mpiexec -n 2 %s --test --mode=interceptor\" > " +
+            testFile + " 2>&1";
+
+        const int status = std::system(command.c_str());
+
+        std::ifstream input(testFile);
+        std::stringstream buffer;
+        buffer << input.rdbuf();
+        const std::string output = buffer.str();
+
+        NS_TEST_ASSERT_MSG_NE(status,
+                              0,
+                              "interceptor-removed regression should fail fast when deprecated mode is requested");
+        NS_TEST_ASSERT_MSG_NE(output.find("TEST ERROR interceptor mode has been removed; use tp"),
+                              std::string::npos,
+                              "deprecated mode should emit the expected error message");
+    }
+};
+
+class MpiHybridSmokeInterceptorRemovedTestSuite : public TestSuite
+{
+  public:
+    MpiHybridSmokeInterceptorRemovedTestSuite()
+        : TestSuite("mpi-example-ub-hybrid-smoke-2-interceptor-removed", Type::SYSTEM)
+    {
+        AddTestCase(new MpiHybridSmokeInterceptorRemovedTestCase(), TestCase::Duration::QUICK);
+    }
+};
+
 /* Tests using SimpleDistributedSimulatorImpl */
 static MpiTestSuite g_mpiNms2("mpi-example-nms-2", "nms-p2p-nix-distributed", NS_TEST_SOURCEDIR, 2);
 static MpiTestSuite g_mpiComm2("mpi-example-comm-2",
@@ -143,6 +188,29 @@ static MpiTestSuite g_mpiSimple2("mpi-example-simple-2",
                                  NS_TEST_SOURCEDIR,
                                  2);
 static MpiTestSuite g_mpiThird2("mpi-example-third-2", "third-distributed", NS_TEST_SOURCEDIR, 2);
+static MpiTestSuite g_mpiUbConfigSmoke2("mpi-example-ub-mpi-config-smoke-2",
+                                        "ub-mpi-config-smoke",
+                                        NS_TEST_SOURCEDIR,
+                                        2,
+                                        "--case-path=scratch/ub-mpi-minimal");
+static MpiTestSuite g_mpiUbConfigTpOwnership2("mpi-example-ub-mpi-config-tp-ownership-2",
+                                              "ub-mpi-config-smoke",
+                                              NS_TEST_SOURCEDIR,
+                                              2,
+                                              "--case-path=scratch/ub-mpi-minimal --verify-tp-ownership");
+
+#ifdef NS3_MTP
+static MpiTestSuite g_mpiUbConfigHybridSmoke2("mpi-example-ub-mpi-config-hybrid-smoke-2",
+                                              "ub-mpi-config-smoke",
+                                              NS_TEST_SOURCEDIR,
+                                              2,
+                                              "--case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --stop-ms=50");
+static MpiTestSuite g_mpiUbHybridSmoke2("mpi-example-ub-hybrid-smoke-2",
+                                        "ub-hybrid-smoke",
+                                        NS_TEST_SOURCEDIR,
+                                        2);
+static MpiHybridSmokeInterceptorRemovedTestSuite g_mpiUbHybridSmoke2InterceptorRemoved;
+#endif
 
 /* Tests using NullMessageSimulatorImpl */
 static MpiTestSuite g_mpiSimple2NullMsg("mpi-example-simple-2-nullmsg",

@@ -57,6 +57,14 @@ public:
 
     static std::string PrepareTraceDir(const std::string &configPath);
 
+    static uint32_t ExtractMpiRank(uint32_t systemId);
+
+    static bool IsSameMpiRank(uint32_t lhsSystemId, uint32_t rhsSystemId);
+
+    static bool IsSystemOwnedByRank(uint32_t systemId, uint32_t currentRank);
+
+    static bool IsNodeOwnedByCurrentRank(ns3::Ptr<ns3::Node> node);
+
     // 创建node
     void CreateNode(const std::string &filename);
 

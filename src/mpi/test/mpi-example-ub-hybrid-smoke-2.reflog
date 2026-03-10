@@ -1,0 +1,6 @@
+TEST Cross-rank send complete
+TEST PASS
+TEST Rank 0 initialized
+TEST Rank 0 sending payload
+TEST Rank 1 initialized
+TEST Rank 1 received payload

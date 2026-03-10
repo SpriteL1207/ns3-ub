@@ -27,6 +27,7 @@ build_lib(
 	model/protocol/ub-header.cc
 	model/ub-link.cc
 	model/ub-port.cc
+	model/ub-tag.cc
 	model/ub-switch.cc
 	model/protocol/ub-transaction.cc
 	model/protocol/ub-function.cc

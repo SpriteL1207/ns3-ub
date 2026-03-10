@@ -85,8 +85,18 @@ We also provide three detailed fat-tree examples for Unison, traditional MPI par
 | fat-tree-mtp | src/mtp/examples/fat-tree-mtp.cc | `--enable-mtp --enable-exaples` without `--enable-mpi` | `./ns3 run "fat-tree-mtp --thread=4"` |
 | fat-tree-mpi | src/mpi/examples/fat-tree-mpi.cc | `--enable-mpi --enable-exaples` without `--enable-mtp` | `./ns3 run fat-tree-mpi --command-template "mpirun -np 4 %s"` |
 | fat-tree-hybrid | src/mpi/examples/fat-tree-hybrid.cc | `--enable-mtp --enable-mpi --enable-exaples` | `./ns3 run fat-tree-hybrid --command-template "mpirun -np 2 %s --thread=2"` |
+| ub-hybrid-smoke | src/unified-bus/examples/ub-hybrid-smoke.cc | `--enable-mtp --enable-mpi --enable-examples` | `mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-hybrid-smoke-default --test --mtp-threads=2` |
 
 Feel free to explore these examples, compare code changes and adjust the `-np` and `--thread` arguments.
+
+### Unified-bus config MPI notes
+
+For config-driven unified-bus MPI runs such as `src/unified-bus/examples/ub-mpi-config-smoke.cc`, keep the following rules explicit:
+
+- `node.csv` should provide an explicit `systemId` column for multi-process placement. In single-process compatibility mode, omitted `systemId` still defaults to `0`.
+- In `MTP+MPI` hybrid runs, `node.csv` still uses the MPI-rank ownership value in `systemId`. Do not pre-pack the high 16 bits in config; `HybridSimulatorImpl` assigns packed local-system ids at runtime.
+- `topology.csv` may connect endpoints on different MPI ranks. Local vs. remote channel selection is decided by the builder from endpoint placement; config files do not choose link type directly.
+- `transport_channel.csv` describes TP connectivity metadata between endpoints. It is not an instruction to create remote-side TP objects on the current rank.
 
 ## Running Evaluations
 

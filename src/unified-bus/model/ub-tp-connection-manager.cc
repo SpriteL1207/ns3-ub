@@ -1,7 +1,35 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "ns3/ub-tp-connection-manager.h"
 #include "ns3/ub-controller.h"
+#include "ns3/node-list.h"
 #include "ns3/ub-utils.h"
+
+namespace {
+
+void CreateDeviceTpOnNode(uint32_t nodeId,
+                          uint32_t src,
+                          uint32_t dest,
+                          uint8_t sport,
+                          uint8_t dport,
+                          uint32_t priority,
+                          uint32_t srcTpn,
+                          uint32_t dstTpn)
+{
+    auto controller = ns3::NodeList::GetNode(nodeId)->GetObject<ns3::UbController>();
+    NS_ASSERT_MSG(controller != nullptr, "UbController not found on target node");
+    auto congestionCtrl = ns3::UbCongestionControl::Create(ns3::UB_DEVICE);
+    controller->CreateTp(src,
+                         dest,
+                         sport,
+                         dport,
+                         static_cast<ns3::UbPriority>(priority),
+                         srcTpn,
+                         dstTpn,
+                         congestionCtrl);
+}
+
+}
+
 using namespace ns3;
 namespace utils {
 
@@ -512,13 +540,19 @@ uint32_t TpConnectionManager::CreateNewTp(Connection conn)
     Ptr<ns3::UbController> recvCtrl = NodeList::GetNode(conn.node2)->GetObject<ns3::UbController>();
 
     auto sendHostCaqm = UbCongestionControl::Create(UB_DEVICE);
-    auto recvHostCaqm = UbCongestionControl::Create(UB_DEVICE);
     sendCtrl->CreateTp(conn.node1, conn.node2, conn.port1, conn.port2,
                        conn.priority, conn.tpn1, conn.tpn2, sendHostCaqm);
-    // for thread safety
-    Simulator::ScheduleWithContext(conn.node2, Time(0), &UbController::CreateTp, recvCtrl,
-                                   conn.node2, conn.node1, conn.port2, conn.port1,
-                                   conn.priority, conn.tpn2, conn.tpn1, recvHostCaqm);
+    Simulator::ScheduleWithContext(conn.node2,
+                                   Time(0),
+                                   &CreateDeviceTpOnNode,
+                                   conn.node2,
+                                   conn.node2,
+                                   conn.node1,
+                                   conn.port2,
+                                   conn.port1,
+                                   conn.priority,
+                                   conn.tpn2,
+                                   conn.tpn1);
     return conn.tpn1;
 }
 
@@ -551,11 +585,17 @@ uint32_t TpConnectionManager::ReconstructTp(Connection conn)
                            conn.priority, conn.tpn1, conn.tpn2, sendHostCaqm);
     }
     if (!recvCtrl->IsTPExists(conn.tpn2)) {
-        auto recvHostCaqm = UbCongestionControl::Create(UB_DEVICE);
-        // for thread safety
-        Simulator::ScheduleWithContext(conn.node2, Time(0), &UbController::CreateTp, recvCtrl,
-                                       conn.node2, conn.node1, conn.port2, conn.port1,
-                                       conn.priority, conn.tpn2, conn.tpn1, recvHostCaqm);
+        Simulator::ScheduleWithContext(conn.node2,
+                                       Time(0),
+                                       &CreateDeviceTpOnNode,
+                                       conn.node2,
+                                       conn.node2,
+                                       conn.node1,
+                                       conn.port2,
+                                       conn.port1,
+                                       conn.priority,
+                                       conn.tpn2,
+                                       conn.tpn1);
     }
     return conn.tpn1;
 }

@@ -2,13 +2,17 @@
 #include "ns3/command-line.h"
 #include "ns3/core-module.h"
 #include "ns3/mpi-interface.h"
+#include "ns3/mtp-interface.h"
 #include "ns3/ub-app.h"
+#include "ns3/ub-controller.h"
 #include "ns3/ub-traffic-gen.h"
+#include "ns3/ub-tp-connection-manager.h"
 #include "ns3/ub-utils.h"
 
 #include <mpi.h>
 #include <iostream>
 #include <string>
+#include <vector>
 
 using namespace ns3;
 using namespace utils;
@@ -16,15 +20,8 @@ using namespace utils;
 namespace
 {
 
-uint32_t
-ExtractMpiRank(uint32_t systemId)
-{
-#ifdef NS3_MTP
-    return systemId & 0xFFFF;
-#else
-    return systemId;
-#endif
-}
+std::vector<uint32_t> g_initialSystemIds;
+bool g_packedSystemIdCheckPassed = true;
 
 void
 ConfigureCase(const std::string& casePath)
@@ -44,7 +41,7 @@ InitiateLocalTasks(const std::string& casePath, uint32_t mpiRank)
     for (const auto& record : trafficData)
     {
         Ptr<Node> sourceNode = NodeList::GetNode(record.sourceNode);
-        if (ExtractMpiRank(sourceNode->GetSystemId()) != mpiRank)
+        if (UbUtils::ExtractMpiRank(sourceNode->GetSystemId()) != mpiRank)
         {
             continue;
         }
@@ -61,6 +58,95 @@ InitiateLocalTasks(const std::string& casePath, uint32_t mpiRank)
 
     UbTrafficGen::Get()->ScheduleNextTasks();
     return localTaskCount;
+}
+
+void
+CaptureInitialSystemIds()
+{
+    g_initialSystemIds.clear();
+    g_initialSystemIds.reserve(NodeList::GetNNodes());
+    for (auto nodeIt = NodeList::Begin(); nodeIt != NodeList::End(); ++nodeIt)
+    {
+        g_initialSystemIds.push_back((*nodeIt)->GetSystemId());
+    }
+}
+
+bool
+VerifyTpOwnershipPreload()
+{
+    for (auto nodeIt = NodeList::Begin(); nodeIt != NodeList::End(); ++nodeIt)
+    {
+        Ptr<Node> node = *nodeIt;
+        Ptr<UbController> controller = node->GetObject<UbController>();
+        if (controller == nullptr)
+        {
+            continue;
+        }
+
+        const bool nodeOwnedByCurrentRank = UbUtils::IsNodeOwnedByCurrentRank(node);
+        const auto connections = controller->GetTpConnManager()->GetNodeConnections(node->GetId());
+        for (const auto& connection : connections)
+        {
+            const uint32_t localTpn =
+                (connection.node1 == node->GetId()) ? connection.tpn1 : connection.tpn2;
+            const bool tpExists = controller->IsTPExists(localTpn);
+            if (tpExists != nodeOwnedByCurrentRank)
+            {
+                std::cerr << "TP ownership mismatch on node " << node->GetId() << " tpn "
+                          << localTpn << " ownedByRank=" << nodeOwnedByCurrentRank
+                          << " exists=" << tpExists << std::endl;
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+void
+VerifyPackedSystemIds(uint32_t mpiRank)
+{
+    g_packedSystemIdCheckPassed = true;
+    if (g_initialSystemIds.size() != NodeList::GetNNodes())
+    {
+        std::cerr << "Packed systemId verification lost initial node ownership snapshot" << std::endl;
+        g_packedSystemIdCheckPassed = false;
+        return;
+    }
+
+    for (uint32_t nodeId = 0; nodeId < NodeList::GetNNodes(); ++nodeId)
+    {
+        Ptr<Node> node = NodeList::GetNode(nodeId);
+        const uint32_t initialSystemId = g_initialSystemIds[nodeId];
+        const uint32_t currentSystemId = node->GetSystemId();
+        const bool initiallyOwnedByCurrentRank = (initialSystemId == mpiRank);
+        const bool currentlyOwnedByCurrentRank = UbUtils::IsNodeOwnedByCurrentRank(node);
+
+        if (initiallyOwnedByCurrentRank)
+        {
+            if (!currentlyOwnedByCurrentRank || currentSystemId == initialSystemId ||
+                (currentSystemId >> 16) == 0 || UbUtils::ExtractMpiRank(currentSystemId) != mpiRank)
+            {
+                std::cerr << "Packed systemId verification failed for local node " << nodeId
+                          << " initial=" << initialSystemId << " current=" << currentSystemId
+                          << std::endl;
+                g_packedSystemIdCheckPassed = false;
+                return;
+            }
+        }
+        else
+        {
+            if (currentlyOwnedByCurrentRank || currentSystemId != initialSystemId ||
+                UbUtils::ExtractMpiRank(currentSystemId) != initialSystemId)
+            {
+                std::cerr << "Packed systemId verification failed for remote node " << nodeId
+                          << " initial=" << initialSystemId << " current=" << currentSystemId
+                          << std::endl;
+                g_packedSystemIdCheckPassed = false;
+                return;
+            }
+        }
+    }
 }
 
 void
@@ -81,26 +167,41 @@ main(int argc, char* argv[])
     bool test = false;
     uint32_t stopMs = 10;
     uint32_t mtpThreads = 0;
+    bool verifyTpOwnership = false;
+    bool verifyPackedSystemId = false;
     std::string casePath = "scratch/ub-mpi-minimal";
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("test", "Enable regression-test style output", test);
     cmd.AddValue("stop-ms", "Simulation stop time in milliseconds", stopMs);
     cmd.AddValue("mtp-threads", "Number of local MTP threads (0-1 disables hybrid mode)", mtpThreads);
+    cmd.AddValue("verify-tp-ownership",
+                 "Assert config-preloaded TP instances exist only on locally owned nodes",
+                 verifyTpOwnership);
+    cmd.AddValue("verify-packed-systemid",
+                 "Assert local nodes become packed MTP+MPI systemIds after hybrid partition",
+                 verifyPackedSystemId);
     cmd.AddValue("case-path", "Path to the unified-bus MPI smoke case", casePath);
     cmd.Parse(argc, argv);
 
-    if (mtpThreads > 1)
+    if (verifyPackedSystemId && mtpThreads <= 1)
     {
         if (test)
         {
             PrintTestResult(false);
         }
-        std::cerr << "ub-mpi-config-smoke currently validates MPI-only smoke; hybrid MTP+MPI smoke is pending a dedicated packed-systemId case" << std::endl;
+        std::cerr << "verify-packed-systemid requires --mtp-threads > 1" << std::endl;
         return 1;
     }
 
-    GlobalValue::Bind("SimulatorImplementationType", StringValue("ns3::DistributedSimulatorImpl"));
+    if (mtpThreads > 1)
+    {
+        MtpInterface::Enable(mtpThreads);
+    }
+    else
+    {
+        GlobalValue::Bind("SimulatorImplementationType", StringValue("ns3::DistributedSimulatorImpl"));
+    }
 
     MpiInterface::Enable(&argc, &argv);
 
@@ -119,12 +220,23 @@ main(int argc, char* argv[])
     Time::SetResolution(Time::PS);
 
     ConfigureCase(casePath);
+    CaptureInitialSystemIds();
+    const bool ownershipPassed = !verifyTpOwnership || VerifyTpOwnershipPreload();
+    if (verifyPackedSystemId)
+    {
+        Simulator::ScheduleNow(&VerifyPackedSystemIds, mpiRank);
+    }
     const uint32_t localTaskCount = InitiateLocalTasks(casePath, mpiRank);
 
-    Simulator::Stop(MilliSeconds(stopMs));
-    Simulator::Run();
+    if (ownershipPassed)
+    {
+        Simulator::Stop(MilliSeconds(stopMs));
+        Simulator::Run();
+    }
 
-    const bool localPassed = (localTaskCount == 0) || UbTrafficGen::Get()->IsCompleted();
+    const bool localPassed =
+        ownershipPassed && g_packedSystemIdCheckPassed &&
+        ((localTaskCount == 0) || UbTrafficGen::Get()->IsCompleted());
 
     int localPassedInt = localPassed ? 1 : 0;
     int globalPassedInt = 0;

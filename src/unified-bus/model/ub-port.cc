@@ -159,12 +159,12 @@ TypeId UbPort::GetTypeId(void)
             .AddAttribute("CbfcInitCreditCell",
                           "According to the configuration of the receive buffer at the connected node port, "
                           "the unit is cell",
-                          UintegerValue(1024),
+                          IntegerValue(1024),
                           MakeIntegerAccessor(&UbPort::m_cbfcPortTxfree),
                           MakeIntegerChecker<int32_t>())
             .AddAttribute("CbfcSharedInitCreditCell",
                           "Cbfc shared credit mode",
-                          UintegerValue(8192),
+                          IntegerValue(8192),
                           MakeIntegerAccessor(&UbPort::m_cbfcSharedInitCells),
                           MakeIntegerChecker<int32_t>())
             .AddAttribute("PfcUpThld",
@@ -350,8 +350,10 @@ void UbPort::DequeuePacket(void)
     m_currentPriority = priority;
     if (m_ubEQ->IsEmpty()) {
         // Switch allocation when port sendding packet.
-        auto allocator = GetNode()->GetObject<UbSwitch>()->GetAllocator();
-        Simulator::ScheduleNow(&UbSwitchAllocator::TriggerAllocator, allocator, this);
+        Ptr<UbSwitch> ubSwitch = GetNode()->GetObject<UbSwitch>();
+        if (ubSwitch != nullptr && ubSwitch->GetAllocator() != nullptr) {
+            Simulator::ScheduleNow(&UbSwitchAllocator::TriggerAllocator, ubSwitch->GetAllocator(), this);
+        }
     }
 
     if (!m_faultCallBack.IsNull()) {
@@ -419,6 +421,7 @@ void UbPort::Receive(Ptr<Packet> packet)
         packet->AddPacketTag(tag);
     }
     PortRxNotify(GetNode()->GetId(), m_portId, packet->GetSize());
+    PktRcvNotify(packet);
     GetNode()->GetObject<UbSwitch>()->SwitchHandlePacket(this, packet);
 
     return;
@@ -515,8 +518,10 @@ void UbPort::TriggerTransmit()
     }
     if (m_ubEQ->IsEmpty()) {
         NS_LOG_DEBUG("[UbPort TriggerTransmit] trigger Allocator");
-        auto allocator = GetNode()->GetObject<UbSwitch>()->GetAllocator();
-        Simulator::ScheduleNow(&UbSwitchAllocator::TriggerAllocator, allocator, this);
+        Ptr<UbSwitch> ubSwitch = GetNode()->GetObject<UbSwitch>();
+        if (ubSwitch != nullptr && ubSwitch->GetAllocator() != nullptr) {
+            Simulator::ScheduleNow(&UbSwitchAllocator::TriggerAllocator, ubSwitch->GetAllocator(), this);
+        }
         return;
     }
     DequeuePacket();

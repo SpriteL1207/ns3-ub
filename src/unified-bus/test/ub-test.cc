@@ -199,6 +199,72 @@ class UbCreateTopoRemoteLinkTest : public TestCase
     }
 };
 
+class UbCreateTopoPackedSystemIdLocalLinkTest : public TestCase
+{
+  public:
+    UbCreateTopoPackedSystemIdLocalLinkTest()
+        : TestCase("UnifiedBus - CreateTopo keeps same-rank packed systemId on local link")
+    {
+    }
+
+    void DoRun() override
+    {
+#if defined(NS3_MPI) && defined(NS3_MTP)
+        namespace fs = std::filesystem;
+
+        const uint32_t beforeNodes = NodeList::GetNNodes();
+        auto uniqueSuffix = std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count());
+        fs::path caseDir = fs::temp_directory_path() / ("ub-packed-local-link-test-" + uniqueSuffix);
+        std::error_code ec;
+        fs::remove_all(caseDir, ec);
+        ec.clear();
+        fs::create_directories(caseDir, ec);
+        NS_TEST_ASSERT_MSG_EQ(ec.value(), 0, "Temporary case directory creation should succeed");
+
+        const uint32_t node0Id = beforeNodes;
+        const uint32_t node1Id = beforeNodes + 1;
+        const uint32_t node0SystemId = (0x0001u << 16) | 0x0009u;
+        const uint32_t node1SystemId = (0x0002u << 16) | 0x0009u;
+
+        fs::path nodePath = caseDir / "node.csv";
+        std::ofstream nodeFile(nodePath.string());
+        nodeFile << "nodeId,nodeType,portNum,forwardDelay,systemId\n";
+        nodeFile << node0Id << ",DEVICE,1,1ns," << node0SystemId << "\n";
+        nodeFile << node1Id << ",DEVICE,1,1ns," << node1SystemId << "\n";
+        nodeFile.close();
+
+        fs::path topoPath = caseDir / "topology.csv";
+        std::ofstream topoFile(topoPath.string());
+        topoFile << "node1,port1,node2,port2,bandwidth,delay\n";
+        topoFile << node0Id << ",0," << node1Id << ",0,400Gbps,10ns\n";
+        topoFile.close();
+
+        utils::UbUtils::Get()->CreateNode(nodePath.string());
+        utils::UbUtils::Get()->CreateTopo(topoPath.string());
+
+        Ptr<Node> n0 = NodeList::GetNode(beforeNodes);
+        Ptr<Node> n1 = NodeList::GetNode(beforeNodes + 1);
+        Ptr<UbPort> p0 = DynamicCast<UbPort>(n0->GetDevice(0));
+        Ptr<UbPort> p1 = DynamicCast<UbPort>(n1->GetDevice(0));
+        Ptr<Channel> channel = p0->GetChannel();
+
+        NS_TEST_ASSERT_MSG_NE(channel, nullptr, "Port channel should be created");
+        NS_TEST_ASSERT_MSG_EQ(channel->GetInstanceTypeId().GetName(), std::string("ns3::UbLink"),
+                              "Same MPI rank packed systemId should keep a local UbLink");
+        NS_TEST_ASSERT_MSG_EQ(p0->HasMpiReceive(), false,
+                              "Local link should not enable MPI receive on the first endpoint");
+        NS_TEST_ASSERT_MSG_EQ(p1->HasMpiReceive(), false,
+                              "Local link should not enable MPI receive on the second endpoint");
+        NS_TEST_ASSERT_MSG_EQ(p1->GetChannel(), p0->GetChannel(), "Both ports should share the same local link");
+
+        fs::remove_all(caseDir, ec);
+#else
+        NS_TEST_SKIP_MSG("Requires MPI+MTP packed systemId support");
+#endif
+    }
+};
+
 class UbCreateTpPreloadInstancesTest : public TestCase
 {
   public:
@@ -291,6 +357,106 @@ class UbTraceDirSetupTest : public TestCase
     }
 };
 
+class UbMpiRankExtractionHelperTest : public TestCase
+{
+  public:
+    UbMpiRankExtractionHelperTest()
+        : TestCase("UnifiedBus - ExtractMpiRank follows MPI rank encoding rules")
+    {
+    }
+
+    void DoRun() override
+    {
+        NS_TEST_ASSERT_MSG_EQ(utils::UbUtils::ExtractMpiRank(7u),
+                              7u,
+                              "Plain systemId should preserve rank value");
+
+        const uint32_t packedSystemId = (0x1234u << 16) | 0x002au;
+#ifdef NS3_MTP
+        NS_TEST_ASSERT_MSG_EQ(utils::UbUtils::ExtractMpiRank(packedSystemId),
+                              0x002au,
+                              "MTP packed systemId should use low 16 bits as MPI rank");
+#else
+        NS_TEST_ASSERT_MSG_EQ(utils::UbUtils::ExtractMpiRank(packedSystemId),
+                              packedSystemId,
+                              "Non-MTP build should use the full systemId as MPI rank");
+#endif
+    }
+};
+
+class UbSameMpiRankHelperTest : public TestCase
+{
+  public:
+    UbSameMpiRankHelperTest()
+        : TestCase("UnifiedBus - IsSameMpiRank compares MPI rank instead of raw packed systemId")
+    {
+    }
+
+    void DoRun() override
+    {
+        NS_TEST_ASSERT_MSG_EQ(utils::UbUtils::IsSameMpiRank(5u, 5u),
+                              true,
+                              "Identical plain systemId values should be on the same MPI rank");
+        NS_TEST_ASSERT_MSG_EQ(utils::UbUtils::IsSameMpiRank(5u, 6u),
+                              false,
+                              "Different plain systemId values should be on different MPI ranks");
+
+        const uint32_t lhsPacked = (0x0001u << 16) | 0x0009u;
+        const uint32_t rhsSameRankPacked = (0x0002u << 16) | 0x0009u;
+        const uint32_t rhsDifferentRankPacked = (0x0002u << 16) | 0x000au;
+
+#ifdef NS3_MTP
+        NS_TEST_ASSERT_MSG_EQ(utils::UbUtils::IsSameMpiRank(lhsPacked, rhsSameRankPacked),
+                              true,
+                              "MTP packed systemId values with the same low 16 bits should match");
+#else
+        NS_TEST_ASSERT_MSG_EQ(utils::UbUtils::IsSameMpiRank(lhsPacked, rhsSameRankPacked),
+                              false,
+                              "Non-MTP build should compare full systemId values");
+#endif
+        NS_TEST_ASSERT_MSG_EQ(utils::UbUtils::IsSameMpiRank(lhsPacked, rhsDifferentRankPacked),
+                              false,
+                              "Different MPI rank encodings should not match");
+    }
+};
+
+class UbSystemOwnedByRankHelperTest : public TestCase
+{
+  public:
+    UbSystemOwnedByRankHelperTest()
+        : TestCase("UnifiedBus - IsSystemOwnedByRank follows packed MPI ownership rules")
+    {
+    }
+
+    void DoRun() override
+    {
+        NS_TEST_ASSERT_MSG_EQ(utils::UbUtils::IsSystemOwnedByRank(7u, 7u),
+                              true,
+                              "Plain systemId should be owned by the same MPI rank");
+        NS_TEST_ASSERT_MSG_EQ(utils::UbUtils::IsSystemOwnedByRank(7u, 6u),
+                              false,
+                              "Plain systemId should not be owned by a different MPI rank");
+
+        const uint32_t packedSystemId = (0x1234u << 16) | 0x0009u;
+
+#ifdef NS3_MTP
+        NS_TEST_ASSERT_MSG_EQ(utils::UbUtils::IsSystemOwnedByRank(packedSystemId, 0x0009u),
+                              true,
+                              "Packed systemId should be owned by the matching low-16-bit MPI rank");
+        NS_TEST_ASSERT_MSG_EQ(utils::UbUtils::IsSystemOwnedByRank(packedSystemId, 0x000au),
+                              false,
+                              "Packed systemId should not be owned by a different low-16-bit MPI rank");
+#else
+        NS_TEST_ASSERT_MSG_EQ(utils::UbUtils::IsSystemOwnedByRank(packedSystemId, packedSystemId),
+                              true,
+                              "Non-MTP build should treat the full systemId as the owner key");
+        NS_TEST_ASSERT_MSG_EQ(utils::UbUtils::IsSystemOwnedByRank(packedSystemId, 0x0009u),
+                              false,
+                              "Non-MTP build should not mask packed systemId values");
+#endif
+    }
+};
+
 /**
  * @brief Unified-bus test suite
  */
@@ -305,13 +471,14 @@ UbTestSuite::UbTestSuite()
 {
     AddTestCase(new UbFunctionalityTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbTraceDirSetupTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbMpiRankExtractionHelperTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbSameMpiRankHelperTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbSystemOwnedByRankHelperTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbCreateNodeSystemIdTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbCreateTopoRemoteLinkTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbCreateTopoPackedSystemIdLocalLinkTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbCreateTpPreloadInstancesTest(), TestCase::Duration::QUICK);
 }
 
 // Register the test suite
 static UbTestSuite g_ubTestSuite;
-
-
-
