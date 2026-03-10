@@ -205,6 +205,11 @@ static MpiTestSuite g_mpiUbConfigHybridSmoke2("mpi-example-ub-mpi-config-hybrid-
                                               NS_TEST_SOURCEDIR,
                                               2,
                                               "--case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --stop-ms=50");
+static MpiTestSuite g_mpiUbConfigHybridCbfc2("mpi-example-ub-mpi-config-hybrid-cbfc-2",
+                                             "ub-mpi-config-smoke",
+                                             NS_TEST_SOURCEDIR,
+                                             2,
+                                             "--case-path=scratch/ub-mpi-hybrid-cbfc-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --verify-cbfc-control --verify-cbfc-control-count --stop-ms=50");
 static MpiTestSuite g_mpiUbHybridSmoke2("mpi-example-ub-hybrid-smoke-2",
                                         "ub-hybrid-smoke",
                                         NS_TEST_SOURCEDIR,

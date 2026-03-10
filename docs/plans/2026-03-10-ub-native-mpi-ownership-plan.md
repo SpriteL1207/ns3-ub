@@ -681,3 +681,61 @@ Result: PASS
 
 - config-driven unified-bus now has a verified native `MTP+MPI` smoke entry instead of an explicit hybrid rejection path.
 - runtime packed `systemId` behavior is now checked in a real hybrid run rather than only inferred from helper logic and MPI internals.
+
+## Phase 2C Config Hybrid CBFC Regression Log (2026-03-10)
+
+### Code Changes Applied
+
+- Extended `ub-mpi-config-smoke` with `--verify-cbfc-control` so the config-driven hybrid path can assert cross-rank `CBFC` control traffic instead of only raw payload delivery.
+- Added boundary-port observation on `UbPort::TraComEventNotify` for ports with `HasMpiReceive() == true`, then decoded `UbDatalinkHeader` / `UbDatalinkControlCreditHeader` directly from transmitted packets.
+- Loaded the expected `CBFC` priority from `transport_channel.csv` so the regression checks the configured virtual lane, not a hard-coded default.
+- Strengthened the hybrid `CBFC` regression with `--verify-cbfc-control-count`, which counts boundary data/ack packets and derives the expected control-frame count from actual on-wire packet sizes at the MPI boundary.
+- Added a new config case `scratch/ub-mpi-hybrid-cbfc-minimal` and the formal MPI regression entry `mpi-example-ub-mpi-config-hybrid-cbfc-2`.
+
+### Verification Commands Run
+
+1. Red test after strengthening the suite contract:
+```bash
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-cbfc-2 --verbose
+```
+Result: FAIL as expected before `--verify-cbfc-control-count` was implemented
+
+2. Direct hybrid `CBFC` debug run during bring-up:
+```bash
+python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-cbfc-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --verify-cbfc-control --verify-cbfc-control-count --stop-ms=50"
+```
+Observed intermediate failures:
+- no TP-packet count source when trying to rely on `TpRecvNotify`
+- count mismatch when using payload-only size instead of boundary on-wire size
+
+3. Formal hybrid `CBFC` regression after fixing the count oracle:
+```bash
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-cbfc-2 --verbose
+```
+Result: PASS
+
+4. Direct config-driven hybrid `CBFC` smoke:
+```bash
+python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-cbfc-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --verify-cbfc-control --verify-cbfc-control-count --stop-ms=50"
+```
+Result: PASS
+
+5. Backward-compat regressions after `CBFC` support:
+```bash
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-tp-ownership-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-smoke-2 --verbose
+```
+Result: PASS
+
+### Confirmed Outcome
+
+- config-driven native `MTP+MPI` support now has a formal `CBFC` regression, not only a payload-only hybrid smoke.
+- the `CBFC` check is attached at the MPI boundary transmit path, so it verifies that inter-rank hybrid delivery emits real control packets with non-zero returned credits on the configured virtual lane.
+- the strengthened count oracle is now based on actual boundary packet sizes, which matches the link-layer cell accounting better than TP payload size for this config-driven path.
+
+### Remaining Confirmed Gaps
+
+- this regression uses a minimal 2-rank topology and only proves one remote boundary path at a time.
+- it does not yet measure performance or compare single-process / multi-thread / multi-process throughput and latency.
+- it does not yet stress multiple simultaneous remote links or stronger `CBFC` corner cases such as multiple priorities returning credits in the same control frame.
