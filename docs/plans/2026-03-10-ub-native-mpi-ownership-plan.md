@@ -1460,6 +1460,7 @@ Result: PASS
 - Registered the formal MPI regression:
   - `src/mpi/test/mpi-example-ub-mpi-config-hybrid-cbfc-multivl-2.reflog`
   - `src/mpi/test/mpi-test-suite.cc`
+- After focused review, tightened the stronger `CBFC` oracle contract so expected active priorities are derived from `traffic.csv` activity rather than every preloaded `transport_channel.csv` row.
 
 ### Fresh Verification Commands Run
 
@@ -1500,11 +1501,78 @@ What is now proven:
 - hybrid `CBFC` is green
 - 2-rank `LDST` proof is green
 - 2-rank multi-remote proof is green
-- stronger `CBFC` with more than one active priority is green
+- single-remote-edge multi-priority `CBFC` regression is green
 
 Scope note:
 - this recommendation applies to the config-driven native MPI path introduced in this branch
 - it does not claim that `scratch/ub-quick-example.cc` is already a formal local-MTP benchmark entrypoint
+
+## Phase 7 Execution Log (2026-03-10)
+
+### Additive Coverage Used In This Phase
+
+- Reused the already-added larger deterministic config topology:
+  - `scratch/ub-mpi-hybrid-multi-remote/`
+- Added a local single-process manual spot-check fixture:
+  - `scratch/ub-local-hybrid-minimal/`
+- Added one bounded stronger robustness invocation on the same config path:
+```bash
+python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-multi-remote --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --stop-ms=80"
+```
+Result: PASS
+
+### Informational Spot Check
+
+1. Single-process / single-thread:
+```bash
+/usr/bin/time -p build/src/unified-bus/examples/ns3.44-ub-quick-example-default scratch/ub-local-hybrid-minimal
+```
+Result:
+- program wall-clock total: `0.007161 s`
+- external `time`: `real 0.09`
+
+2. Multi-process:
+```bash
+/usr/bin/time -p python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-minimal --stop-ms=50"
+```
+Result:
+- external `time`: `real 0.20`
+
+3. Multi-process + multi-thread:
+```bash
+/usr/bin/time -p python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2 --stop-ms=50"
+```
+Result:
+- external `time`: `real 0.20`
+
+### Confirmed Anomaly / Blocker
+
+The current local single-process + multi-thread route is not usable as a benchmark entrypoint:
+```bash
+build/src/unified-bus/examples/ns3.44-ub-quick-example-default scratch/ub-local-hybrid-minimal --mtp-threads=2
+```
+Result:
+- FAIL
+- observed runtime error: `MPI_Testany() ... before MPI_INIT`
+
+Interpretation:
+- the config-driven native MPI feature path validated in this branch remains green
+- the local `quick-example` + `--mtp-threads` route still touches MPI lifecycle before `MPI_Init`, so it should stay outside the claimed feature scope for now
+- the three timings above are not a like-for-like benchmark because `ub-quick-example` and `ub-mpi-config-smoke` are different entrypoints with different surrounding work
+
+### Confidence-Expansion Summary
+
+- Additional covered failure modes:
+  - a single remote edge carrying `CBFC` traffic on more than one active priority
+  - deterministic multi-remote config path under a longer stop window
+  - a first non-gating wall-clock comparison between local and MPI entry paths
+- Observed performance anomaly:
+  - on this tiny case, `MP` and `MP+MT` were both `real 0.20`, so no meaningful speedup signal was observed
+  - `SP/MT` could not be compared because the current local entry fails before completing initialization
+- Still outside scope:
+  - a true local `SP/MT` benchmark-capable entrypoint
+  - broader topology / rank-count performance studies
+  - any throughput or latency claim beyond the small informational baseline above
 
 ## End Condition For This Round
 

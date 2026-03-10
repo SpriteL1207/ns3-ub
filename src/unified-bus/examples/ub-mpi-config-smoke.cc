@@ -45,7 +45,7 @@ void
 LoadExpectedCbfcVls(const std::string& casePath)
 {
     g_expectedCbfcVls.clear();
-    std::ifstream file(casePath + "/transport_channel.csv");
+    std::ifstream file(casePath + "/traffic.csv");
     if (!file.is_open())
     {
         g_expectedCbfcVls.insert(UB_PRIORITY_DEFAULT);
@@ -63,7 +63,7 @@ LoadExpectedCbfcVls(const std::string& casePath)
 
         std::stringstream ss(line);
         std::string item;
-        for (uint32_t column = 0; column < 6; ++column)
+        for (uint32_t column = 0; column < 5; ++column)
         {
             std::getline(ss, item, ',');
         }
