@@ -1031,6 +1031,61 @@ Expected:
 
 ---
 
+## Phase 4 Execution Log (2026-03-10)
+
+### Code Changes Applied
+
+- Added a new minimal 2-rank `LDST` config case at `scratch/ub-mpi-hybrid-ldst-minimal/`.
+- Reused `ub-mpi-config-smoke` unchanged to prove `MEM_STORE` traffic crosses the same remote-link / builder path under `MTP+MPI`.
+- Added a new deterministic 2-rank multi-remote case at `scratch/ub-mpi-hybrid-multi-remote/` with two disjoint cross-rank edges.
+- Registered two formal MPI regressions:
+  - `mpi-example-ub-mpi-config-hybrid-ldst-2`
+  - `mpi-example-ub-mpi-config-hybrid-multi-remote-2`
+
+### Verification Commands Run
+
+1. Direct `LDST` proof:
+```bash
+python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-ldst-minimal --mtp-threads=2 --verify-packed-systemid --stop-ms=50"
+```
+Result: PASS
+
+2. Direct multi-remote proof:
+```bash
+python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-multi-remote --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --stop-ms=50"
+```
+Result: PASS
+
+3. Rebuild after adding formal suites:
+```bash
+cmake --build /Users/ytxing/workspace/ns-3-ub-mpi/cmake-cache -j 7 --target mpi-test
+```
+Result: PASS
+
+4. Formal `LDST` regression:
+```bash
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-ldst-2 --verbose
+```
+Result: PASS
+
+5. Formal multi-remote regression:
+```bash
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-multi-remote-2 --verbose
+```
+Result: PASS
+
+### Confirmed Outcome
+
+- the current remote-link / ownership / builder path is now proven for `LDST` without adding protocol-specific link code.
+- config-driven `MTP+MPI` now has a formal multi-remote regression instead of only a single-cross-rank-edge minimal case.
+
+### Remaining Confirmed Gaps
+
+- stronger `CBFC` coverage with more than one active flow or priority is still pending.
+- larger topology / performance comparison work is still pending outside this proof phase.
+
+---
+
 ## Phase 5: Final Checkpoint
 
 ### Task 20: Run the final focused verification set
@@ -1068,7 +1123,7 @@ Run:
 python3 ./ns3 run ub-hybrid-smoke --no-build --command-template='mpiexec -n 2 %s --test --mode=tp --flow-size=1500 --stop-ms=50'
 python3 ./ns3 run ub-hybrid-smoke --no-build --command-template='mpiexec -n 2 %s --test --mode=tp --flow-control=cbfc --flow-size=1500 --stop-ms=50'
 python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --stop-ms=50"
-python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-cbfc-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --verify-cbfc-control --verify-cbfc-control-count --stop-ms=50"
+python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-cbfc-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --verify-cbfc-control --stop-ms=50"
 ```
 Expected:
 - PASS

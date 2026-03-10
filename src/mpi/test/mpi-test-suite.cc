@@ -205,6 +205,16 @@ static MpiTestSuite g_mpiUbConfigHybridSmoke2("mpi-example-ub-mpi-config-hybrid-
                                               NS_TEST_SOURCEDIR,
                                               2,
                                               "--case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --stop-ms=50");
+static MpiTestSuite g_mpiUbConfigHybridLdst2("mpi-example-ub-mpi-config-hybrid-ldst-2",
+                                             "ub-mpi-config-smoke",
+                                             NS_TEST_SOURCEDIR,
+                                             2,
+                                             "--case-path=scratch/ub-mpi-hybrid-ldst-minimal --mtp-threads=2 --verify-packed-systemid --stop-ms=50");
+static MpiTestSuite g_mpiUbConfigHybridMultiRemote2("mpi-example-ub-mpi-config-hybrid-multi-remote-2",
+                                                    "ub-mpi-config-smoke",
+                                                    NS_TEST_SOURCEDIR,
+                                                    2,
+                                                    "--case-path=scratch/ub-mpi-hybrid-multi-remote --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --stop-ms=50");
 static MpiTestSuite g_mpiUbConfigHybridCbfc2("mpi-example-ub-mpi-config-hybrid-cbfc-2",
                                              "ub-mpi-config-smoke",
                                              NS_TEST_SOURCEDIR,
