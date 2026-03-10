@@ -106,6 +106,8 @@ private:
         std::string portNumStr;
 
         std::string forwardDelay;
+
+        std::string systemIdStr;
     };
 
     std::map<uint32_t, NodeEle> nodeEle_map;

@@ -43,6 +43,7 @@ build_lib(
 	model/ub-queue-manager.cc
 	model/ub-fault.cc
 	model/ub-tp-connection-manager.cc
+	model/ub-tag.cc
   HEADER_FILES
     ${mpi_headers}
 	model/ub-traffic-gen.h

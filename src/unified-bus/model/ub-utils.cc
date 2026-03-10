@@ -1,9 +1,92 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "ub-utils.h"
 #include <filesystem>
+#ifdef NS3_MPI
+#include "ub-remote-link.h"
+#include "ns3/mpi-interface.h"
+#endif
 
 using namespace std;
 using namespace ns3;
+
+namespace
+{
+
+uint32_t
+ExtractMpiRank(uint32_t systemId)
+{
+#ifdef NS3_MTP
+    return systemId & 0xFFFF;
+#else
+    return systemId;
+#endif
+}
+
+bool
+ShouldCreateLocalPreloadedTp(Ptr<Node> node)
+{
+#ifdef NS3_MPI
+    if (!MpiInterface::IsEnabled() || MpiInterface::GetSize() <= 1)
+    {
+        return true;
+    }
+    return ExtractMpiRank(node->GetSystemId()) == MpiInterface::GetSystemId();
+#else
+    return true;
+#endif
+}
+
+void
+PreloadLocalTpIfOwned(Ptr<Node> node,
+                      uint32_t src,
+                      uint32_t dest,
+                      uint8_t sport,
+                      uint8_t dport,
+                      UbPriority priority,
+                      uint32_t srcTpn,
+                      uint32_t dstTpn)
+{
+    if (!ShouldCreateLocalPreloadedTp(node))
+    {
+        return;
+    }
+
+    Ptr<UbController> ctrl = node->GetObject<UbController>();
+    NS_ASSERT_MSG(ctrl != nullptr, "Preloaded TP endpoint must have UbController");
+    if (ctrl->IsTPExists(srcTpn))
+    {
+        return;
+    }
+
+    auto congestionCtrl = UbCongestionControl::Create(UB_DEVICE);
+    ctrl->CreateTp(src, dest, sport, dport, priority, srcTpn, dstTpn, congestionCtrl);
+}
+
+Ptr<UbLink>
+CreateUbChannelBetween(Ptr<UbPort> p1, Ptr<UbPort> p2, const string& delay)
+{
+    Ptr<UbLink> channel;
+#ifdef NS3_MPI
+    if (ExtractMpiRank(p1->GetNode()->GetSystemId()) != ExtractMpiRank(p2->GetNode()->GetSystemId()))
+    {
+        channel = CreateObject<UbRemoteLink>();
+        p1->EnableMpiReceive();
+        p2->EnableMpiReceive();
+    }
+    else
+#endif
+    {
+        channel = CreateObject<UbLink>();
+    }
+
+    channel->SetAttribute("Delay", StringValue(delay));
+    p1->Attach(channel);
+    p2->Attach(channel);
+    return channel;
+}
+
+} // namespace
+
 namespace utils {
 
 void UbUtils::PrintTimestamp(const std::string &message)
@@ -455,10 +538,7 @@ void UbUtils::CreateTopo(const string &filename)
         Ptr<UbPort> p2 = DynamicCast<UbPort>(n2->GetDevice(port2));
         p1->SetDataRate(DataRate(bandwidth));
         p2->SetDataRate(DataRate(bandwidth));
-        Ptr<UbLink> channel = CreateObject<UbLink>();
-        channel->SetAttribute("Delay", StringValue(delay));
-        p1->Attach(channel);
-        p2->Attach(channel);
+        CreateUbChannelBetween(p1, p2, delay);
     }
 
     for (auto it = NodeList::Begin(); it != NodeList::End(); ++it) {
@@ -493,6 +573,7 @@ inline void UbUtils::ParseNodeRange(const string &rangeStr, NodeEle nodeEle)
 void UbUtils::CreateNode(const string &filename)
 {
     PrintTimestamp("Create node.");
+    nodeEle_map.clear();
     ifstream file(filename);
     if (!file.is_open()) {
         NS_ASSERT_MSG(0, "Can not open File: " << filename);
@@ -510,17 +591,20 @@ void UbUtils::CreateNode(const string &filename)
         string nodeTypeStr;
         string portNumStr;
         string forwardDelay;
+        string systemIdStr;
         // 解析CSV行
         getline(ss, nodeIdStr, ',');
         getline(ss, nodeTypeStr, ',');
         getline(ss, portNumStr, ',');
-        getline(ss, forwardDelay);
+        getline(ss, forwardDelay, ',');
+        getline(ss, systemIdStr);
 
         NodeEle nodeEle = {};
         nodeEle.nodeIdStr = nodeIdStr;
         nodeEle.nodeTypeStr = nodeTypeStr;
         nodeEle.portNumStr = portNumStr;
         nodeEle.forwardDelay = forwardDelay;
+        nodeEle.systemIdStr = systemIdStr;
 
         // 解析节点ID（范围 or 单个节点）
         ParseNodeRange(nodeIdStr, nodeEle);
@@ -532,8 +616,10 @@ void UbUtils::CreateNode(const string &filename)
         string nodeTypeStr = it.second.nodeTypeStr;
         string portNumStr = it.second.portNumStr;
         string forwardDelay = it.second.forwardDelay;
+        string systemIdStr = it.second.systemIdStr;
         int portNum = stoi(portNumStr);
-        Ptr<Node> node = CreateObject<Node>();
+        uint32_t systemId = systemIdStr.empty() ? 0 : static_cast<uint32_t>(stoul(systemIdStr));
+        Ptr<Node> node = CreateObject<Node>(systemId);
         Ptr<UbSwitch> sw = CreateObject<UbSwitch>();
         node->AggregateObject(sw);
         Ptr<ns3::UbLdstInstance> ldst = CreateObject<UbLdstInstance>();
@@ -705,10 +791,29 @@ void UbUtils::CreateTp(const string &filename)
         }
         Connection conn;
         ParseLine(line, conn);
-        auto sendCtrl = NodeList::GetNode(conn.node1)->GetObject<UbController>();
-        auto recvCtrl = NodeList::GetNode(conn.node2)->GetObject<UbController>();
+        Ptr<Node> sendNode = NodeList::GetNode(conn.node1);
+        Ptr<Node> recvNode = NodeList::GetNode(conn.node2);
+        auto sendCtrl = sendNode->GetObject<UbController>();
+        auto recvCtrl = recvNode->GetObject<UbController>();
         sendCtrl->GetTpConnManager()->AddUnilateralConnection(conn, conn.node1);
         recvCtrl->GetTpConnManager()->AddUnilateralConnection(conn, conn.node2);
+
+        PreloadLocalTpIfOwned(sendNode,
+                              conn.node1,
+                              conn.node2,
+                              conn.port1,
+                              conn.port2,
+                              conn.priority,
+                              conn.tpn1,
+                              conn.tpn2);
+        PreloadLocalTpIfOwned(recvNode,
+                              conn.node2,
+                              conn.node1,
+                              conn.port2,
+                              conn.port1,
+                              conn.priority,
+                              conn.tpn2,
+                              conn.tpn1);
     }
     file.close();
     return ;

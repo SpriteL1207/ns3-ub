@@ -13,3 +13,20 @@ build_lib_example(
   SOURCE_FILES ub-quick-example.cc
   LIBRARIES_TO_LINK ${ub_quick_example_libraries}
 )
+
+set(ub_mpi_config_smoke_libraries
+    ${libcore}
+    ${libconfig-store}
+    ${libpoint-to-point}
+    ${libmpi}
+)
+
+if(${ENABLE_MTP})
+  list(APPEND ub_mpi_config_smoke_libraries ${libmtp})
+endif()
+
+build_lib_example(
+  NAME ub-mpi-config-smoke
+  SOURCE_FILES ub-mpi-config-smoke.cc
+  LIBRARIES_TO_LINK ${ub_mpi_config_smoke_libraries}
+)
