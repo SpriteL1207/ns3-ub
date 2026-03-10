@@ -1388,6 +1388,124 @@ Do not turn this phase into open-ended coverage expansion.
 
 ---
 
+## Phase 5 Execution Log (2026-03-10)
+
+### Code / Regression State At This Checkpoint
+
+- No new semantic code path was introduced in this checkpoint; this phase re-verified the already-landed ownership, builder, oracle-convergence, `LDST`, and multi-remote changes together.
+- The focused regression subset now includes:
+  - `unified-bus`
+  - `mpi-example-ub-hybrid-smoke-2`
+  - `mpi-example-ub-hybrid-smoke-2-interceptor-removed`
+  - `mpi-example-ub-mpi-config-smoke-2`
+  - `mpi-example-ub-mpi-config-hybrid-smoke-2`
+  - `mpi-example-ub-mpi-config-hybrid-cbfc-2`
+  - `mpi-example-ub-mpi-config-hybrid-ldst-2`
+  - `mpi-example-ub-mpi-config-hybrid-multi-remote-2`
+
+### Fresh Verification Commands Run
+
+1. Rebuild:
+```bash
+cmake --build /Users/ytxing/workspace/ns-3-ub-mpi/cmake-cache -j 7 --target unified-bus-test ub-hybrid-smoke ub-mpi-config-smoke mpi-test
+```
+Result: PASS
+
+2. Focused suites:
+```bash
+build/utils/ns3.44-test-runner-default --suite=unified-bus --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-hybrid-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-hybrid-smoke-2-interceptor-removed --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-cbfc-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-ldst-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-multi-remote-2 --verbose
+```
+Result: PASS
+
+3. Direct smoke baselines:
+```bash
+python3 ./ns3 run ub-hybrid-smoke --no-build --command-template='mpiexec -n 2 %s --test --mode=tp --flow-size=1500 --stop-ms=50'
+python3 ./ns3 run ub-hybrid-smoke --no-build --command-template='mpiexec -n 2 %s --test --mode=tp --flow-control=cbfc --flow-size=1500 --stop-ms=50'
+python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --stop-ms=50"
+python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-cbfc-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --verify-cbfc-control --stop-ms=50"
+python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-ldst-minimal --mtp-threads=2 --verify-packed-systemid --stop-ms=50"
+python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-multi-remote --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --stop-ms=50"
+```
+Result: PASS
+
+### What This Phase Proves
+
+- Shared ownership / builder rules stay green under the `unified-bus` suite.
+- `ub-hybrid-smoke` still proves end-to-end `TP` and end-to-end `CBFC` without reintroducing link-layer semantic oracles.
+- The config-driven native MPI path is green for:
+  - minimal hybrid `TP`
+  - minimal hybrid `CBFC`
+  - minimal 2-rank `LDST`
+  - a deterministic 2-rank multi-remote topology
+
+### Confirmed Remaining Gaps After Phase 5
+
+- `quick-example` is still not a formal native-MPI or local-MTP benchmark entrypoint.
+- A simple performance comparison baseline is still pending at this checkpoint.
+- Confidence expansion beyond the current minimal / proof topologies is still pending at this checkpoint.
+
+## Phase 6 Execution Log (2026-03-10)
+
+### Code Changes Applied
+
+- Added the stronger `CBFC` multi-priority config case:
+  - `scratch/ub-mpi-hybrid-cbfc-multivl/`
+- Registered the formal MPI regression:
+  - `src/mpi/test/mpi-example-ub-mpi-config-hybrid-cbfc-multivl-2.reflog`
+  - `src/mpi/test/mpi-test-suite.cc`
+
+### Fresh Verification Commands Run
+
+1. Formal stronger-`CBFC` regression:
+```bash
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-cbfc-multivl-2 --verbose
+```
+Result: PASS
+
+2. Direct stronger-`CBFC` smoke:
+```bash
+python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-cbfc-multivl --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --verify-cbfc-control --stop-ms=50"
+```
+Result: PASS
+
+3. Final focused regression subset:
+```bash
+build/utils/ns3.44-test-runner-default --suite=unified-bus --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-hybrid-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-hybrid-smoke-2-interceptor-removed --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-cbfc-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-ldst-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-multi-remote-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-cbfc-multivl-2 --verbose
+```
+Result: PASS
+
+### Merge-Readiness Report
+
+- Recommendation: `merge-ready`
+
+What is now proven:
+- shared ownership and builder rules are covered by `unified-bus` tests
+- config-driven native MPI baseline is green
+- hybrid `TP` is green
+- hybrid `CBFC` is green
+- 2-rank `LDST` proof is green
+- 2-rank multi-remote proof is green
+- stronger `CBFC` with more than one active priority is green
+
+Scope note:
+- this recommendation applies to the config-driven native MPI path introduced in this branch
+- it does not claim that `scratch/ub-quick-example.cc` is already a formal local-MTP benchmark entrypoint
+
 ## End Condition For This Round
 
 This round is complete when all of the following are true:
