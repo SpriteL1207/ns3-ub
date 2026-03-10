@@ -16,9 +16,12 @@
 #include "ns3/rng-seed-manager.h"
 #include "ns3/node-container.h"
 #include "ns3/ub-utils.h"
+#include "ns3/ub-controller.h"
 
 #include <chrono>
 #include <filesystem>
+#include <fstream>
+#include <iostream>
 
 using namespace ns3;
 
@@ -91,6 +94,164 @@ void UbFunctionalityTest::DoRun()
     NS_LOG_INFO("All basic tests completed successfully");
 }
 
+class UbCreateNodeSystemIdTest : public TestCase
+{
+  public:
+    UbCreateNodeSystemIdTest()
+        : TestCase("UnifiedBus - CreateNode honors systemId column")
+    {
+    }
+
+    void DoRun() override
+    {
+        namespace fs = std::filesystem;
+
+        const uint32_t beforeNodes = NodeList::GetNNodes();
+        auto uniqueSuffix = std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count());
+        fs::path caseDir = fs::temp_directory_path() / ("ub-systemid-test-" + uniqueSuffix);
+        std::error_code ec;
+        fs::remove_all(caseDir, ec);
+        ec.clear();
+        fs::create_directories(caseDir, ec);
+        NS_TEST_ASSERT_MSG_EQ(ec.value(), 0, "Temporary case directory creation should succeed");
+
+        fs::path nodePath = caseDir / "node.csv";
+        std::ofstream nodeFile(nodePath.string());
+        nodeFile << "nodeId,nodeType,portNum,forwardDelay,systemId\n";
+        nodeFile << "0,DEVICE,1,1ns,0\n";
+        nodeFile << "1,SWITCH,2,1ns,1\n";
+        nodeFile.close();
+
+        utils::UbUtils::Get()->CreateNode(nodePath.string());
+
+        NS_TEST_ASSERT_MSG_EQ(NodeList::GetNNodes(), beforeNodes + 2, "CreateNode should create 2 nodes");
+        NS_TEST_ASSERT_MSG_EQ(NodeList::GetNode(beforeNodes)->GetSystemId(), 0u,
+                              "First created node should preserve systemId 0");
+        NS_TEST_ASSERT_MSG_EQ(NodeList::GetNode(beforeNodes + 1)->GetSystemId(), 1u,
+                              "Second created node should preserve systemId 1");
+
+        fs::remove_all(caseDir, ec);
+    }
+};
+
+class UbCreateTopoRemoteLinkTest : public TestCase
+{
+  public:
+    UbCreateTopoRemoteLinkTest()
+        : TestCase("UnifiedBus - CreateTopo builds remote link across systemId")
+    {
+    }
+
+    void DoRun() override
+    {
+#ifdef NS3_MPI
+        namespace fs = std::filesystem;
+
+        const uint32_t beforeNodes = NodeList::GetNNodes();
+        auto uniqueSuffix = std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count());
+        fs::path caseDir = fs::temp_directory_path() / ("ub-remote-link-test-" + uniqueSuffix);
+        std::error_code ec;
+        fs::remove_all(caseDir, ec);
+        ec.clear();
+        fs::create_directories(caseDir, ec);
+        NS_TEST_ASSERT_MSG_EQ(ec.value(), 0, "Temporary case directory creation should succeed");
+
+        fs::path nodePath = caseDir / "node.csv";
+        const uint32_t node0Id = beforeNodes;
+        const uint32_t node1Id = beforeNodes + 1;
+
+        std::ofstream nodeFile(nodePath.string());
+        nodeFile << "nodeId,nodeType,portNum,forwardDelay,systemId\n";
+        nodeFile << node0Id << ",DEVICE,1,1ns,0\n";
+        nodeFile << node1Id << ",DEVICE,1,1ns,1\n";
+        nodeFile.close();
+
+        fs::path topoPath = caseDir / "topology.csv";
+        std::ofstream topoFile(topoPath.string());
+        topoFile << "node1,port1,node2,port2,bandwidth,delay\n";
+        topoFile << node0Id << ",0," << node1Id << ",0,400Gbps,10ns\n";
+        topoFile.close();
+
+        utils::UbUtils::Get()->CreateNode(nodePath.string());
+        utils::UbUtils::Get()->CreateTopo(topoPath.string());
+
+        NS_TEST_ASSERT_MSG_EQ(NodeList::GetNNodes(), beforeNodes + 2, "CreateNode should create 2 nodes");
+
+        Ptr<Node> n0 = NodeList::GetNode(beforeNodes);
+        Ptr<Node> n1 = NodeList::GetNode(beforeNodes + 1);
+        Ptr<UbPort> p0 = DynamicCast<UbPort>(n0->GetDevice(0));
+        Ptr<UbPort> p1 = DynamicCast<UbPort>(n1->GetDevice(0));
+        Ptr<Channel> channel = p0->GetChannel();
+
+        NS_TEST_ASSERT_MSG_NE(channel, nullptr, "Port channel should be created");
+        NS_TEST_ASSERT_MSG_EQ(channel->GetInstanceTypeId().GetName(), std::string("ns3::UbRemoteLink"),
+                              "Cross-systemId topology should use UbRemoteLink");
+        NS_TEST_ASSERT_MSG_EQ(p0->HasMpiReceive(), true, "Remote link endpoint should enable MPI receive");
+        NS_TEST_ASSERT_MSG_EQ(p1->HasMpiReceive(), true, "Remote link endpoint should enable MPI receive");
+        NS_TEST_ASSERT_MSG_EQ(p1->GetChannel(), p0->GetChannel(), "Both ports should share the same link");
+
+        fs::remove_all(caseDir, ec);
+#else
+        NS_TEST_SKIP_MSG("Requires MPI support");
+#endif
+    }
+};
+
+class UbCreateTpPreloadInstancesTest : public TestCase
+{
+  public:
+    UbCreateTpPreloadInstancesTest()
+        : TestCase("UnifiedBus - CreateTp preloads TP instances from config")
+    {
+    }
+
+    void DoRun() override
+    {
+        namespace fs = std::filesystem;
+
+        const uint32_t beforeNodes = NodeList::GetNNodes();
+        auto uniqueSuffix = std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count());
+        fs::path caseDir = fs::temp_directory_path() / ("ub-create-tp-test-" + uniqueSuffix);
+        std::error_code ec;
+        fs::remove_all(caseDir, ec);
+        ec.clear();
+        fs::create_directories(caseDir, ec);
+        NS_TEST_ASSERT_MSG_EQ(ec.value(), 0, "Temporary case directory creation should succeed");
+
+        const uint32_t node0Id = beforeNodes;
+        const uint32_t node1Id = beforeNodes + 1;
+
+        fs::path nodePath = caseDir / "node.csv";
+        std::ofstream nodeFile(nodePath.string());
+        nodeFile << "nodeId,nodeType,portNum,forwardDelay,systemId\n";
+        nodeFile << node0Id << ",DEVICE,1,1ns,0\n";
+        nodeFile << node1Id << ",DEVICE,1,1ns,1\n";
+        nodeFile.close();
+
+        fs::path tpPath = caseDir / "transport_channel.csv";
+        std::ofstream tpFile(tpPath.string());
+        tpFile << "nodeId1,portId1,tpn1,nodeId2,portId2,tpn2,priority,metric\n";
+        tpFile << node0Id << ",0,11," << node1Id << ",0,22,7,1\n";
+        tpFile.close();
+
+        utils::UbUtils::Get()->CreateNode(nodePath.string());
+        utils::UbUtils::Get()->CreateTp(tpPath.string());
+
+        Ptr<Node> n0 = NodeList::GetNode(beforeNodes);
+        Ptr<Node> n1 = NodeList::GetNode(beforeNodes + 1);
+        Ptr<UbController> c0 = n0->GetObject<UbController>();
+        Ptr<UbController> c1 = n1->GetObject<UbController>();
+
+        NS_TEST_ASSERT_MSG_EQ(c0->IsTPExists(11), true, "Source-side TP should be preloaded from config");
+        NS_TEST_ASSERT_MSG_EQ(c1->IsTPExists(22), true, "Destination-side TP should be preloaded from config");
+
+        fs::remove_all(caseDir, ec);
+    }
+};
+
 class UbTraceDirSetupTest : public TestCase
 {
   public:
@@ -144,7 +305,13 @@ UbTestSuite::UbTestSuite()
 {
     AddTestCase(new UbFunctionalityTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbTraceDirSetupTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbCreateNodeSystemIdTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbCreateTopoRemoteLinkTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbCreateTpPreloadInstancesTest(), TestCase::Duration::QUICK);
 }
 
 // Register the test suite
 static UbTestSuite g_ubTestSuite;
+
+
+
