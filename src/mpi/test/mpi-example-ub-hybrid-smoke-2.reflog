@@ -1,6 +1,8 @@
-TEST Cross-rank send complete
 TEST PASS
 TEST Rank 0 initialized
-TEST Rank 0 sending payload
 TEST Rank 1 initialized
-TEST Rank 1 received payload
+TEST Receiver observed data
+TEST Sender observed ack
+TEST TP flow enqueued
+TEST TP mode start
+TEST Task complete

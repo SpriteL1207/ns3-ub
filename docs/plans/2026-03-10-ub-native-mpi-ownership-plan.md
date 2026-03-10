@@ -731,11 +731,614 @@ Result: PASS
 ### Confirmed Outcome
 
 - config-driven native `MTP+MPI` support now has a formal `CBFC` regression, not only a payload-only hybrid smoke.
-- the `CBFC` check is attached at the MPI boundary transmit path, so it verifies that inter-rank hybrid delivery emits real control packets with non-zero returned credits on the configured virtual lane.
-- the strengthened count oracle is now based on actual boundary packet sizes, which matches the link-layer cell accounting better than TP payload size for this config-driven path.
+- [superseded by Phase 3] the first revision attached the `CBFC` check at the MPI boundary transmit path; this was useful for bring-up but remained a synthetic oracle.
+- [superseded by Phase 3] the `--verify-cbfc-control-count` count oracle was an intermediate bring-up tool and is no longer treated as the correct long-term contract.
 
 ### Remaining Confirmed Gaps
 
 - this regression uses a minimal 2-rank topology and only proves one remote boundary path at a time.
 - it does not yet measure performance or compare single-process / multi-thread / multi-process throughput and latency.
 - it does not yet stress multiple simultaneous remote links or stronger `CBFC` corner cases such as multiple priorities returning credits in the same control frame.
+
+## Phase 2D Smoke Oracle Cleanup Log (2026-03-10)
+
+### Code Changes Applied
+
+- Removed the `ub-hybrid-smoke` remote-link packet oracle that decoded `Packet` bytes on `UbRemoteLink` and asserted `TP data / ACK` semantics at the link boundary.
+- Kept `ub-hybrid-smoke` on the already-existing end-to-end `UbTransportChannel::TpRecvNotify` and task-complete signals only.
+- Added repository-level test guidance to `AGENTS.md`:
+  - `UbLink` / `UbRemoteLink` only carry serialized `Packet` bytes
+  - semantic interpretation belongs to `UbSwitch`, flow-control, and transport handling paths
+  - when a test must parse packets, it should reuse or strictly mirror unified-bus parsing boundaries rather than inventing an extra oracle
+- Restored and kept the formal hybrid `CBFC` config regression entry `mpi-example-ub-mpi-config-hybrid-cbfc-2`.
+
+### Verification Commands Run
+
+1. Rebuild after removing the link-level oracle:
+```bash
+cmake --build /Users/ytxing/workspace/ns-3-ub-mpi/cmake-cache -j 7 --target ub-hybrid-smoke ub-mpi-config-smoke mpi-test
+```
+Result: PASS
+
+2. Direct TP smoke after oracle cleanup:
+```bash
+python3 ./ns3 run ub-hybrid-smoke --no-build --command-template='mpiexec -n 2 %s --test --mode=tp --flow-size=1500 --stop-ms=50'
+```
+Result: PASS
+
+3. Direct TP + `CBFC` smoke after oracle cleanup:
+```bash
+python3 ./ns3 run ub-hybrid-smoke --no-build --command-template='mpiexec -n 2 %s --test --mode=tp --flow-control=cbfc --flow-size=1500 --stop-ms=50'
+```
+Result: PASS
+
+4. Focused regressions after oracle cleanup:
+```bash
+build/utils/ns3.44-test-runner-default --suite=unified-bus --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-hybrid-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-cbfc-2 --verbose
+```
+Result: PASS
+
+### Confirmed Outcome
+
+- `ub-hybrid-smoke` no longer treats `UbRemoteLink` as a protocol-semantics observation point.
+- the current MPI-native smoke baseline is now aligned with the repository rule that link only transports serialized `Packet` bytes and higher-level meaning is established inside unified-bus processing paths.
+- the remaining questionable oracle is no longer in `ub-hybrid-smoke`; it is now concentrated in `ub-mpi-config-smoke`, which makes the next cleanup step well scoped.
+
+### Updated Confirmed Gaps
+
+- `ub-mpi-config-smoke` still needs its `CBFC` observation point moved from boundary-port transmit into the real flow-control receive/restore path.
+- current `CBFC` config validation is still tied to a single remote boundary path and does not yet prove multi-priority credit returns in the same control frame.
+- `LDST` has not yet been proven in a dedicated 2-rank native MPI regression, even though the current link/builder model is intended to be protocol-agnostic at the serialized-packet level.
+
+---
+
+## Phase 3: Config Oracle Convergence
+
+### Task 15: Re-audit `ub-mpi-config-smoke` against the link-only transport rule
+
+**Files:**
+- Read: `src/unified-bus/examples/ub-mpi-config-smoke.cc`
+- Read: `src/unified-bus/model/ub-switch.cc`
+- Read: `src/unified-bus/model/protocol/ub-datalink.cc`
+- Read: `src/unified-bus/model/protocol/ub-flow-control.cc`
+- Modify: `docs/plans/2026-03-10-ub-native-mpi-ownership-plan.md`
+
+**Step 1: Freeze the audit rules in task notes**
+
+Record these rules before any code changes:
+- `UbLink` / `UbRemoteLink` only move serialized packets
+- packet meaning is established by unified-bus processing logic, not by the link
+- test-side parsing must reuse or strictly mirror the production parsing boundary
+
+**Step 2: Inventory every assumption inside `ObserveBoundaryPortTransmit(...)`**
+
+Explicitly classify each assumption as:
+- raw framing check
+- mirrored production parsing
+- extra oracle assumption that should be removed
+
+**Step 3: Append the audit results to this plan**
+
+Do not modify production code in this task; only freeze what is actually being assumed today.
+
+### Task 16: Shrink or replace the boundary-port `CBFC` oracle
+
+**Files:**
+- Modify: `src/unified-bus/examples/ub-mpi-config-smoke.cc`
+- Read: `src/unified-bus/model/ub-switch.h`
+- Read: `src/unified-bus/model/ub-switch.cc`
+- Read: `src/unified-bus/model/protocol/ub-datalink.h`
+- Read: `src/unified-bus/model/protocol/ub-datalink.cc`
+
+**Step 1: Write the failing expectation**
+
+Desired end state:
+- no assertion depends on “link saw a packet, therefore it semantically belongs to X”
+- control-frame checks only assert facts that the real production parsing path also establishes
+
+**Step 2: Prefer reuse or strict mirroring of production parsing**
+
+Allowed directions:
+- reuse helpers such as `UbDataLink::ParseCreditHeader(...)` where practical
+- mirror `UbSwitch::GetPacketType(...)` packet-type boundaries exactly
+
+Disallowed directions:
+- inventing a simplified single-VL control-frame oracle
+- deriving extra semantics at the link boundary that `UbSwitch` / flow-control never use
+
+**Step 3: If boundary-port parsing remains too synthetic, add the smallest possible formal trace**
+
+Only if needed, add one minimal production trace point closer to:
+- `UbSwitch::SinkControlFrame(...)`, or
+- flow-control receive/restore handling
+
+Rules:
+- smallest possible surface
+- no new behavior
+- trace only, not logic refactor
+
+**Step 4: Re-run focused config regressions**
+
+Run:
+```bash
+cmake --build /Users/ytxing/workspace/ns-3-ub-mpi/cmake-cache -j 7 --target ub-mpi-config-smoke mpi-test
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-cbfc-2 --verbose
+```
+Expected:
+- PASS
+
+### Task 17: Lock the cleaned config oracle with direct smoke
+
+**Files:**
+- Verify only
+
+**Step 1: Re-run direct config hybrid smoke**
+
+Run:
+```bash
+python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --stop-ms=50"
+```
+Expected:
+- PASS
+
+**Step 2: Re-run direct config hybrid `CBFC` smoke**
+
+Run:
+```bash
+python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-cbfc-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --verify-cbfc-control --stop-ms=50"
+```
+Expected:
+- PASS
+
+---
+
+## Phase 3 Execution Log (2026-03-10)
+
+### Audit Result
+
+- [fact] `ObserveBoundaryPortTransmit(...)` had three kinds of assumptions mixed together:
+  - raw framing inspection on `TraComEventNotify`
+  - partial mirroring of production header parsing
+  - extra oracle assumptions that production never uses: exact control-frame count from boundary packet sizes, and link-boundary semantic attribution
+- [fact] unified-bus production semantics for `CBFC` are established in flow-control receive/restore handling, not in `UbLink` / `UbRemoteLink` and not in boundary-port transmit callbacks.
+- [inference] keeping the count oracle would continue to couple the regression to a synthetic observation layer, even if the current minimal case still passes.
+
+### Code Changes Applied
+
+- Added a minimal trace source `ControlCreditRestoreNotify` on `UbCbfc`, emitted from the real `CbfcRestoreCrd(...)` / `CbfcSharedRestoreCrd(...)` receive path.
+- Replaced `ub-mpi-config-smoke` boundary-port packet decoding with flow-control restore observation on MPI boundary ports.
+- Removed `--verify-cbfc-control-count` and its packet-size/count oracle from `ub-mpi-config-smoke`.
+- Updated `mpi-example-ub-mpi-config-hybrid-cbfc-2` to use the cleaned `--verify-cbfc-control` contract only.
+
+### Verification Commands Run
+
+1. Rebuild after moving the oracle:
+```bash
+cmake --build /Users/ytxing/workspace/ns-3-ub-mpi/cmake-cache -j 7 --target ub-mpi-config-smoke mpi-test
+```
+Result: PASS
+
+2. Focused config regressions:
+```bash
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-cbfc-2 --verbose
+```
+Result: PASS
+
+3. Direct hybrid smoke:
+```bash
+python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --stop-ms=50"
+```
+Result: PASS
+
+4. Direct hybrid `CBFC` smoke:
+```bash
+python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-cbfc-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --verify-cbfc-control --stop-ms=50"
+```
+Result: PASS
+
+### Confirmed Outcome
+
+- `ub-mpi-config-smoke` no longer derives `CBFC` semantics by decoding serialized packets at the link/boundary layer.
+- `CBFC` verification now anchors at the real flow-control restore path, which is the production boundary that establishes returned-credit meaning.
+- the known-wrong count oracle is removed rather than patched.
+
+### Remaining Confirmed Gaps
+
+- the current `CBFC` config regression still proves only one remote boundary path in a minimal 2-rank topology.
+- stronger multi-priority / multi-flow `CBFC` coverage is still pending.
+- `LDST` still needs an explicit 2-rank native MPI proof.
+
+---
+
+## Phase 4: Protocol-Agnostic Proof
+
+### Task 18: Prove the same remote-link path works for `LDST`
+
+**Files:**
+- Read: `src/unified-bus/model/protocol/ub-ldst-api.cc`
+- Read: `src/unified-bus/model/ub-ldst-thread.cc`
+- Read: `src/unified-bus/model/ub-switch.cc`
+- Create or modify: a minimal 2-rank case under `scratch/`
+- Modify: `src/unified-bus/examples/ub-mpi-config-smoke.cc` only if the current config path can already drive `LDST`
+- Or create: a dedicated minimal `LDST` MPI smoke if the config entrypoint cannot express `LDST` cleanly
+
+**Step 1: Freeze the hypothesis**
+
+Record the hypothesis explicitly:
+- `UbLink` / `UbRemoteLink` are protocol-agnostic carriers of serialized packets
+- therefore `LDST` should not need link-layer special handling beyond builder/ownership already in place
+
+**Step 2: Write the smallest failing 2-rank `LDST` regression**
+
+Requirements:
+- exactly 2 ranks
+- one remote boundary path
+- deterministic success signal
+- no performance assertion
+
+**Step 3: Prefer proving the current path over adding new abstractions**
+
+Priority order:
+1. reuse `ub-mpi-config-smoke` if it can naturally drive `LDST`
+2. otherwise add one dedicated minimal smoke for `LDST`
+
+Do not refactor link/model code unless the proof actually fails.
+
+**Step 4: Investigate failures only at the true missing layer**
+
+If red:
+- first determine whether the gap is in config expressiveness
+- then ownership/object preload
+- only last consider protocol-specific model issues
+
+**Step 5: Verify the new `LDST` regression**
+
+Run the focused direct smoke and, if added, the dedicated suite.
+
+### Task 19: Add one multi-remote-edge proof on the same builder path
+
+**Files:**
+- Create or modify case files under `scratch/`
+- Modify: `src/mpi/test/mpi-test-suite.cc`
+- Modify: relevant `.reflog` files as needed
+
+**Step 1: Define one deterministic 2-rank topology with more than one remote edge**
+
+Requirements:
+- still small
+- same config-driven builder path
+- deterministic task completion
+
+**Step 2: Keep assertions minimal**
+
+Assert only:
+- process exits successfully
+- stable `TEST ...` lines
+- no builder misclassification regressions
+
+**Step 3: Run the focused MPI suite**
+
+Expected:
+- PASS
+
+---
+
+## Phase 5: Final Checkpoint
+
+### Task 20: Run the final focused verification set
+
+**Files:**
+- Verify only
+
+**Step 1: Rebuild touched targets**
+
+Run:
+```bash
+cmake --build /Users/ytxing/workspace/ns-3-ub-mpi/cmake-cache -j 7 --target unified-bus-test ub-hybrid-smoke ub-mpi-config-smoke mpi-test
+```
+Expected:
+- PASS
+
+**Step 2: Run the final regression subset**
+
+Run:
+```bash
+build/utils/ns3.44-test-runner-default --suite=unified-bus --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-hybrid-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-hybrid-smoke-2-interceptor-removed --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-cbfc-2 --verbose
+```
+Expected:
+- PASS
+
+**Step 3: Run the direct smoke baselines**
+
+Run:
+```bash
+python3 ./ns3 run ub-hybrid-smoke --no-build --command-template='mpiexec -n 2 %s --test --mode=tp --flow-size=1500 --stop-ms=50'
+python3 ./ns3 run ub-hybrid-smoke --no-build --command-template='mpiexec -n 2 %s --test --mode=tp --flow-control=cbfc --flow-size=1500 --stop-ms=50'
+python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --stop-ms=50"
+python3 ./ns3 run ub-mpi-config-smoke --no-build --command-template="mpiexec -n 2 %s --test --case-path=scratch/ub-mpi-hybrid-cbfc-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --verify-cbfc-control --verify-cbfc-control-count --stop-ms=50"
+```
+Expected:
+- PASS
+
+### Task 21: Write the final handoff report and stop
+
+**Files:**
+- Modify: `docs/plans/2026-03-10-ub-native-mpi-ownership-plan.md`
+- Optional: a short report under `docs/workflows/` or another agreed notes path
+
+**Step 1: Record exactly what is proven**
+
+At minimum list:
+- builder/ownership rules
+- config-driven native MPI baseline
+- hybrid `TP`
+- hybrid `CBFC`
+- whether `LDST` proof succeeded or remains pending
+
+**Step 2: Record confirmed remaining gaps only**
+
+Examples:
+- performance comparison matrix still pending
+- larger topology matrix still pending
+- stronger multi-priority `CBFC` coverage still pending
+
+**Step 3: Stop after report**
+
+Do not merge to main and do not clean unrelated untracked files in this checkpoint.
+
+---
+
+## Phase 6: Main-Branch Readiness
+
+### Task 22: Add a formal 2-rank `LDST` regression
+
+**Files:**
+- Read: `src/unified-bus/model/protocol/ub-ldst-api.cc`
+- Read: `src/unified-bus/model/ub-ldst-thread.cc`
+- Read: `src/unified-bus/model/ub-switch.cc`
+- Create or modify: minimal `LDST` case files under `scratch/`
+- Modify: `src/mpi/test/mpi-test-suite.cc`
+- Create: matching `.reflog` file if needed
+
+**Step 1: Freeze the proof target**
+
+Record the intended proof:
+- `UbLink` / `UbRemoteLink` are serialized-packet carriers only
+- therefore `LDST` should not require link-layer special handling
+
+**Step 2: Write the smallest failing 2-rank regression**
+
+Requirements:
+- exactly 2 ranks
+- one remote boundary path
+- deterministic completion signal
+- no performance assertion
+
+**Step 3: Reuse existing entrypoints before adding new ones**
+
+Priority:
+1. reuse `ub-mpi-config-smoke` if it can naturally express the `LDST` path
+2. otherwise add one dedicated minimal `LDST` MPI smoke
+
+**Step 4: Verify the new regression**
+
+Run the direct smoke and the formal suite.
+
+Expected:
+- PASS, or
+- a precise recorded blocker at config / ownership / endpoint / protocol level
+
+### Task 23: Add one multi-remote-edge config regression
+
+**Files:**
+- Create or modify: case files under `scratch/`
+- Modify: `src/mpi/test/mpi-test-suite.cc`
+- Create or modify: matching `.reflog`
+
+**Step 1: Define one deterministic small topology**
+
+Requirements:
+- still only 2 ranks
+- more than one remote edge
+- same config-driven builder path
+- deterministic end-to-end completion
+
+**Step 2: Keep assertions minimal**
+
+Assert only:
+- process exits successfully
+- stable `TEST ...` lines appear
+- no builder misclassification regression
+
+**Step 3: Verify the regression**
+
+Run the direct smoke and the formal suite.
+
+Expected:
+- PASS
+
+### Task 24: Add one stronger `CBFC` regression with more than one active priority or flow
+
+**Files:**
+- Create or modify: `scratch/` case files
+- Modify: `src/unified-bus/examples/ub-mpi-config-smoke.cc` only if required
+- Modify: `src/mpi/test/mpi-test-suite.cc`
+- Create or modify: matching `.reflog`
+
+**Step 1: Define the smallest stronger `CBFC` case**
+
+Requirements:
+- still deterministic
+- at least two active flows or priorities
+- keeps runtime in quick/medium range
+
+**Step 2: Avoid overfitting the oracle**
+
+Rules:
+- prefer success and confirmed returned-credit facts over fragile exact packet-order assumptions
+- do not reintroduce single-VL control-frame assumptions
+
+**Step 3: Verify the stronger `CBFC` regression**
+
+Expected:
+- PASS
+
+### Task 25: Run merge-candidate review and cleanup
+
+**Files:**
+- Review: all touched files
+- Modify: only if review finds correctness or maintainability issues directly relevant to this feature
+
+**Step 1: Do a focused code review**
+
+Review for:
+- hidden link-level semantic assumptions
+- duplicated ownership / rank logic
+- regression fragility
+- accidental scope creep
+
+**Step 2: Apply only direct fixes**
+
+Rules:
+- no unrelated cleanup
+- no warning-only cleanup
+- no new abstraction unless it removes a proven duplication or risk in this feature path
+
+**Step 3: Re-run the focused regression set**
+
+Run:
+```bash
+cmake --build /Users/ytxing/workspace/ns-3-ub-mpi/cmake-cache -j 7 --target unified-bus-test ub-hybrid-smoke ub-mpi-config-smoke mpi-test
+build/utils/ns3.44-test-runner-default --suite=unified-bus --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-hybrid-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-hybrid-smoke-2-interceptor-removed --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-smoke-2 --verbose
+build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-cbfc-2 --verbose
+```
+Plus all new `LDST` / multi-remote / stronger-`CBFC` suites added in this phase.
+
+### Task 26: Write the merge-readiness report
+
+**Files:**
+- Modify: `docs/plans/2026-03-10-ub-native-mpi-ownership-plan.md`
+- Optional: short report under `docs/workflows/` or another agreed notes path
+
+**Step 1: Record what is now proven**
+
+At minimum:
+- ownership and builder rules
+- config-driven native MPI baseline
+- hybrid `TP`
+- hybrid `CBFC`
+- `LDST` 2-rank status
+- multi-remote-edge status
+
+**Step 2: Give a binary recommendation**
+
+Choose one:
+- `merge-ready`
+- `not yet merge-ready`
+
+If not ready, list only the concrete blockers.
+
+---
+
+## Phase 7: Confidence Expansion
+
+### Task 27: Add a larger topology matrix on the same config path
+
+**Files:**
+- Create or modify: additional `scratch/` cases
+- Modify: `src/mpi/test/mpi-test-suite.cc`
+- Create or modify: matching `.reflog`
+
+**Step 1: Add one larger but still deterministic topology**
+
+Requirements:
+- more nodes than the current minimal cases
+- still only as large as needed to prove builder / ownership stability
+- same config-driven path
+
+**Step 2: Add one focused regression per topology, not a matrix explosion**
+
+Rules:
+- keep coverage additive
+- avoid multiplying cases unless each adds a distinct failure mode
+
+### Task 28: Add a simple performance baseline
+
+**Files:**
+- Modify or create: benchmark notes / scripts only if needed
+- Modify: report docs only
+
+**Step 1: Define a non-ambitious baseline**
+
+Compare only a small set such as:
+- single-process / single-thread
+- single-process / multi-thread
+- multi-process or multi-process + multi-thread
+
+**Step 2: Keep this informational, not gating**
+
+Rules:
+- do not fail regressions on throughput numbers
+- only record measurements and obvious anomalies
+
+### Task 29: Add one stronger robustness check
+
+**Files:**
+- Create or modify: one additional case or smoke invocation
+- Modify docs if needed
+
+**Step 1: Pick one robustness axis**
+
+Examples:
+- slightly larger flow
+- multiple simultaneous flows
+- slightly longer run duration
+
+**Step 2: Keep it bounded**
+
+This is not a soak test; it is only a stronger confidence check.
+
+### Task 30: Write the confidence-expansion summary
+
+**Files:**
+- Modify: `docs/plans/2026-03-10-ub-native-mpi-ownership-plan.md`
+
+**Step 1: Record what the larger coverage adds**
+
+At minimum:
+- which new failure modes are now covered
+- whether any performance anomaly was observed
+- what still remains outside scope
+
+**Step 2: Stop after summary**
+
+Do not turn this phase into open-ended coverage expansion.
+
+---
+
+## End Condition For This Round
+
+This round is complete when all of the following are true:
+
+- `ub-hybrid-smoke` stays on end-to-end TP semantics only
+- `ub-mpi-config-smoke` no longer carries a known-wrong link/boundary oracle
+- config-driven native MPI baseline and hybrid `CBFC` regressions are green
+- either a minimal 2-rank `LDST` proof is green, or a precise reason is recorded for why it is still pending
+- the final plan log records exact verification commands and remaining confirmed gaps

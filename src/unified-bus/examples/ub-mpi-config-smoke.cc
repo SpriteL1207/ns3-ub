@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "ns3/command-line.h"
 #include "ns3/core-module.h"
-#include "ns3/ipv4-header.h"
-#include "ns3/ub-header.h"
 #include "ns3/mpi-interface.h"
 #include "ns3/mtp-interface.h"
-#include "ns3/udp-header.h"
 #include "ns3/ub-app.h"
 #include "ns3/ub-controller.h"
 #include "ns3/ub-port.h"
@@ -16,6 +13,8 @@
 #include <mpi.h>
 #include <fstream>
 #include <iostream>
+#include <map>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -28,20 +27,9 @@ namespace
 
 std::vector<uint32_t> g_initialSystemIds;
 bool g_packedSystemIdCheckPassed = true;
-uint8_t g_expectedCbfcVl = UB_PRIORITY_DEFAULT;
-
-struct BoundaryFrameInfo
-{
-    bool isControl = false;
-    uint8_t firstCreditVl = 0xff;
-    uint8_t firstCreditValue = 0;
-};
-
-std::vector<BoundaryFrameInfo> g_boundaryFrames;
-std::vector<uint32_t> g_boundaryTpPacketSizes;
-
-constexpr uint32_t kCbfcCellBytes = 20 * 4;
-constexpr uint32_t kCbfcReturnCellGrain = 2;
+std::set<uint8_t> g_expectedCbfcVls;
+std::map<uint8_t, uint32_t> g_restoredControlCreditsByVl;
+uint32_t g_totalRestoredControlCreditEvents = 0;
 
 void
 ConfigureCase(const std::string& casePath)
@@ -54,12 +42,13 @@ ConfigureCase(const std::string& casePath)
 }
 
 void
-LoadExpectedCbfcVl(const std::string& casePath)
+LoadExpectedCbfcVls(const std::string& casePath)
 {
-    g_expectedCbfcVl = UB_PRIORITY_DEFAULT;
+    g_expectedCbfcVls.clear();
     std::ifstream file(casePath + "/transport_channel.csv");
     if (!file.is_open())
     {
+        g_expectedCbfcVls.insert(UB_PRIORITY_DEFAULT);
         return;
     }
 
@@ -80,30 +69,14 @@ LoadExpectedCbfcVl(const std::string& casePath)
         }
         if (std::getline(ss, item, ','))
         {
-            g_expectedCbfcVl = static_cast<uint8_t>(std::stoul(item));
+            g_expectedCbfcVls.insert(static_cast<uint8_t>(std::stoul(item)));
         }
-        return;
     }
-}
 
-uint32_t
-CountExpectedCbfcControlFrames(const std::vector<uint32_t>& packetSizes)
-{
-    uint32_t carriedCells = 0;
-    uint32_t frameCount = 0;
-
-    for (uint32_t packetSize : packetSizes)
+    if (g_expectedCbfcVls.empty())
     {
-        const uint32_t packetCells = (packetSize + kCbfcCellBytes - 1) / kCbfcCellBytes;
-        carriedCells += packetCells;
-        if (carriedCells >= kCbfcReturnCellGrain)
-        {
-            ++frameCount;
-            carriedCells %= kCbfcReturnCellGrain;
-        }
+        g_expectedCbfcVls.insert(UB_PRIORITY_DEFAULT);
     }
-
-    return frameCount;
 }
 
 uint32_t
@@ -223,82 +196,25 @@ VerifyPackedSystemIds(uint32_t mpiRank)
 }
 
 void
-ObserveBoundaryPortTransmit(Ptr<Packet> packet, Time)
+ObserveRestoredBoundaryCredits(uint32_t nodeId, uint32_t portId, std::vector<uint8_t> credits)
 {
-    BoundaryFrameInfo info;
-    Ptr<Packet> copy = packet->Copy();
-
-    UbDatalinkHeader datalinkHeader;
-    if (copy->PeekHeader(datalinkHeader) == 0)
-    {
-        return;
-    }
-
-    if (!datalinkHeader.IsControlCreditHeader())
-    {
-        UbDatalinkPacketHeader packetHeader;
-        UbNetworkHeader networkHeader;
-        Ipv4Header ipv4Header;
-        UdpHeader udpHeader;
-        UbTransportHeader transportHeader;
-        if (copy->RemoveHeader(packetHeader) == 0 || copy->RemoveHeader(networkHeader) == 0 ||
-            copy->RemoveHeader(ipv4Header) == 0 || copy->RemoveHeader(udpHeader) == 0 ||
-            copy->RemoveHeader(transportHeader) == 0)
-        {
-            return;
-        }
-
-        const uint8_t tpOpcode = transportHeader.GetTPOpcode();
-        if (tpOpcode == static_cast<uint8_t>(TpOpcode::TP_OPCODE_ACK_WITH_CETPH) ||
-            tpOpcode == static_cast<uint8_t>(TpOpcode::TP_OPCODE_ACK_WITHOUT_CETPH))
-        {
-            UbCongestionExtTph congestionHeader;
-            UbAckTransactionHeader ackHeader;
-            if (copy->RemoveHeader(congestionHeader) == 0 || copy->RemoveHeader(ackHeader) == 0)
-            {
-                return;
-            }
-        }
-        else
-        {
-            UbTransactionHeader transactionHeader;
-            UbMAExtTah extHeader;
-            if (copy->RemoveHeader(transactionHeader) == 0 || copy->RemoveHeader(extHeader) == 0)
-            {
-                return;
-            }
-        }
-
-        g_boundaryTpPacketSizes.push_back(packet->GetSize());
-        return;
-    }
-
-    UbDatalinkControlCreditHeader controlHeader;
-    if (copy->RemoveHeader(controlHeader) == 0)
-    {
-        return;
-    }
-
-    uint8_t credits[UB_PRIORITY_NUM_DEFAULT] = {0};
-    controlHeader.GetAllCreditsVL(credits);
-    info.isControl = true;
-    for (uint8_t vl = 0; vl < UB_PRIORITY_NUM_DEFAULT; ++vl)
+    (void)nodeId;
+    (void)portId;
+    ++g_totalRestoredControlCreditEvents;
+    for (uint8_t vl = 0; vl < credits.size(); ++vl)
     {
         if (credits[vl] > 0)
         {
-            info.firstCreditVl = vl;
-            info.firstCreditValue = credits[vl];
-            break;
+            ++g_restoredControlCreditsByVl[vl];
         }
     }
-    g_boundaryFrames.push_back(info);
 }
 
 void
 AttachBoundaryPortObservers()
 {
-    g_boundaryFrames.clear();
-    g_boundaryTpPacketSizes.clear();
+    g_restoredControlCreditsByVl.clear();
+    g_totalRestoredControlCreditEvents = 0;
     for (auto nodeIt = NodeList::Begin(); nodeIt != NodeList::End(); ++nodeIt)
     {
         Ptr<Node> node = *nodeIt;
@@ -309,58 +225,35 @@ AttachBoundaryPortObservers()
             {
                 continue;
             }
-            port->TraceConnectWithoutContext("TraComEventNotify",
-                                             MakeCallback(&ObserveBoundaryPortTransmit));
+            Ptr<UbFlowControl> flowControl = port->GetFlowControl();
+            if (flowControl == nullptr)
+            {
+                continue;
+            }
+            flowControl->TraceConnectWithoutContext("ControlCreditRestoreNotify",
+                                                    MakeCallback(&ObserveRestoredBoundaryCredits));
         }
     }
 }
 
 bool
-ValidateObservedCbfcControlFrames(bool verifyCbfcControlCount)
+ValidateObservedCbfcControlFrames()
 {
-    uint32_t controlFrameCount = 0;
-    for (const auto& frame : g_boundaryFrames)
+    if (g_totalRestoredControlCreditEvents == 0)
     {
-        if (!frame.isControl)
-        {
-            continue;
-        }
-
-        ++controlFrameCount;
-        if (frame.firstCreditValue == 0)
-        {
-            std::cerr << "Observed CBFC control frame without returned credit" << std::endl;
-            return false;
-        }
-        if (frame.firstCreditVl != g_expectedCbfcVl)
-        {
-            std::cerr << "Observed CBFC control frame on VL "
-                      << static_cast<uint32_t>(frame.firstCreditVl) << ", expected "
-                      << static_cast<uint32_t>(g_expectedCbfcVl) << std::endl;
-            return false;
-        }
-    }
-
-    if (controlFrameCount == 0)
-    {
-        std::cerr << "No CBFC control frame observed on boundary MPI ports" << std::endl;
+        std::cerr << "No CBFC restored-credit event observed on boundary MPI ports" << std::endl;
         return false;
     }
 
-    if (verifyCbfcControlCount)
+    for (uint8_t expectedVl : g_expectedCbfcVls)
     {
-        if (g_boundaryTpPacketSizes.empty())
+        const auto controlCountIt = g_restoredControlCreditsByVl.find(expectedVl);
+        const uint32_t observedCount =
+            (controlCountIt == g_restoredControlCreditsByVl.end()) ? 0 : controlCountIt->second;
+        if (observedCount == 0)
         {
-            std::cerr << "No boundary TP packets observed for CBFC control count verification" << std::endl;
-            return false;
-        }
-
-        const uint32_t expectedCount = CountExpectedCbfcControlFrames(g_boundaryTpPacketSizes);
-        if (controlFrameCount != expectedCount)
-        {
-            std::cerr << "Observed " << controlFrameCount
-                      << " CBFC control frames on boundary MPI ports, expected " << expectedCount
-                      << " from " << g_boundaryTpPacketSizes.size() << " boundary TP packets" << std::endl;
+            std::cerr << "No CBFC restored credit observed on expected VL "
+                      << static_cast<uint32_t>(expectedVl) << std::endl;
             return false;
         }
     }
@@ -389,7 +282,6 @@ main(int argc, char* argv[])
     bool verifyTpOwnership = false;
     bool verifyPackedSystemId = false;
     bool verifyCbfcControl = false;
-    bool verifyCbfcControlCount = false;
     std::string casePath = "scratch/ub-mpi-minimal";
 
     CommandLine cmd(__FILE__);
@@ -403,15 +295,12 @@ main(int argc, char* argv[])
                  "Assert local nodes become packed MTP+MPI systemIds after hybrid partition",
                  verifyPackedSystemId);
     cmd.AddValue("verify-cbfc-control",
-                 "Assert boundary MPI ports transmit CBFC control frames in hybrid mode",
+                 "Assert boundary MPI ports restore CBFC credits in hybrid mode",
                  verifyCbfcControl);
-    cmd.AddValue("verify-cbfc-control-count",
-                 "Assert CBFC control frame count matches locally received TP packets",
-                 verifyCbfcControlCount);
     cmd.AddValue("case-path", "Path to the unified-bus MPI smoke case", casePath);
     cmd.Parse(argc, argv);
 
-    if ((verifyPackedSystemId || verifyCbfcControl || verifyCbfcControlCount) && mtpThreads <= 1)
+    if ((verifyPackedSystemId || verifyCbfcControl) && mtpThreads <= 1)
     {
         if (test)
         {
@@ -447,7 +336,7 @@ main(int argc, char* argv[])
     Time::SetResolution(Time::PS);
 
     ConfigureCase(casePath);
-    LoadExpectedCbfcVl(casePath);
+    LoadExpectedCbfcVls(casePath);
     CaptureInitialSystemIds();
     const bool ownershipPassed = !verifyTpOwnership || VerifyTpOwnershipPreload();
     if (verifyCbfcControl)
@@ -466,8 +355,7 @@ main(int argc, char* argv[])
         Simulator::Run();
     }
 
-    const bool cbfcControlPassed =
-        !verifyCbfcControl || ValidateObservedCbfcControlFrames(verifyCbfcControlCount);
+    const bool cbfcControlPassed = !verifyCbfcControl || ValidateObservedCbfcControlFrames();
 
     const bool localPassed =
         ownershipPassed && g_packedSystemIdCheckPassed && cbfcControlPassed &&
