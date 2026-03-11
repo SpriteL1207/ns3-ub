@@ -29,6 +29,9 @@ if(${ENABLE_MTP})
   list(APPEND ub_mpi_config_smoke_libraries ${libmtp})
 endif()
 
+# Transitional regression shell only.
+# Keep building this target while MPI/MTP black-box entrypoints migrate to
+# ub-quick-example; do not treat it as the long-term user-facing UB entry.
 build_lib_example(
   NAME ub-mpi-config-smoke
   SOURCE_FILES
