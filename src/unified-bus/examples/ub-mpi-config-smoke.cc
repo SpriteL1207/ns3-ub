@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include "ub-config-runner.h"
+
 #include "ns3/command-line.h"
 #include "ns3/core-module.h"
 #include "ns3/mpi-interface.h"
-#include "ns3/mtp-interface.h"
-#include "ns3/ub-app.h"
 #include "ns3/ub-controller.h"
 #include "ns3/ub-port.h"
-#include "ns3/ub-traffic-gen.h"
 #include "ns3/ub-tp-connection-manager.h"
 #include "ns3/ub-utils.h"
 
@@ -30,16 +29,6 @@ bool g_packedSystemIdCheckPassed = true;
 std::set<uint8_t> g_expectedCbfcVls;
 std::map<uint8_t, uint32_t> g_restoredControlCreditsByVl;
 uint32_t g_totalRestoredControlCreditEvents = 0;
-
-void
-ConfigureCase(const std::string& casePath)
-{
-    UbUtils::Get()->SetComponentsAttribute(casePath + "/network_attribute.txt");
-    UbUtils::Get()->CreateNode(casePath + "/node.csv");
-    UbUtils::Get()->CreateTopo(casePath + "/topology.csv");
-    UbUtils::Get()->AddRoutingTable(casePath + "/routing_table.csv");
-    UbUtils::Get()->CreateTp(casePath + "/transport_channel.csv");
-}
 
 void
 LoadExpectedCbfcVls(const std::string& casePath)
@@ -77,33 +66,6 @@ LoadExpectedCbfcVls(const std::string& casePath)
     {
         g_expectedCbfcVls.insert(UB_PRIORITY_DEFAULT);
     }
-}
-
-uint32_t
-InitiateLocalTasks(const std::string& casePath, uint32_t mpiRank)
-{
-    uint32_t localTaskCount = 0;
-    auto trafficData = UbUtils::Get()->ReadTrafficCSV(casePath + "/traffic.csv");
-    for (const auto& record : trafficData)
-    {
-        Ptr<Node> sourceNode = NodeList::GetNode(record.sourceNode);
-        if (UbUtils::ExtractMpiRank(sourceNode->GetSystemId()) != mpiRank)
-        {
-            continue;
-        }
-
-        if (sourceNode->GetNApplications() == 0)
-        {
-            Ptr<UbApp> client = CreateObject<UbApp>();
-            sourceNode->AddApplication(client);
-        }
-
-        UbTrafficGen::Get()->AddTask(record);
-        localTaskCount++;
-    }
-
-    UbTrafficGen::Get()->ScheduleNextTasks();
-    return localTaskCount;
 }
 
 void
@@ -310,77 +272,69 @@ main(int argc, char* argv[])
         return 1;
     }
 
-    if (mtpThreads > 1)
-    {
-        MtpInterface::Enable(mtpThreads);
-    }
-    else
-    {
-        GlobalValue::Bind("SimulatorImplementationType", StringValue("ns3::DistributedSimulatorImpl"));
-    }
-
-    MpiInterface::Enable(&argc, &argv);
-
-    const uint32_t mpiRank = MpiInterface::GetSystemId();
-    const uint32_t mpiSize = MpiInterface::GetSize();
-    if (mpiSize != 2)
-    {
-        if (test && mpiRank == 0)
-        {
-            PrintTestResult(false);
-        }
-        MpiInterface::Disable();
-        return 1;
-    }
-
     Time::SetResolution(Time::PS);
-
-    ConfigureCase(casePath);
     LoadExpectedCbfcVls(casePath);
-    CaptureInitialSystemIds();
-    const bool ownershipPassed = !verifyTpOwnership || VerifyTpOwnershipPreload();
-    if (verifyCbfcControl)
+
+    bool ownershipPassed = true;
+    UbConfigRunOptions runOptions;
+    runOptions.casePath = casePath;
+    runOptions.mtpThreads = mtpThreads;
+    runOptions.stopMs = stopMs;
+    runOptions.enableMpi = true;
+    runOptions.activateLocalOwnedTasksOnly = true;
+    runOptions.argc = &argc;
+    runOptions.argv = &argv;
+
+    UbConfigRunnerHooks hooks;
+    hooks.onConfigured = [&](const UbConfigRunOptions&, UbConfigRunResult& result) {
+        g_packedSystemIdCheckPassed = true;
+        if (result.mpiSize != 2)
+        {
+            ownershipPassed = false;
+            return;
+        }
+
+        CaptureInitialSystemIds();
+        ownershipPassed = !verifyTpOwnership || VerifyTpOwnershipPreload();
+        if (verifyCbfcControl)
+        {
+            AttachBoundaryPortObservers();
+        }
+        if (verifyPackedSystemId)
+        {
+            Simulator::ScheduleNow(&VerifyPackedSystemIds, result.mpiRank);
+        }
+    };
+    hooks.onAfterRun = [&](const UbConfigRunOptions&, UbConfigRunResult& result) {
+        if (result.mpiSize != 2)
+        {
+            result.localPassed = false;
+            result.globalPassed = false;
+            return;
+        }
+
+        const bool cbfcControlPassed = !verifyCbfcControl || ValidateObservedCbfcControlFrames();
+        result.localPassed =
+            ownershipPassed && g_packedSystemIdCheckPassed && cbfcControlPassed && result.localPassed;
+
+        int localPassedInt = result.localPassed ? 1 : 0;
+        int globalPassedInt = 0;
+        MPI_Allreduce(&localPassedInt,
+                      &globalPassedInt,
+                      1,
+                      MPI_INT,
+                      MPI_MIN,
+                      MpiInterface::GetCommunicator());
+        result.globalPassed = (globalPassedInt != 0);
+    };
+
+    UbConfigRunResult result = RunUbConfigCase(runOptions, hooks);
+
+    if (test && result.mpiRank == 0)
     {
-        AttachBoundaryPortObservers();
-    }
-    if (verifyPackedSystemId)
-    {
-        Simulator::ScheduleNow(&VerifyPackedSystemIds, mpiRank);
-    }
-    const uint32_t localTaskCount = InitiateLocalTasks(casePath, mpiRank);
-
-    if (ownershipPassed)
-    {
-        Simulator::Stop(MilliSeconds(stopMs));
-        Simulator::Run();
+        PrintTestResult(result.globalPassed);
     }
 
-    const bool cbfcControlPassed = !verifyCbfcControl || ValidateObservedCbfcControlFrames();
-
-    const bool localPassed =
-        ownershipPassed && g_packedSystemIdCheckPassed && cbfcControlPassed &&
-        ((localTaskCount == 0) || UbTrafficGen::Get()->IsCompleted());
-
-    int localPassedInt = localPassed ? 1 : 0;
-    int globalPassedInt = 0;
-    MPI_Allreduce(&localPassedInt,
-                  &globalPassedInt,
-                  1,
-                  MPI_INT,
-                  MPI_MIN,
-                  MpiInterface::GetCommunicator());
-
-    const bool globalPassed = (globalPassedInt != 0);
-
-    Simulator::Destroy();
-    UbUtils::Get()->Destroy();
-    MpiInterface::Disable();
-
-    if (test && mpiRank == 0)
-    {
-        PrintTestResult(globalPassed);
-    }
-
-    return globalPassed ? 0 : 1;
+    return result.globalPassed ? 0 : 1;
 #endif
 }
