@@ -1,4 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Unified-bus config-driven user entry.
+ *
+ * Typical usage:
+ *   local:      build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=<case-dir>
+ *   MPI:        mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=<case-dir>
+ *   MPI + MTP:  mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=<case-dir> --mtp-threads=2
+ *
+ * This example is the unified config-driven user entry. The separate
+ * `ub-mtp-remote-tp-regression` binary remains regression-only.
+ */
 #include "ns3/ub-utils.h"
 #include "ns3/command-line.h"
 #include "ns3/node-list.h"
@@ -24,6 +35,33 @@
 using namespace ns3;
 
 using namespace utils;
+
+namespace
+{
+
+struct QuickExampleOptions
+{
+    bool test = false;
+    uint32_t mtpThreads = 0;
+    uint32_t stopMs = 0;
+    std::string configPath;
+};
+
+struct RuntimeSelection
+{
+    bool enableMpi = false;
+    bool mtpEnabled = false;
+    uint32_t mpiRank = 0;
+};
+
+struct PhaseTiming
+{
+    std::chrono::high_resolution_clock::time_point programStart;
+    std::chrono::high_resolution_clock::time_point simulationStart;
+    std::chrono::high_resolution_clock::time_point simulationEnd;
+    std::chrono::high_resolution_clock::time_point traceStart;
+    std::chrono::high_resolution_clock::time_point programEnd;
+};
 
 std::string FormatTime(double time_us)
 {
@@ -180,7 +218,7 @@ bool PrepareSimulatorMode(bool enableMpi, uint32_t mtpThreads)
     return false;
 }
 
-void ConfigureCase(const std::string& configPath)
+void BuildScenarioFromConfig(const std::string& configPath)
 {
     UbUtils::Get()->SetComponentsAttribute(configPath + "/network_attribute.txt");
     UbUtils::Get()->CreateTraceDir();
@@ -191,7 +229,9 @@ void ConfigureCase(const std::string& configPath)
     UbUtils::Get()->TopoTraceConnect();
 }
 
-uint32_t ActivateTasks(const std::string& configPath, bool activateLocalOwnedTasksOnly, uint32_t mpiRank)
+uint32_t ActivateTrafficFromConfig(const std::string& configPath,
+                                   bool activateLocalOwnedTasksOnly,
+                                   uint32_t mpiRank)
 {
     auto trafficData = UbUtils::Get()->ReadTrafficCSV(configPath + "/traffic.csv");
     BooleanValue faultEnabled;
@@ -227,50 +267,58 @@ uint32_t ActivateTasks(const std::string& configPath, bool activateLocalOwnedTas
     return localTaskCount;
 }
 
-// 根据配置文件路径执行用例
-int main(int argc, char* argv[])
+bool HandleAttributeQuery(int argc, char* argv[])
 {
-    // 先检查是否查询属性信息（使用独立的参数检查，不触发严格解析）
-    for (int i = 1; i < argc; ++i) {
+    for (int i = 1; i < argc; ++i)
+    {
         std::string arg(argv[i]);
-        if (arg.find("--ClassName") == 0) {
+        if (arg.find("--ClassName") == 0)
+        {
             if (UbUtils::Get()->QueryAttributeInfo(argc, argv))
-                return 0;
+            {
+                return true;
+            }
             break;
         }
     }
+    return false;
+}
 
-    // 多线程加速配置（需编译时启用：./ns3 configure --enable-mtp）
-    // 运行时通过 --mtp-threads=N 指定线程数（0-1=禁用，>=2 启用）
-    uint32_t mtpThreads = 0;
-    bool test = false;
+QuickExampleOptions ParseOptions(int argc, char* argv[])
+{
+    QuickExampleOptions options;
     std::string casePathArg;
     std::string positionalCasePath;
     CommandLine cmd;
-    cmd.AddValue("test", "Enable regression-test style output", test);
-    cmd.AddValue("mtp-threads", "Number of MTP threads (0-1 to disable, >=2 to enable)", mtpThreads);
+    cmd.AddValue("test", "Enable regression-test style output", options.test);
+    cmd.AddValue("mtp-threads",
+                 "Number of MTP threads (0-1 to disable, >=2 to enable)",
+                 options.mtpThreads);
     cmd.AddValue("case-path",
                  "Required path to the unified-bus case directory",
                  casePathArg);
-    uint32_t stopMs = 0;
-    cmd.AddValue("stop-ms", "Optional simulation stop time in milliseconds", stopMs);
+    cmd.AddValue("stop-ms", "Optional simulation stop time in milliseconds", options.stopMs);
     cmd.AddNonOption("casePath",
                      "Required unified-bus case directory when --case-path is omitted",
                      positionalCasePath);
     cmd.Parse(argc, argv);
 
-    // 开始计时
-    auto start = std::chrono::high_resolution_clock::now();
+    options.configPath = casePathArg.empty() ? positionalCasePath : casePathArg;
+    if (options.configPath.empty())
+    {
+        std::cerr << "missing required case path (--case-path or casePath)" << std::endl;
+        std::exit(1);
+    }
+
+    return options;
+}
+
+void EnableExampleLogging()
+{
     Time::SetResolution(Time::PS);
 
-    // 日志中添加时间前缀
     ns3::LogComponentEnableAll(LOG_PREFIX_TIME);
 
-    // 示例：设置指定组件日志级别，设置指定组件打印时间前缀
-    // LogComponentEnable("UbApp", LOG_LEVEL_INFO);
-    // LogComponentEnable("UbApp", LOG_PREFIX_TIME);
-
-    // 激活日志
     LogComponentEnable("UbSwitchAllocator", LOG_LEVEL_WARN);
     LogComponentEnable("UbQueueManager", LOG_LEVEL_WARN);
     LogComponentEnable("UbCaqm", LOG_LEVEL_WARN);
@@ -293,37 +341,28 @@ int main(int argc, char* argv[])
     LogComponentEnable("UbFault", LOG_LEVEL_WARN);
     LogComponentEnable("UbTransaction", LOG_LEVEL_WARN);
     LogComponentEnable("TpConnectionManager", LOG_LEVEL_WARN);
+}
 
-    // 配置文件路径
-    string configPath = casePathArg.empty() ? positionalCasePath : casePathArg;
-    if (configPath.empty())
-    {
-        std::cerr << "missing required case path (--case-path or casePath)" << std::endl;
-        return 1;
-    }
+RuntimeSelection PrepareRuntime(int* argc, char*** argv, const QuickExampleOptions& options)
+{
+    RuntimeSelection runtime;
+    runtime.enableMpi = DetectMpiWorld();
+    runtime.mtpEnabled = PrepareSimulatorMode(runtime.enableMpi, options.mtpThreads);
 
-    // 读取配置文件并执行用例
-    string runCase = "Run case: " + configPath;
-    UbUtils::Get()->PrintTimestamp(runCase);
-    RngSeedManager::SetSeed(10);
-    const bool enableMpi = DetectMpiWorld();
-    const bool mtpEnabled = PrepareSimulatorMode(enableMpi, mtpThreads);
-
-    uint32_t mpiRank = 0;
 #ifdef NS3_MPI
-    if (enableMpi)
+    if (runtime.enableMpi)
     {
-        MpiInterface::Enable(&argc, &argv);
-        mpiRank = MpiInterface::GetSystemId();
+        MpiInterface::Enable(argc, argv);
+        runtime.mpiRank = MpiInterface::GetSystemId();
     }
 #endif
 
-    if (mtpThreads > 1)
+    if (options.mtpThreads > 1)
     {
-        if (mtpEnabled)
+        if (runtime.mtpEnabled)
         {
-            std::cout << "[INFO] MTP enabled with " << mtpThreads << " threads."
-                      << (enableMpi ? " (hybrid MPI mode)." : " (local mode).")
+            std::cout << "[INFO] MTP enabled with " << options.mtpThreads << " threads."
+                      << (runtime.enableMpi ? " (hybrid MPI mode)." : " (local mode).")
                       << std::endl;
         }
         else
@@ -333,41 +372,93 @@ int main(int argc, char* argv[])
         }
     }
 
-    auto sim_wall_start = std::chrono::high_resolution_clock::now();
-    ConfigureCase(configPath);
-    ActivateTasks(configPath, enableMpi, mpiRank);
-    if (stopMs > 0)
+    return runtime;
+}
+
+PhaseTiming RunScenario(const QuickExampleOptions& options,
+                        const RuntimeSelection& runtime,
+                        const std::chrono::high_resolution_clock::time_point& programStart)
+{
+    PhaseTiming timing;
+    timing.programStart = programStart;
+
+    EnableExampleLogging();
+
+    UbUtils::Get()->PrintTimestamp("Run case: " + options.configPath);
+    RngSeedManager::SetSeed(10);
+
+    timing.simulationStart = std::chrono::high_resolution_clock::now();
+    BuildScenarioFromConfig(options.configPath);
+    ActivateTrafficFromConfig(options.configPath, runtime.enableMpi, runtime.mpiRank);
+    if (options.stopMs > 0)
     {
-        Simulator::Stop(MilliSeconds(stopMs));
+        Simulator::Stop(MilliSeconds(options.stopMs));
     }
     Simulator::Run();
+    timing.simulationEnd = std::chrono::high_resolution_clock::now();
+
     UbUtils::Get()->Destroy();
     Simulator::Destroy();
 #ifdef NS3_MPI
-    if (enableMpi && MpiInterface::IsEnabled())
+    if (runtime.enableMpi && MpiInterface::IsEnabled())
     {
         MpiInterface::Disable();
     }
 #endif
-    auto sim_wall_end = std::chrono::high_resolution_clock::now();
-    UbUtils::Get()->PrintTimestamp("Simulator finished!");
-    auto trace_wall_start = std::chrono::high_resolution_clock::now();
-    UbUtils::Get()->ParseTrace(test);
 
-    auto end = std::chrono::high_resolution_clock::now();
+    UbUtils::Get()->PrintTimestamp("Simulator finished!");
+    timing.traceStart = std::chrono::high_resolution_clock::now();
+    UbUtils::Get()->ParseTrace(options.test);
+    timing.programEnd = std::chrono::high_resolution_clock::now();
+    return timing;
+}
+
+void ReportResult(const QuickExampleOptions& options,
+                  const RuntimeSelection& runtime,
+                  const PhaseTiming& timing)
+{
     UbUtils::Get()->PrintTimestamp("Program finished.");
-    // 阶段性挂钟时间统计（单位：秒）
-    double config_wall_s = std::chrono::duration_cast<std::chrono::microseconds>(sim_wall_start - start).count() / 1e6;
-    double run_wall_s    = std::chrono::duration_cast<std::chrono::microseconds>(sim_wall_end - sim_wall_start).count() / 1e6;
-    double trace_wall_s  = std::chrono::duration_cast<std::chrono::microseconds>(end - trace_wall_start).count() / 1e6;
-    double total_wall_s  = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e6;
+    double config_wall_s =
+        std::chrono::duration_cast<std::chrono::microseconds>(timing.simulationStart -
+                                                              timing.programStart)
+            .count() /
+        1e6;
+    double run_wall_s =
+        std::chrono::duration_cast<std::chrono::microseconds>(timing.simulationEnd -
+                                                              timing.simulationStart)
+            .count() /
+        1e6;
+    double trace_wall_s =
+        std::chrono::duration_cast<std::chrono::microseconds>(timing.programEnd - timing.traceStart)
+            .count() /
+        1e6;
+    double total_wall_s =
+        std::chrono::duration_cast<std::chrono::microseconds>(timing.programEnd - timing.programStart)
+            .count() /
+        1e6;
     UbUtils::Get()->PrintTimestamp("Wall-clock (config phase): " + std::to_string(config_wall_s) + " s");
     UbUtils::Get()->PrintTimestamp("Wall-clock (run phase): " + std::to_string(run_wall_s) + " s");
     UbUtils::Get()->PrintTimestamp("Wall-clock (trace phase): " + std::to_string(trace_wall_s) + " s");
     UbUtils::Get()->PrintTimestamp("Wall-clock (total): " + std::to_string(total_wall_s) + " s");
-    if (test)
+    if (options.test)
     {
-        PrintTestResult(UbTrafficGen::Get()->IsCompleted(), enableMpi, mpiRank);
+        PrintTestResult(UbTrafficGen::Get()->IsCompleted(), runtime.enableMpi, runtime.mpiRank);
     }
+}
+
+} // namespace
+
+int main(int argc, char* argv[])
+{
+    if (HandleAttributeQuery(argc, argv))
+    {
+        return 0;
+    }
+
+    QuickExampleOptions options = ParseOptions(argc, argv);
+    const auto programStart = std::chrono::high_resolution_clock::now();
+    RuntimeSelection runtime = PrepareRuntime(&argc, &argv, options);
+    PhaseTiming timing = RunScenario(options, runtime, programStart);
+    ReportResult(options, runtime, timing);
     return 0;
 }
