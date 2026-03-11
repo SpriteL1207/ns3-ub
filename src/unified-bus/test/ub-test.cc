@@ -485,6 +485,20 @@ UbTestSuite::UbTestSuite()
 // Register the test suite
 static UbTestSuite g_ubTestSuite;
 
+namespace
+{
+
+std::filesystem::path
+LocateRepoRoot();
+
+std::pair<int, std::string>
+RunQuickExampleCommand(const std::string& testFile,
+                       const std::string& casePathRelative,
+                       const std::string& extraArgs,
+                       const std::string& commandPrefix);
+
+} // namespace
+
 class UbQuickExampleLocalMtpSystemTest : public TestCase
 {
   public:
@@ -497,26 +511,11 @@ class UbQuickExampleLocalMtpSystemTest : public TestCase
     {
 #ifdef NS3_MTP
         SetDataDir(NS_TEST_SOURCEDIR);
-        const std::string testFile = CreateTempDirFilename("ub-quick-example-local-mtp.log");
-        std::filesystem::path repoRoot = NS_TEST_SOURCEDIR;
-        const std::filesystem::path binaryRelativePath =
-            "build/src/unified-bus/examples/ns3.44-ub-quick-example-default";
-        for (uint32_t i = 0; i < 4 && !std::filesystem::exists(repoRoot / binaryRelativePath); ++i)
-        {
-            repoRoot = repoRoot.parent_path();
-        }
-
-        const std::filesystem::path binaryPath = repoRoot / binaryRelativePath;
-        const std::filesystem::path casePath = repoRoot / "scratch/ub-local-hybrid-minimal";
-        const std::string command = binaryPath.string() + " --case-path=" + casePath.string() +
-                                    " --mtp-threads=2 > " + testFile + " 2>&1";
-
-        const int status = std::system(command.c_str());
-
-        std::ifstream input(testFile);
-        std::stringstream buffer;
-        buffer << input.rdbuf();
-        const std::string output = buffer.str();
+        auto [status, output] =
+            RunQuickExampleCommand(CreateTempDirFilename("ub-quick-example-local-mtp.log"),
+                                   "scratch/ub-local-hybrid-minimal",
+                                   "--mtp-threads=2",
+                                   "");
 
         NS_TEST_ASSERT_MSG_EQ(status,
                               0,
@@ -529,6 +528,93 @@ class UbQuickExampleLocalMtpSystemTest : public TestCase
     }
 };
 
+namespace
+{
+
+std::filesystem::path
+LocateRepoRoot()
+{
+    std::filesystem::path repoRoot = NS_TEST_SOURCEDIR;
+    const std::filesystem::path binaryRelativePath =
+        "build/src/unified-bus/examples/ns3.44-ub-quick-example-default";
+    for (uint32_t i = 0; i < 4 && !std::filesystem::exists(repoRoot / binaryRelativePath); ++i)
+    {
+        repoRoot = repoRoot.parent_path();
+    }
+    return repoRoot;
+}
+
+std::pair<int, std::string>
+RunQuickExampleCommand(const std::string& testFile,
+                       const std::string& casePathRelative,
+                       const std::string& extraArgs,
+                       const std::string& commandPrefix)
+{
+    const std::filesystem::path repoRoot = LocateRepoRoot();
+    const std::filesystem::path binaryPath =
+        repoRoot / "build/src/unified-bus/examples/ns3.44-ub-quick-example-default";
+    const std::filesystem::path casePath = repoRoot / casePathRelative;
+
+    std::string command;
+    if (!commandPrefix.empty())
+    {
+        command += commandPrefix + " ";
+    }
+    command += "\"" + binaryPath.string() + "\" --case-path=\"" + casePath.string() + "\"";
+    if (!extraArgs.empty())
+    {
+        command += " " + extraArgs;
+    }
+    command += " > \"" + testFile + "\" 2>&1";
+
+    const int status = std::system(command.c_str());
+
+    std::ifstream input(testFile);
+    std::stringstream buffer;
+    buffer << input.rdbuf();
+    return {status, buffer.str()};
+}
+
+} // namespace
+
+class UbQuickExampleMpiSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleMpiSystemTest(const std::string& name,
+                                const std::string& casePathRelative,
+                                const std::string& extraArgs)
+        : TestCase(name),
+          m_casePathRelative(casePathRelative),
+          m_extraArgs(extraArgs)
+    {
+    }
+
+    void DoRun() override
+    {
+#ifdef NS3_MPI
+        SetDataDir(NS_TEST_SOURCEDIR);
+        auto [status, output] =
+            RunQuickExampleCommand(CreateTempDirFilename(GetName() + ".log"),
+                                   m_casePathRelative,
+                                   m_extraArgs,
+                                   "mpirun -np 2");
+
+        NS_TEST_ASSERT_MSG_EQ(status, 0, "ub-quick-example MPI invocation should exit successfully");
+        NS_TEST_ASSERT_MSG_NE(output.find("Simulator finished!"),
+                              std::string::npos,
+                              "MPI quick-example output should contain simulator completion");
+        NS_TEST_ASSERT_MSG_EQ(output.find("TEST ERROR"), std::string::npos,
+                              "MPI quick-example should not emit smoke-specific error text");
+#else
+        NS_TEST_SKIP_MSG("Requires MPI support");
+#endif
+    }
+
+  private:
+    std::string m_casePathRelative;
+    std::string m_extraArgs;
+};
+
 class UbQuickExampleSystemTestSuite : public TestSuite
 {
   public:
@@ -536,6 +622,22 @@ class UbQuickExampleSystemTestSuite : public TestSuite
         : TestSuite("unified-bus-examples", Type::SYSTEM)
     {
         AddTestCase(new UbQuickExampleLocalMtpSystemTest(), TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example MPI minimal case runs",
+                                                    "scratch/ub-mpi-hybrid-minimal",
+                                                    ""),
+                    TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example hybrid minimal case runs",
+                                                    "scratch/ub-mpi-hybrid-minimal",
+                                                    "--mtp-threads=2"),
+                    TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example hybrid ldst case runs",
+                                                    "scratch/ub-mpi-hybrid-ldst-minimal",
+                                                    "--mtp-threads=2"),
+                    TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example hybrid multi-remote case runs",
+                                                    "scratch/ub-mpi-hybrid-multi-remote",
+                                                    "--mtp-threads=2"),
+                    TestCase::Duration::QUICK);
     }
 };
 
