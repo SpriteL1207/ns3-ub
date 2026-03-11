@@ -116,11 +116,11 @@ class MpiTestSuite : public TestSuite
 
 }; // class MpiTestSuite
 
-class MpiHybridSmokeInterceptorRemovedTestCase : public TestCase
+class MpiRemoteTpRegressionInterceptorRemovedTestCase : public TestCase
 {
   public:
-    MpiHybridSmokeInterceptorRemovedTestCase()
-        : TestCase("mpi-example-ub-hybrid-smoke-2-interceptor-removed")
+    MpiRemoteTpRegressionInterceptorRemovedTestCase()
+        : TestCase("mpi-example-ub-mtp-remote-tp-regression-interceptor-removed-np2")
     {
     }
 
@@ -129,7 +129,7 @@ class MpiHybridSmokeInterceptorRemovedTestCase : public TestCase
         SetDataDir(NS_TEST_SOURCEDIR);
         const std::string testFile = CreateTempDirFilename(GetName() + ".log");
         const std::string command =
-            "python3 ./ns3 run ub-hybrid-smoke --no-build "
+            "python3 ./ns3 run src/unified-bus/examples/ub-mtp-remote-tp-regression --no-build "
             "--command-template=\"mpiexec -n 2 %s --test --mode=interceptor\" > " +
             testFile + " 2>&1";
 
@@ -149,13 +149,15 @@ class MpiHybridSmokeInterceptorRemovedTestCase : public TestCase
     }
 };
 
-class MpiHybridSmokeInterceptorRemovedTestSuite : public TestSuite
+class MpiRemoteTpRegressionInterceptorRemovedTestSuite : public TestSuite
 {
   public:
-    MpiHybridSmokeInterceptorRemovedTestSuite()
-        : TestSuite("mpi-example-ub-hybrid-smoke-2-interceptor-removed", Type::SYSTEM)
+    MpiRemoteTpRegressionInterceptorRemovedTestSuite()
+        : TestSuite("mpi-example-ub-mtp-remote-tp-regression-interceptor-removed-np2",
+                    Type::SYSTEM)
     {
-        AddTestCase(new MpiHybridSmokeInterceptorRemovedTestCase(), TestCase::Duration::QUICK);
+        AddTestCase(new MpiRemoteTpRegressionInterceptorRemovedTestCase(),
+                    TestCase::Duration::QUICK);
     }
 };
 
@@ -210,11 +212,12 @@ static MpiTestSuite g_mpiUbConfigHybridMultiRemote2("mpi-example-ub-mpi-config-h
                                                     NS_TEST_SOURCEDIR,
                                                     2,
                                                     "--case-path=scratch/ub-mpi-hybrid-multi-remote --mtp-threads=2 --stop-ms=50");
-static MpiTestSuite g_mpiUbHybridSmoke2("mpi-example-ub-hybrid-smoke-2",
-                                        "ub-hybrid-smoke",
-                                        NS_TEST_SOURCEDIR,
-                                        2);
-static MpiHybridSmokeInterceptorRemovedTestSuite g_mpiUbHybridSmoke2InterceptorRemoved;
+static MpiTestSuite g_mpiUbRemoteTpRegressionNp2(
+    "mpi-example-ub-mtp-remote-tp-regression-np2",
+    "src/unified-bus/examples/ub-mtp-remote-tp-regression",
+    NS_TEST_SOURCEDIR,
+    2);
+static MpiRemoteTpRegressionInterceptorRemovedTestSuite g_mpiUbRemoteTpRegressionInterceptorRemoved;
 #endif
 
 /* Tests using NullMessageSimulatorImpl */

@@ -20,8 +20,8 @@ build_lib_example(
 
 if(${ENABLE_MPI} AND ${ENABLE_MTP})
   build_lib_example(
-    NAME ub-hybrid-smoke
-    SOURCE_FILES ub-hybrid-smoke.cc
+    NAME ub-mtp-remote-tp-regression
+    SOURCE_FILES ub-mtp-remote-tp-regression.cc
     LIBRARIES_TO_LINK
       ${libmpi}
       ${libmtp}

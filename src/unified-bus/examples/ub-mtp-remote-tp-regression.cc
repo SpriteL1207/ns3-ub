@@ -340,7 +340,7 @@ main(int argc, char* argv[])
 
     if (systemCount != 2)
     {
-        std::cerr << "ub-hybrid-smoke requires exactly 2 MPI ranks" << std::endl;
+        std::cerr << "ub-mtp-remote-tp-regression requires exactly 2 MPI ranks" << std::endl;
         return 1;
     }
     if (mode != "tp")
