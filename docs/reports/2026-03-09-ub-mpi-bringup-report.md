@@ -2,11 +2,12 @@
 
 ## 结论
 
+- [事实] 本报告记录的是 **截至 2026-03-09** 的阶段性状态；后续统一入口与 hybrid 进展以 `UNISON_README.md` 和 `docs/reports/2026-03-11-ub-quick-example-mpi-unification-report.md` 为准。
 - [事实] 当前分支已经打通一条 **MPI-only、2 rank、静态预配置 TP** 的 unified-bus 多进程冒烟链路。
 - [事实] 已验证通过：
   - `unified-bus` unit suite
   - 2-rank config smoke
-- [事实] 当前能力边界仍然是：
+- [事实] 截至当时，能力边界仍然是：
   - **已支持**：跨 rank remote link + 预配置 TP 的收发路径
   - **未完成**：跨 MPI rank 的 **按需/动态 TP 创建**
   - **未完成**：`MTP + MPI` hybrid packed-systemId 专用 smoke
@@ -47,16 +48,17 @@ build/utils/ns3.44-test-runner-default --suite=unified-bus --verbose
 - [事实] 输出：
   - `TEST : 00000 : PASSED`
 
-## 当前实现边界
+## 当前实现边界（截至 2026-03-09）
 
 - [事实] 当时的 dedicated config smoke 入口仍明确限制在 MPI-only 路线；若 `--mtp-threads > 1` 会直接失败返回。
 - [事实] 这不是 bug，而是当前实现尚未覆盖 hybrid packed-systemId case。
+- [事实] 这一限制后续已由 `ub-quick-example` 统一入口收敛替代；本节保留仅用于说明当时边界。
 - [建议] 后续若要继续推进“原生支持多进程”，下一阶段应优先补：
   1. 跨 rank 动态 TP 创建控制通路
   2. control frame / CBFC 相关跨 rank 场景
   3. hybrid (`MTP + MPI`) 专用 case 与 smoke
 
-## 建议的下一阶段
+## 建议的下一阶段（2026-03-09 时点）
 
 1. 做一个 **TP create control path**：
    - 源端只发轻量控制消息

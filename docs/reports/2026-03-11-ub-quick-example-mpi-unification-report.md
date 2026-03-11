@@ -36,11 +36,11 @@
   - 四条 config-driven unified-bus MPI suites
   - `build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mtp-remote-tp-regression-np2 --verbose`
   - `build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mtp-remote-tp-regression-interceptor-removed-np2 --verbose`
-  - `mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-mtp-remote-tp-regression-default --test --mtp-threads=2`
+  - regression-only binary spot check: `mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-mtp-remote-tp-regression-default --test`
 
 ## 仍然保留的边界
 
-- `ub-mtp-remote-tp-regression` 仍保留，作为已有单独 regression binary；它不是 unified-bus 用户入口。
+- `ub-mtp-remote-tp-regression` 仍保留，作为 regression-only binary；它不是 unified-bus 用户入口。
 - 本轮没有继续保留 smoke 中的 CBFC / TP ownership 专用黑盒 oracle。
   - 原因：这些检查要么已经下沉为白盒 ownership/helper 覆盖，要么属于更高层协议语义，不应继续绑在旧 smoke 壳上。
 - 本轮没有为 task activation ownership 单独引入新公共 API；当前依赖现有 ownership helper 白盒测试与 quick-example 黑盒回归共同覆盖。

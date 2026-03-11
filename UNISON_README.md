@@ -85,14 +85,14 @@ We also provide several detailed examples for Unison, traditional MPI parallel s
 | fat-tree-mtp | src/mtp/examples/fat-tree-mtp.cc | `--enable-mtp --enable-exaples` without `--enable-mpi` | `./ns3 run "fat-tree-mtp --thread=4"` |
 | fat-tree-mpi | src/mpi/examples/fat-tree-mpi.cc | `--enable-mpi --enable-exaples` without `--enable-mtp` | `./ns3 run fat-tree-mpi --command-template "mpirun -np 4 %s"` |
 | fat-tree-hybrid | src/mpi/examples/fat-tree-hybrid.cc | `--enable-mtp --enable-mpi --enable-exaples` | `./ns3 run fat-tree-hybrid --command-template "mpirun -np 2 %s --thread=2"` |
-| ub-quick-example | src/unified-bus/examples/ub-quick-example.cc | local: `--enable-examples`; hybrid: `--enable-mtp --enable-mpi --enable-examples` | local: `build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=scratch/ub-local-hybrid-minimal`; hybrid: `mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2` |
-| ub-mtp-remote-tp-regression | src/unified-bus/examples/ub-mtp-remote-tp-regression.cc | `--enable-mtp --enable-mpi --enable-examples` | `mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-mtp-remote-tp-regression-default --test --mtp-threads=2` |
+| ub-quick-example | src/unified-bus/examples/ub-quick-example.cc | local: `--enable-examples`; MPI: `--enable-mpi --enable-examples`; MPI+MTP: `--enable-mtp --enable-mpi --enable-examples` | local: `build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=scratch/ub-local-hybrid-minimal`; MPI: `mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=scratch/ub-mpi-minimal`; MPI+MTP: `mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2` |
+| ub-mtp-remote-tp-regression | src/unified-bus/examples/ub-mtp-remote-tp-regression.cc | `--enable-mtp --enable-mpi --enable-examples` | regression-only binary; exercised by `build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mtp-remote-tp-regression-np2 --verbose` |
 
 Feel free to explore these examples, compare code changes and adjust the `-np` and `--thread` arguments.
 
 ### Unified-bus config MPI notes
 
-Use `src/unified-bus/examples/ub-quick-example.cc` as the unified user-facing entry for config-driven unified-bus runs. The legacy dedicated smoke entry is no longer a user entry; MPI regression suites now invoke `ub-quick-example` directly.
+Use `src/unified-bus/examples/ub-quick-example.cc` as the unified user-facing entry for config-driven unified-bus runs. The legacy dedicated smoke entry is no longer a user entry; MPI regression suites now invoke `ub-quick-example` directly. `ub-mtp-remote-tp-regression` remains regression-only and is not a user-facing entry.
 
 For config-driven unified-bus MPI runs, keep the following rules explicit:
 
