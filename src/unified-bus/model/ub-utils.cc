@@ -12,6 +12,20 @@ using namespace ns3;
 namespace
 {
 
+bool
+IsNodeOwnedByCurrentRank(Ptr<Node> node)
+{
+#ifdef NS3_MPI
+    if (!MpiInterface::IsEnabled() || MpiInterface::GetSize() <= 1)
+    {
+        return true;
+    }
+    return utils::UbUtils::IsSystemOwnedByRank(node->GetSystemId(), MpiInterface::GetSystemId());
+#else
+    return true;
+#endif
+}
+
 void
 PreloadLocalTpIfOwned(Ptr<Node> node,
                       uint32_t src,
@@ -22,7 +36,7 @@ PreloadLocalTpIfOwned(Ptr<Node> node,
                       uint32_t srcTpn,
                       uint32_t dstTpn)
 {
-    if (!utils::UbUtils::IsNodeOwnedByCurrentRank(node))
+    if (!IsNodeOwnedByCurrentRank(node))
     {
         return;
     }
@@ -86,20 +100,6 @@ bool
 UbUtils::IsSystemOwnedByRank(uint32_t systemId, uint32_t currentRank)
 {
     return ExtractMpiRank(systemId) == currentRank;
-}
-
-bool
-UbUtils::IsNodeOwnedByCurrentRank(Ptr<Node> node)
-{
-#ifdef NS3_MPI
-    if (!MpiInterface::IsEnabled() || MpiInterface::GetSize() <= 1)
-    {
-        return true;
-    }
-    return IsSystemOwnedByRank(node->GetSystemId(), MpiInterface::GetSystemId());
-#else
-    return true;
-#endif
 }
 
 void UbUtils::PrintTimestamp(const std::string &message)

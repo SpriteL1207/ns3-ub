@@ -63,8 +63,6 @@ public:
 
     static bool IsSystemOwnedByRank(uint32_t systemId, uint32_t currentRank);
 
-    static bool IsNodeOwnedByCurrentRank(ns3::Ptr<ns3::Node> node);
-
     // 创建node
     void CreateNode(const std::string &filename);
 
