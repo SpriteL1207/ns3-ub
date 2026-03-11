@@ -39,7 +39,7 @@ namespace utils {
  */
 class UbUtils : public ns3::Singleton<UbUtils> {
 public:
-    // 保存node
+    // Runtime trace state shared by current process.
     inline static std::string trace_path;
 
     inline static std::map<std::string, std::ofstream *> files;  // 存储文件名和对应的文件句柄
@@ -47,6 +47,7 @@ public:
     ns3::GlobalValue g_fault_enable =
     ns3::GlobalValue("UB_FAULT_ENABLE", "fault moudle enabled", ns3::BooleanValue(false), ns3::MakeBooleanChecker());
 
+    // Runtime / trace lifecycle helpers used by examples and tests.
     void PrintTimestamp(const std::string &message);
 
     void ParseTrace(bool isTest = false);
@@ -57,31 +58,29 @@ public:
 
     static std::string PrepareTraceDir(const std::string &configPath);
 
+    // MPI locality helpers used by config-driven builder/tests.
     static uint32_t ExtractMpiRank(uint32_t systemId);
 
     static bool IsSameMpiRank(uint32_t lhsSystemId, uint32_t rhsSystemId);
 
     static bool IsSystemOwnedByRank(uint32_t systemId, uint32_t currentRank);
 
-    // 创建node
+    // Config-driven builder surface used by ub-quick-example and white-box tests.
     void CreateNode(const std::string &filename);
 
     std::vector<TrafficRecord> ReadTrafficCSV(const std::string &filename);
 
-    // 读取拓扑文件
     void CreateTopo(const std::string &filename);
 
-    // 读取路由
     void AddRoutingTable(const std::string &filename);
 
     void CreateTp(const std::string &filename);
 
-    // 从TXT文件加载配置
     void SetComponentsAttribute(const std::string &filename);
 
+    // Runtime trace wiring / attribute query / fault helpers.
     void TopoTraceConnect();
 
-    // 为单个TP和Trace回调函数链接
     void SingleTpTraceConnect(uint32_t nodeId, uint32_t tpn);
 
     void ClientTraceConnect(int srcNode);

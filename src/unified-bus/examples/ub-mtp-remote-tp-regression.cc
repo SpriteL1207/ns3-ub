@@ -18,8 +18,6 @@
 #include "ns3/ub-utils.h"
 
 using namespace ns3;
-using namespace utils;
-
 namespace {
 constexpr uint32_t kJettyNum = 0;
 constexpr uint32_t kTaskId = 1;
@@ -369,6 +367,7 @@ main(int argc, char* argv[])
     Time::SetResolution(Time::NS);
     (void)UbFlowTag::GetTypeId();
     (void)UbPacketTraceTag::GetTypeId();
+    // `UB_RECORD_PKT_TRACE` is registered during UbUtils singleton construction.
     (void)utils::UbUtils::Get();
     GlobalValue::Bind("UB_RECORD_PKT_TRACE", BooleanValue(true));
     if (flowControlMode == FlowControlMode::CBFC)
