@@ -87,6 +87,8 @@ public:
 
     bool QueryAttributeInfo(int argc, char *argv[]);
 
+    bool IsFaultEnabled() const;
+
     void InitFaultMoudle(const std::string &FaultConfigFile);
 
 private:

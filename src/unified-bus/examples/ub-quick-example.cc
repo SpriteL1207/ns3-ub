@@ -234,9 +234,7 @@ uint32_t ActivateTrafficFromConfig(const std::string& configPath,
                                    uint32_t mpiRank)
 {
     auto trafficData = UbUtils::Get()->ReadTrafficCSV(configPath + "/traffic.csv");
-    BooleanValue faultEnabled;
-    UbUtils::Get()->g_fault_enable.GetValue(faultEnabled);
-    if (faultEnabled.Get())
+    if (UbUtils::Get()->IsFaultEnabled())
     {
         UbUtils::Get()->InitFaultMoudle(configPath + "/fault.csv");
     }

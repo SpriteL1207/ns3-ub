@@ -102,6 +102,14 @@ UbUtils::IsSystemOwnedByRank(uint32_t systemId, uint32_t currentRank)
     return ExtractMpiRank(systemId) == currentRank;
 }
 
+bool
+UbUtils::IsFaultEnabled() const
+{
+    BooleanValue faultEnabled;
+    g_fault_enable.GetValue(faultEnabled);
+    return faultEnabled.Get();
+}
+
 void UbUtils::PrintTimestamp(const std::string &message)
 {
     // 获取当前系统时间点
