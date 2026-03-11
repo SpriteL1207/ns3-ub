@@ -14,10 +14,7 @@ endif()
 
 build_lib_example(
   NAME ub-quick-example
-  SOURCE_FILES
-    ub-quick-example.cc
-    ub-config-runner.cc
-  HEADER_FILES ub-config-runner.h
+  SOURCE_FILES ub-quick-example.cc
   LIBRARIES_TO_LINK ${ub_quick_example_libraries}
 )
 

@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "ub-config-runner.h"
 
+// Transitional MPI regression shell only.
+// This binary is kept for test coverage while MPI/MTP black-box entrypoints
+// migrate to ub-quick-example; do not add new user-facing runtime features here.
+
 #include "ns3/command-line.h"
 #include "ns3/core-module.h"
 #include "ns3/mpi-interface.h"
