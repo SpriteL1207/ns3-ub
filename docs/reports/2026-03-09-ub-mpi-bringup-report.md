@@ -5,7 +5,7 @@
 - [事实] 当前分支已经打通一条 **MPI-only、2 rank、静态预配置 TP** 的 unified-bus 多进程冒烟链路。
 - [事实] 已验证通过：
   - `unified-bus` unit suite
-  - `ub-mpi-config-smoke` 2-rank smoke
+  - 2-rank config smoke
 - [事实] 当前能力边界仍然是：
   - **已支持**：跨 rank remote link + 预配置 TP 的收发路径
   - **未完成**：跨 MPI rank 的 **按需/动态 TP 创建**
@@ -43,15 +43,13 @@ build/utils/ns3.44-test-runner-default --suite=unified-bus --verbose
 - [事实] PASS
 
 ### MPI smoke
-```bash
-mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-mpi-config-smoke-default --test --stop-ms=200 --case-path=scratch/ub-mpi-minimal
-```
+- [事实] 当时通过 dedicated config smoke 入口执行 2-rank MPI smoke。
 - [事实] 输出：
   - `TEST : 00000 : PASSED`
 
 ## 当前实现边界
 
-- [事实] `ub-mpi-config-smoke` 仍明确限制在 MPI-only 路线；若 `--mtp-threads > 1` 会直接失败返回。
+- [事实] 当时的 dedicated config smoke 入口仍明确限制在 MPI-only 路线；若 `--mtp-threads > 1` 会直接失败返回。
 - [事实] 这不是 bug，而是当前实现尚未覆盖 hybrid packed-systemId case。
 - [建议] 后续若要继续推进“原生支持多进程”，下一阶段应优先补：
   1. 跨 rank 动态 TP 创建控制通路

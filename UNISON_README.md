@@ -92,7 +92,7 @@ Feel free to explore these examples, compare code changes and adjust the `-np` a
 
 ### Unified-bus config MPI notes
 
-Use `src/unified-bus/examples/ub-quick-example.cc` as the unified user-facing entry for config-driven unified-bus runs. The old `ub-mpi-config-smoke` path is no longer a user entry; MPI regression suites now invoke `ub-quick-example` directly.
+Use `src/unified-bus/examples/ub-quick-example.cc` as the unified user-facing entry for config-driven unified-bus runs. The legacy dedicated smoke entry is no longer a user entry; MPI regression suites now invoke `ub-quick-example` directly.
 
 For config-driven unified-bus MPI runs, keep the following rules explicit:
 

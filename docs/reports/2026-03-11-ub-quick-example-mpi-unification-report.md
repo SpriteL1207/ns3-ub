@@ -1,7 +1,7 @@
 ## 结论
 
 - `ub-quick-example` 现在承接 unified-bus 配置驱动场景的统一入口。
-- `ub-mpi-config-smoke` / `ub-config-runner` 已从源码与构建接线删除。
+- 旧 smoke/config-runner 路径已从源码与构建接线删除。
 - `mpi-test-suite` 里的 unified-bus MPI 回归已切到 `ub-quick-example --test`。
 - 白盒覆盖仍放在 `src/unified-bus/test/ub-test.cc`，黑盒 MPI 回归入口保留在 `src/mpi/test/mpi-test-suite.cc`。
 
@@ -16,12 +16,10 @@
   - 保留原 suite 名，复用既有 `*.reflog`，减少回归入口变动。
   - 删除旧 smoke 专属的 TP ownership / CBFC suites。
 - `src/unified-bus/examples/CMakeLists.txt`
-  - 删除 `ub-mpi-config-smoke` 目标及其构建接线。
+  - 删除旧 dedicated smoke 目标及其构建接线。
   - 将保留的 TP-only MPI regression binary 重命名为 `ub-mtp-remote-tp-regression`。
 - 删除文件
-  - `src/unified-bus/examples/ub-mpi-config-smoke.cc`
-  - `src/unified-bus/examples/ub-config-runner.h`
-  - `src/unified-bus/examples/ub-config-runner.cc`
+  - 旧 dedicated smoke/config runner 源文件
 - 删除旧 reflog
   - `src/mpi/test/mpi-example-ub-mpi-config-tp-ownership-2.reflog`
   - `src/mpi/test/mpi-example-ub-mpi-config-hybrid-cbfc-2.reflog`
@@ -35,10 +33,7 @@
   - `build/utils/ns3.44-test-runner-default --suite=unified-bus --verbose`
   - `build/utils/ns3.44-test-runner-default --suite=unified-bus-examples --verbose`
 - MPI black-box
-  - `build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-smoke-2 --verbose`
-  - `build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-smoke-2 --verbose`
-  - `build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-ldst-2 --verbose`
-  - `build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mpi-config-hybrid-multi-remote-2 --verbose`
+  - 四条 config-driven unified-bus MPI suites
   - `build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mtp-remote-tp-regression-np2 --verbose`
   - `build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mtp-remote-tp-regression-interceptor-removed-np2 --verbose`
   - `mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-mtp-remote-tp-regression-default --test --mtp-threads=2`
