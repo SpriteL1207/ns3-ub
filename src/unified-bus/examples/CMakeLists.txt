@@ -8,11 +8,19 @@ if(${ENABLE_MTP})
   list(APPEND ub_quick_example_libraries ${libmtp})
 endif()
 
+if(${ENABLE_MPI})
+  list(APPEND ub_quick_example_libraries ${libmpi})
+endif()
+
 build_lib_example(
   NAME ub-quick-example
-  SOURCE_FILES ub-quick-example.cc
+  SOURCE_FILES
+    ub-quick-example.cc
+    ub-config-runner.cc
+  HEADER_FILES ub-config-runner.h
   LIBRARIES_TO_LINK ${ub_quick_example_libraries}
 )
+
 set(ub_mpi_config_smoke_libraries
     ${libcore}
     ${libconfig-store}
@@ -26,7 +34,10 @@ endif()
 
 build_lib_example(
   NAME ub-mpi-config-smoke
-  SOURCE_FILES ub-mpi-config-smoke.cc
+  SOURCE_FILES
+    ub-mpi-config-smoke.cc
+    ub-config-runner.cc
+  HEADER_FILES ub-config-runner.h
   LIBRARIES_TO_LINK ${ub_mpi_config_smoke_libraries}
 )
 

@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include "ub-config-runner.h"
+
 #include "ns3/ub-utils.h"
 #include "ns3/command-line.h"
 #include <chrono>
-#include <iostream>
-#include <iomanip>
-#include <sstream>
 #include <ctime>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
 #include <string>
 
-#ifdef NS3_MTP
-#include "ns3/mtp-interface.h"
-#endif
+using namespace ns3;
 
 using namespace utils;
 
@@ -83,49 +83,6 @@ void CheckExampleProcess()
 }
 
 // 根据配置文件路径执行用例
-void ConfigCase(const string& configPath)
-{
-    RngSeedManager::SetSeed(10);
-    string LoadConfigFilePath = configPath + "/network_attribute.txt";
-    UbUtils::Get()->SetComponentsAttribute(LoadConfigFilePath);
-    UbUtils::Get()->CreateTraceDir();
-    string NodeConfigFile = configPath + "/node.csv";
-    UbUtils::Get()->CreateNode(NodeConfigFile);
-    string TopoConfigFile = configPath + "/topology.csv";
-    UbUtils::Get()->CreateTopo(TopoConfigFile);
-    string RouterConfigFile = configPath + "/routing_table.csv";
-    UbUtils::Get()->AddRoutingTable(RouterConfigFile);
-    string TpConfigFile = configPath + "/transport_channel.csv";
-    UbUtils::Get()->CreateTp(TpConfigFile);
-    UbUtils::Get()->TopoTraceConnect();
-}
-
-void InitiateTasks(const string& configPath)
-{
-    string TrafficConfigFile = configPath + "/traffic.csv";
-    auto trafficData = UbUtils::Get()->ReadTrafficCSV(TrafficConfigFile);
-    BooleanValue gFaultEnable;
-    UbUtils::Get()->g_fault_enable.GetValue(gFaultEnable);
-    if (gFaultEnable.Get()) {
-        string FaultConfigFile = configPath + "/fault.csv";
-        UbUtils::Get()->InitFaultMoudle(FaultConfigFile);
-    }
-    // 遍历Traffic数据，并启动client
-    UbUtils::Get()->PrintTimestamp ("Start Client.");
-    for (auto& record : trafficData) {
-        auto node = NodeList::GetNode (record.sourceNode);
-        if (node->GetNApplications()==0) {
-            Ptr<UbApp> client = CreateObject<UbApp>();
-            node->AddApplication (client);
-            UbUtils::Get()->ClientTraceConnect(record.sourceNode);
-        }
-        UbTrafficGen::Get()->AddTask(record);
-    }
-    UbTrafficGen::Get()->ScheduleNextTasks();
-    CheckExampleProcess();
-}
-
-// 根据配置文件路径执行用例
 int main(int argc, char* argv[])
 {
     // 先检查是否查询属性信息（使用独立的参数检查，不触发严格解析）
@@ -146,19 +103,10 @@ int main(int argc, char* argv[])
     CommandLine cmd;
     cmd.AddValue("mtp-threads", "Number of MTP threads (0-1 to disable, >=2 to enable)", mtpThreads);
     cmd.AddValue("case-path", "Path to the unified-bus case directory", casePathArg);
+    uint32_t stopMs = 0;
+    cmd.AddValue("stop-ms", "Optional simulation stop time in milliseconds", stopMs);
     cmd.AddNonOption("casePath", "Optional unified-bus case directory", positionalCasePath);
     cmd.Parse(argc, argv);
-
-#ifdef NS3_MTP
-    if (mtpThreads > 1) {
-        MtpInterface::Enable(mtpThreads);
-        std::cout << "[INFO] MTP enabled with " << mtpThreads << " threads." << std::endl;
-    }
-#else
-    if (mtpThreads > 1) {
-        std::cerr << "[WARNING] MTP requested but not compiled. Reconfigure with --enable-mtp" << std::endl;
-    }
-#endif
 
     // 开始计时
     auto start = std::chrono::high_resolution_clock::now();
@@ -204,13 +152,35 @@ int main(int argc, char* argv[])
     // 读取配置文件并执行用例
     string runCase = "Run case: " + configPath;
     UbUtils::Get()->PrintTimestamp(runCase);
-    ConfigCase(configPath);
-    Simulator::Schedule(Time(0), InitiateTasks, configPath);
+    RngSeedManager::SetSeed(10);
+    UbUtils::Get()->CreateTraceDir();
+
+    UbConfigRunOptions runOptions;
+    runOptions.casePath = configPath;
+    runOptions.mtpThreads = mtpThreads;
+    runOptions.stopMs = stopMs;
+    runOptions.enableMpi = UbDetectMpiWorld();
+    runOptions.activateLocalOwnedTasksOnly = runOptions.enableMpi;
+    runOptions.argc = &argc;
+    runOptions.argv = &argv;
+
+    if (mtpThreads > 1)
+    {
+        std::cout << "[INFO] MTP enabled with " << mtpThreads << " threads."
+                  << (runOptions.enableMpi ? " (hybrid MPI mode)." : " (local mode).")
+                  << std::endl;
+    }
+
+    UbConfigRunnerHooks hooks;
+    hooks.onConfigured = [](const UbConfigRunOptions&, UbConfigRunResult&) {
+        UbUtils::Get()->TopoTraceConnect();
+    };
+    hooks.onTasksActivated = [](const UbConfigRunOptions&, UbConfigRunResult&) {
+        CheckExampleProcess();
+    };
     auto sim_wall_start = std::chrono::high_resolution_clock::now();
-    Simulator::Run();
+    RunUbConfigCase(runOptions, hooks);
     auto sim_wall_end = std::chrono::high_resolution_clock::now();
-    UbUtils::Get()->Destroy();
-    Simulator::Destroy();
     UbUtils::Get()->PrintTimestamp("Simulator finished!");
     auto trace_wall_start = std::chrono::high_resolution_clock::now();
     UbUtils::Get()->ParseTrace();
@@ -228,4 +198,3 @@ int main(int argc, char* argv[])
     UbUtils::Get()->PrintTimestamp("Wall-clock (total): " + std::to_string(total_wall_s) + " s");
     return 0;
 }
-

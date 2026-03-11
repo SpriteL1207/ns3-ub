@@ -19,9 +19,11 @@
 #include "ns3/ub-controller.h"
 
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 
 using namespace ns3;
 
@@ -482,3 +484,59 @@ UbTestSuite::UbTestSuite()
 
 // Register the test suite
 static UbTestSuite g_ubTestSuite;
+
+class UbQuickExampleLocalMtpSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleLocalMtpSystemTest()
+        : TestCase("UnifiedBus - ub-quick-example local MTP mode runs without MPI init failure")
+    {
+    }
+
+    void DoRun() override
+    {
+#ifdef NS3_MTP
+        SetDataDir(NS_TEST_SOURCEDIR);
+        const std::string testFile = CreateTempDirFilename("ub-quick-example-local-mtp.log");
+        std::filesystem::path repoRoot = NS_TEST_SOURCEDIR;
+        const std::filesystem::path binaryRelativePath =
+            "build/src/unified-bus/examples/ns3.44-ub-quick-example-default";
+        for (uint32_t i = 0; i < 4 && !std::filesystem::exists(repoRoot / binaryRelativePath); ++i)
+        {
+            repoRoot = repoRoot.parent_path();
+        }
+
+        const std::filesystem::path binaryPath = repoRoot / binaryRelativePath;
+        const std::filesystem::path casePath = repoRoot / "scratch/ub-local-hybrid-minimal";
+        const std::string command = binaryPath.string() + " --case-path=" + casePath.string() +
+                                    " --mtp-threads=2 > " + testFile + " 2>&1";
+
+        const int status = std::system(command.c_str());
+
+        std::ifstream input(testFile);
+        std::stringstream buffer;
+        buffer << input.rdbuf();
+        const std::string output = buffer.str();
+
+        NS_TEST_ASSERT_MSG_EQ(status,
+                              0,
+                              "ub-quick-example local MTP mode should exit successfully");
+        NS_TEST_ASSERT_MSG_EQ(output.find("MPI_Testany() ... before MPI_INIT"), std::string::npos,
+                              "ub-quick-example local MTP mode should not touch MPI before MPI_Init");
+#else
+        NS_TEST_SKIP_MSG("Requires MTP support");
+#endif
+    }
+};
+
+class UbQuickExampleSystemTestSuite : public TestSuite
+{
+  public:
+    UbQuickExampleSystemTestSuite()
+        : TestSuite("unified-bus-examples", Type::SYSTEM)
+    {
+        AddTestCase(new UbQuickExampleLocalMtpSystemTest(), TestCase::Duration::QUICK);
+    }
+};
+
+static UbQuickExampleSystemTestSuite g_ubQuickExampleSystemTestSuite;
