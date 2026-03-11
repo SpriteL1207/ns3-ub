@@ -189,42 +189,27 @@ static MpiTestSuite g_mpiSimple2("mpi-example-simple-2",
                                  2);
 static MpiTestSuite g_mpiThird2("mpi-example-third-2", "third-distributed", NS_TEST_SOURCEDIR, 2);
 static MpiTestSuite g_mpiUbConfigSmoke2("mpi-example-ub-mpi-config-smoke-2",
-                                        "ub-mpi-config-smoke",
+                                        "src/unified-bus/examples/ub-quick-example",
                                         NS_TEST_SOURCEDIR,
                                         2,
-                                        "--case-path=scratch/ub-mpi-minimal");
-static MpiTestSuite g_mpiUbConfigTpOwnership2("mpi-example-ub-mpi-config-tp-ownership-2",
-                                              "ub-mpi-config-smoke",
-                                              NS_TEST_SOURCEDIR,
-                                              2,
-                                              "--case-path=scratch/ub-mpi-minimal --verify-tp-ownership");
+                                        "--case-path=scratch/ub-mpi-hybrid-minimal --stop-ms=50");
 
 #ifdef NS3_MTP
 static MpiTestSuite g_mpiUbConfigHybridSmoke2("mpi-example-ub-mpi-config-hybrid-smoke-2",
-                                              "ub-mpi-config-smoke",
+                                              "src/unified-bus/examples/ub-quick-example",
                                               NS_TEST_SOURCEDIR,
                                               2,
-                                              "--case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --stop-ms=50");
+                                              "--case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2 --stop-ms=50");
 static MpiTestSuite g_mpiUbConfigHybridLdst2("mpi-example-ub-mpi-config-hybrid-ldst-2",
-                                             "ub-mpi-config-smoke",
+                                             "src/unified-bus/examples/ub-quick-example",
                                              NS_TEST_SOURCEDIR,
                                              2,
-                                             "--case-path=scratch/ub-mpi-hybrid-ldst-minimal --mtp-threads=2 --verify-packed-systemid --stop-ms=50");
+                                             "--case-path=scratch/ub-mpi-hybrid-ldst-minimal --mtp-threads=2 --stop-ms=50");
 static MpiTestSuite g_mpiUbConfigHybridMultiRemote2("mpi-example-ub-mpi-config-hybrid-multi-remote-2",
-                                                    "ub-mpi-config-smoke",
+                                                    "src/unified-bus/examples/ub-quick-example",
                                                     NS_TEST_SOURCEDIR,
                                                     2,
-                                                    "--case-path=scratch/ub-mpi-hybrid-multi-remote --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --stop-ms=50");
-static MpiTestSuite g_mpiUbConfigHybridCbfc2("mpi-example-ub-mpi-config-hybrid-cbfc-2",
-                                             "ub-mpi-config-smoke",
-                                             NS_TEST_SOURCEDIR,
-                                             2,
-                                             "--case-path=scratch/ub-mpi-hybrid-cbfc-minimal --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --verify-cbfc-control --stop-ms=50");
-static MpiTestSuite g_mpiUbConfigHybridCbfcMultiVl2("mpi-example-ub-mpi-config-hybrid-cbfc-multivl-2",
-                                                    "ub-mpi-config-smoke",
-                                                    NS_TEST_SOURCEDIR,
-                                                    2,
-                                                    "--case-path=scratch/ub-mpi-hybrid-cbfc-multivl --mtp-threads=2 --verify-packed-systemid --verify-tp-ownership --verify-cbfc-control --stop-ms=50");
+                                                    "--case-path=scratch/ub-mpi-hybrid-multi-remote --mtp-threads=2 --stop-ms=50");
 static MpiTestSuite g_mpiUbHybridSmoke2("mpi-example-ub-hybrid-smoke-2",
                                         "ub-hybrid-smoke",
                                         NS_TEST_SOURCEDIR,

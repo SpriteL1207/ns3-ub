@@ -18,29 +18,6 @@ build_lib_example(
   LIBRARIES_TO_LINK ${ub_quick_example_libraries}
 )
 
-set(ub_mpi_config_smoke_libraries
-    ${libcore}
-    ${libconfig-store}
-    ${libpoint-to-point}
-    ${libmpi}
-)
-
-if(${ENABLE_MTP})
-  list(APPEND ub_mpi_config_smoke_libraries ${libmtp})
-endif()
-
-# Transitional regression shell only.
-# Keep building this target while MPI/MTP black-box entrypoints migrate to
-# ub-quick-example; do not treat it as the long-term user-facing UB entry.
-build_lib_example(
-  NAME ub-mpi-config-smoke
-  SOURCE_FILES
-    ub-mpi-config-smoke.cc
-    ub-config-runner.cc
-  HEADER_FILES ub-config-runner.h
-  LIBRARIES_TO_LINK ${ub_mpi_config_smoke_libraries}
-)
-
 if(${ENABLE_MPI} AND ${ENABLE_MTP})
   build_lib_example(
     NAME ub-hybrid-smoke

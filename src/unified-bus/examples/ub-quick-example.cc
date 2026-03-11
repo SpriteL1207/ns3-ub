@@ -116,6 +116,27 @@ bool DetectMpiWorld()
 #endif
 }
 
+void PrintTestResult(bool passed, bool enableMpi, uint32_t mpiRank)
+{
+    if (!passed)
+    {
+        std::cout << "TEST : 00000 : FAILED" << std::endl;
+        return;
+    }
+
+#ifdef NS3_MPI
+    if (enableMpi && mpiRank != 0)
+    {
+        return;
+    }
+#else
+    (void)enableMpi;
+    (void)mpiRank;
+#endif
+
+    std::cout << "TEST : 00000 : PASSED" << std::endl;
+}
+
 bool PrepareSimulatorMode(bool enableMpi, uint32_t mtpThreads)
 {
 #ifdef NS3_MPI
@@ -222,9 +243,11 @@ int main(int argc, char* argv[])
     // 多线程加速配置（需编译时启用：./ns3 configure --enable-mtp）
     // 运行时通过 --mtp-threads=N 指定线程数（0-1=禁用，>=2 启用）
     uint32_t mtpThreads = 0;
+    bool test = false;
     std::string casePathArg;
     std::string positionalCasePath;
     CommandLine cmd;
+    cmd.AddValue("test", "Enable regression-test style output", test);
     cmd.AddValue("mtp-threads", "Number of MTP threads (0-1 to disable, >=2 to enable)", mtpThreads);
     cmd.AddValue("case-path", "Path to the unified-bus case directory", casePathArg);
     uint32_t stopMs = 0;
@@ -323,7 +346,7 @@ int main(int argc, char* argv[])
     auto sim_wall_end = std::chrono::high_resolution_clock::now();
     UbUtils::Get()->PrintTimestamp("Simulator finished!");
     auto trace_wall_start = std::chrono::high_resolution_clock::now();
-    UbUtils::Get()->ParseTrace();
+    UbUtils::Get()->ParseTrace(test);
 
     auto end = std::chrono::high_resolution_clock::now();
     UbUtils::Get()->PrintTimestamp("Program finished.");
@@ -336,5 +359,9 @@ int main(int argc, char* argv[])
     UbUtils::Get()->PrintTimestamp("Wall-clock (run phase): " + std::to_string(run_wall_s) + " s");
     UbUtils::Get()->PrintTimestamp("Wall-clock (trace phase): " + std::to_string(trace_wall_s) + " s");
     UbUtils::Get()->PrintTimestamp("Wall-clock (total): " + std::to_string(total_wall_s) + " s");
+    if (test)
+    {
+        PrintTestResult(UbTrafficGen::Get()->IsCompleted(), enableMpi, mpiRank);
+    }
     return 0;
 }
