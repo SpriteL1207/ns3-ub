@@ -78,20 +78,23 @@ In addition to the DCTCP example, you can find other adapted examples in `exampl
 Meanwhile, Unison also supports manual partition, and you can find a minimal example in `src/mtp/examples/simple-mtp.cc`
 For hybrid simulation with MPI, you can find a minimal example in `src/mpi/examples/simple-hybrid.cc`.
 
-We also provide three detailed fat-tree examples for Unison, traditional MPI parallel simulation and hybrid simulation:
+We also provide several detailed examples for Unison, traditional MPI parallel simulation, hybrid simulation, and unified-bus config-driven runs:
 
 | Name | Location | Required configuration flags | Running commands |
 | - | - | - | - |
 | fat-tree-mtp | src/mtp/examples/fat-tree-mtp.cc | `--enable-mtp --enable-exaples` without `--enable-mpi` | `./ns3 run "fat-tree-mtp --thread=4"` |
 | fat-tree-mpi | src/mpi/examples/fat-tree-mpi.cc | `--enable-mpi --enable-exaples` without `--enable-mtp` | `./ns3 run fat-tree-mpi --command-template "mpirun -np 4 %s"` |
 | fat-tree-hybrid | src/mpi/examples/fat-tree-hybrid.cc | `--enable-mtp --enable-mpi --enable-exaples` | `./ns3 run fat-tree-hybrid --command-template "mpirun -np 2 %s --thread=2"` |
+| ub-quick-example | src/unified-bus/examples/ub-quick-example.cc | local: `--enable-examples`; hybrid: `--enable-mtp --enable-mpi --enable-examples` | local: `build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=scratch/ub-local-hybrid-minimal`; hybrid: `mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2` |
 | ub-hybrid-smoke | src/unified-bus/examples/ub-hybrid-smoke.cc | `--enable-mtp --enable-mpi --enable-examples` | `mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-hybrid-smoke-default --test --mtp-threads=2` |
 
 Feel free to explore these examples, compare code changes and adjust the `-np` and `--thread` arguments.
 
 ### Unified-bus config MPI notes
 
-For config-driven unified-bus MPI runs such as `src/unified-bus/examples/ub-mpi-config-smoke.cc`, keep the following rules explicit:
+Use `src/unified-bus/examples/ub-quick-example.cc` as the unified user-facing entry for config-driven unified-bus runs. The old `ub-mpi-config-smoke` path is no longer a user entry; MPI regression suites now invoke `ub-quick-example` directly.
+
+For config-driven unified-bus MPI runs, keep the following rules explicit:
 
 - `node.csv` should provide an explicit `systemId` column for multi-process placement. In single-process compatibility mode, omitted `systemId` still defaults to `0`.
 - In `MTP+MPI` hybrid runs, `node.csv` still uses the MPI-rank ownership value in `systemId`. Do not pre-pack the high 16 bits in config; `HybridSimulatorImpl` assigns packed local-system ids at runtime.
