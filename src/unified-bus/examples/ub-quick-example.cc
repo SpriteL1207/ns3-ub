@@ -146,6 +146,12 @@ bool PrepareSimulatorMode(bool enableMpi, uint32_t mtpThreads)
                           StringValue("ns3::MultithreadedSimulatorImpl"));
         return true;
     }
+#else
+    if (mtpThreads > 1)
+    {
+        std::cerr << "[WARNING] MTP requested but not compiled. Reconfigure with --enable-mtp"
+                  << std::endl;
+    }
 #endif
 
     (void)enableMpi;
