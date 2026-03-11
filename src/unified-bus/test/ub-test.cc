@@ -493,9 +493,9 @@ LocateRepoRoot();
 
 std::pair<int, std::string>
 RunQuickExampleCommand(const std::string& testFile,
-                       const std::string& casePathRelative,
                        const std::string& extraArgs,
-                       const std::string& commandPrefix);
+                       const std::string& commandPrefix,
+                       const std::string& casePathRelative = "");
 
 } // namespace
 
@@ -513,9 +513,9 @@ class UbQuickExampleLocalMtpSystemTest : public TestCase
         SetDataDir(NS_TEST_SOURCEDIR);
         auto [status, output] =
             RunQuickExampleCommand(CreateTempDirFilename("ub-quick-example-local-mtp.log"),
-                                   "scratch/ub-local-hybrid-minimal",
                                    "--mtp-threads=2",
-                                   "");
+                                   "",
+                                   "scratch/ub-local-hybrid-minimal");
 
         NS_TEST_ASSERT_MSG_EQ(status,
                               0,
@@ -546,21 +546,25 @@ LocateRepoRoot()
 
 std::pair<int, std::string>
 RunQuickExampleCommand(const std::string& testFile,
-                       const std::string& casePathRelative,
                        const std::string& extraArgs,
-                       const std::string& commandPrefix)
+                       const std::string& commandPrefix,
+                       const std::string& casePathRelative)
 {
     const std::filesystem::path repoRoot = LocateRepoRoot();
     const std::filesystem::path binaryPath =
         repoRoot / "build/src/unified-bus/examples/ns3.44-ub-quick-example-default";
-    const std::filesystem::path casePath = repoRoot / casePathRelative;
 
     std::string command;
     if (!commandPrefix.empty())
     {
         command += commandPrefix + " ";
     }
-    command += "\"" + binaryPath.string() + "\" --case-path=\"" + casePath.string() + "\"";
+    command += "\"" + binaryPath.string() + "\"";
+    if (!casePathRelative.empty())
+    {
+        const std::filesystem::path casePath = repoRoot / casePathRelative;
+        command += " --case-path=\"" + casePath.string() + "\"";
+    }
     if (!extraArgs.empty())
     {
         command += " " + extraArgs;
@@ -576,6 +580,51 @@ RunQuickExampleCommand(const std::string& testFile,
 }
 
 } // namespace
+
+class UbQuickExampleMissingCasePathSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleMissingCasePathSystemTest()
+        : TestCase("UnifiedBus - ub-quick-example rejects missing case-path")
+    {
+    }
+
+    void DoRun() override
+    {
+        SetDataDir(NS_TEST_SOURCEDIR);
+        auto [status, output] = RunQuickExampleCommand(CreateTempDirFilename(GetName() + ".log"),
+                                                       "",
+                                                       "");
+
+        NS_TEST_ASSERT_MSG_NE(status,
+                              0,
+                              "ub-quick-example without case-path should exit with failure");
+        NS_TEST_ASSERT_MSG_NE(output.find("missing required case path (--case-path or casePath)"),
+                              std::string::npos,
+                              "ub-quick-example should print a clear missing case-path error");
+    }
+};
+
+class UbQuickExampleHelpTextSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleHelpTextSystemTest()
+        : TestCase("UnifiedBus - ub-quick-example help marks case-path as required")
+    {
+    }
+
+    void DoRun() override
+    {
+        SetDataDir(NS_TEST_SOURCEDIR);
+        auto [status, output] =
+            RunQuickExampleCommand(CreateTempDirFilename(GetName() + ".log"), "--help", "");
+
+        NS_TEST_ASSERT_MSG_EQ(status, 0, "ub-quick-example --help should exit successfully");
+        NS_TEST_ASSERT_MSG_NE(output.find("Required path to the unified-bus case directory"),
+                              std::string::npos,
+                              "help text should describe case-path as required");
+    }
+};
 
 class UbQuickExampleMpiSystemTest : public TestCase
 {
@@ -595,9 +644,9 @@ class UbQuickExampleMpiSystemTest : public TestCase
         SetDataDir(NS_TEST_SOURCEDIR);
         auto [status, output] =
             RunQuickExampleCommand(CreateTempDirFilename(GetName() + ".log"),
-                                   m_casePathRelative,
                                    m_extraArgs,
-                                   "mpirun -np 2");
+                                   "mpirun -np 2",
+                                   m_casePathRelative);
 
         NS_TEST_ASSERT_MSG_EQ(status, 0, "ub-quick-example MPI invocation should exit successfully");
         NS_TEST_ASSERT_MSG_NE(output.find("Simulator finished!"),
@@ -621,6 +670,8 @@ class UbQuickExampleSystemTestSuite : public TestSuite
     UbQuickExampleSystemTestSuite()
         : TestSuite("unified-bus-examples", Type::SYSTEM)
     {
+        AddTestCase(new UbQuickExampleMissingCasePathSystemTest(), TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleHelpTextSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleLocalMtpSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example MPI minimal case runs",
                                                     "scratch/ub-mpi-hybrid-minimal",

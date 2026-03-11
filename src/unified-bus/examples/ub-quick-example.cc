@@ -249,10 +249,14 @@ int main(int argc, char* argv[])
     CommandLine cmd;
     cmd.AddValue("test", "Enable regression-test style output", test);
     cmd.AddValue("mtp-threads", "Number of MTP threads (0-1 to disable, >=2 to enable)", mtpThreads);
-    cmd.AddValue("case-path", "Path to the unified-bus case directory", casePathArg);
+    cmd.AddValue("case-path",
+                 "Required path to the unified-bus case directory",
+                 casePathArg);
     uint32_t stopMs = 0;
     cmd.AddValue("stop-ms", "Optional simulation stop time in milliseconds", stopMs);
-    cmd.AddNonOption("casePath", "Optional unified-bus case directory", positionalCasePath);
+    cmd.AddNonOption("casePath",
+                     "Required unified-bus case directory when --case-path is omitted",
+                     positionalCasePath);
     cmd.Parse(argc, argv);
 
     // 开始计时
@@ -292,8 +296,10 @@ int main(int argc, char* argv[])
 
     // 配置文件路径
     string configPath = casePathArg.empty() ? positionalCasePath : casePathArg;
-    if (configPath.empty()) {
-        configPath = "scratch/2nodes_single-tp";
+    if (configPath.empty())
+    {
+        std::cerr << "missing required case path (--case-path or casePath)" << std::endl;
+        return 1;
     }
 
     // 读取配置文件并执行用例
