@@ -1,14 +1,25 @@
 // SPDX-License-Identifier: GPL-2.0-only
-#include "ub-config-runner.h"
-
 #include "ns3/ub-utils.h"
 #include "ns3/command-line.h"
+#include "ns3/node-list.h"
+#include "ns3/ub-app.h"
+#include "ns3/ub-traffic-gen.h"
 #include <chrono>
+#include <cstdlib>
 #include <ctime>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
+
+#ifdef NS3_MPI
+#include "ns3/mpi-interface.h"
+#include <mpi.h>
+#endif
+
+#ifdef NS3_MTP
+#include "ns3/mtp-interface.h"
+#endif
 
 using namespace ns3;
 
@@ -82,6 +93,113 @@ void CheckExampleProcess()
     return;
 }
 
+bool ReadPositiveEnvVar(const char* name)
+{
+    const char* value = std::getenv(name);
+    if (value == nullptr || *value == '\0')
+    {
+        return false;
+    }
+
+    char* end = nullptr;
+    const unsigned long parsed = std::strtoul(value, &end, 10);
+    return end != value && *end == '\0' && parsed > 1;
+}
+
+bool DetectMpiWorld()
+{
+#ifdef NS3_MPI
+    return ReadPositiveEnvVar("OMPI_COMM_WORLD_SIZE") || ReadPositiveEnvVar("PMI_SIZE") ||
+           ReadPositiveEnvVar("PMIX_SIZE") || ReadPositiveEnvVar("MV2_COMM_WORLD_SIZE");
+#else
+    return false;
+#endif
+}
+
+bool PrepareSimulatorMode(bool enableMpi, uint32_t mtpThreads)
+{
+#ifdef NS3_MPI
+    if (enableMpi)
+    {
+#ifdef NS3_MTP
+        if (mtpThreads > 1)
+        {
+            MtpInterface::Enable(mtpThreads);
+            return true;
+        }
+        else
+#endif
+        {
+            GlobalValue::Bind("SimulatorImplementationType",
+                              StringValue("ns3::DistributedSimulatorImpl"));
+        }
+        return false;
+    }
+#endif
+
+#ifdef NS3_MTP
+    if (mtpThreads > 1)
+    {
+        Config::SetDefault("ns3::MultithreadedSimulatorImpl::MaxThreads",
+                           UintegerValue(mtpThreads));
+        GlobalValue::Bind("SimulatorImplementationType",
+                          StringValue("ns3::MultithreadedSimulatorImpl"));
+        return true;
+    }
+#endif
+
+    (void)enableMpi;
+    (void)mtpThreads;
+    return false;
+}
+
+void ConfigureCase(const std::string& configPath)
+{
+    UbUtils::Get()->SetComponentsAttribute(configPath + "/network_attribute.txt");
+    UbUtils::Get()->CreateTraceDir();
+    UbUtils::Get()->CreateNode(configPath + "/node.csv");
+    UbUtils::Get()->CreateTopo(configPath + "/topology.csv");
+    UbUtils::Get()->AddRoutingTable(configPath + "/routing_table.csv");
+    UbUtils::Get()->CreateTp(configPath + "/transport_channel.csv");
+    UbUtils::Get()->TopoTraceConnect();
+}
+
+uint32_t ActivateTasks(const std::string& configPath, bool activateLocalOwnedTasksOnly, uint32_t mpiRank)
+{
+    auto trafficData = UbUtils::Get()->ReadTrafficCSV(configPath + "/traffic.csv");
+    BooleanValue faultEnabled;
+    UbUtils::Get()->g_fault_enable.GetValue(faultEnabled);
+    if (faultEnabled.Get())
+    {
+        UbUtils::Get()->InitFaultMoudle(configPath + "/fault.csv");
+    }
+
+    uint32_t localTaskCount = 0;
+    UbUtils::Get()->PrintTimestamp("Start Client.");
+    for (const auto& record : trafficData)
+    {
+        Ptr<Node> sourceNode = NodeList::GetNode(record.sourceNode);
+        if (activateLocalOwnedTasksOnly &&
+            UbUtils::ExtractMpiRank(sourceNode->GetSystemId()) != mpiRank)
+        {
+            continue;
+        }
+
+        if (sourceNode->GetNApplications() == 0)
+        {
+            Ptr<UbApp> client = CreateObject<UbApp>();
+            sourceNode->AddApplication(client);
+            UbUtils::Get()->ClientTraceConnect(record.sourceNode);
+        }
+        UbTrafficGen::Get()->AddTask(record);
+        ++localTaskCount;
+    }
+
+    UbTrafficGen::Get()->ScheduleNextTasks();
+    CheckExampleProcess();
+    return localTaskCount;
+}
+
 // 根据配置文件路径执行用例
 int main(int argc, char* argv[])
 {
@@ -153,33 +271,49 @@ int main(int argc, char* argv[])
     string runCase = "Run case: " + configPath;
     UbUtils::Get()->PrintTimestamp(runCase);
     RngSeedManager::SetSeed(10);
-    UbUtils::Get()->CreateTraceDir();
+    const bool enableMpi = DetectMpiWorld();
+    const bool mtpEnabled = PrepareSimulatorMode(enableMpi, mtpThreads);
 
-    UbConfigRunOptions runOptions;
-    runOptions.casePath = configPath;
-    runOptions.mtpThreads = mtpThreads;
-    runOptions.stopMs = stopMs;
-    runOptions.enableMpi = UbDetectMpiWorld();
-    runOptions.activateLocalOwnedTasksOnly = runOptions.enableMpi;
-    runOptions.argc = &argc;
-    runOptions.argv = &argv;
+    uint32_t mpiRank = 0;
+#ifdef NS3_MPI
+    if (enableMpi)
+    {
+        MpiInterface::Enable(&argc, &argv);
+        mpiRank = MpiInterface::GetSystemId();
+    }
+#endif
 
     if (mtpThreads > 1)
     {
-        std::cout << "[INFO] MTP enabled with " << mtpThreads << " threads."
-                  << (runOptions.enableMpi ? " (hybrid MPI mode)." : " (local mode).")
-                  << std::endl;
+        if (mtpEnabled)
+        {
+            std::cout << "[INFO] MTP enabled with " << mtpThreads << " threads."
+                      << (enableMpi ? " (hybrid MPI mode)." : " (local mode).")
+                      << std::endl;
+        }
+        else
+        {
+            std::cerr << "[WARNING] MTP requested but not compiled. Reconfigure with --enable-mtp"
+                      << std::endl;
+        }
     }
 
-    UbConfigRunnerHooks hooks;
-    hooks.onConfigured = [](const UbConfigRunOptions&, UbConfigRunResult&) {
-        UbUtils::Get()->TopoTraceConnect();
-    };
-    hooks.onTasksActivated = [](const UbConfigRunOptions&, UbConfigRunResult&) {
-        CheckExampleProcess();
-    };
     auto sim_wall_start = std::chrono::high_resolution_clock::now();
-    RunUbConfigCase(runOptions, hooks);
+    ConfigureCase(configPath);
+    ActivateTasks(configPath, enableMpi, mpiRank);
+    if (stopMs > 0)
+    {
+        Simulator::Stop(MilliSeconds(stopMs));
+    }
+    Simulator::Run();
+    UbUtils::Get()->Destroy();
+    Simulator::Destroy();
+#ifdef NS3_MPI
+    if (enableMpi && MpiInterface::IsEnabled())
+    {
+        MpiInterface::Disable();
+    }
+#endif
     auto sim_wall_end = std::chrono::high_resolution_clock::now();
     UbUtils::Get()->PrintTimestamp("Simulator finished!");
     auto trace_wall_start = std::chrono::high_resolution_clock::now();
