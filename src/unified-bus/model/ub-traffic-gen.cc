@@ -9,6 +9,10 @@
 #include "ub-app.h"
 #include "ub-utils.h"
 
+#ifdef NS3_MPI
+#include "ns3/mpi-interface.h"
+#endif
+
 namespace ns3 {
 
 NS_LOG_COMPONENT_DEFINE("UbTrafficGen");
@@ -31,8 +35,28 @@ UbTrafficGen::~UbTrafficGen()
 {
 }
 
+bool
+UbTrafficGen::IsMultiProcessRuntimeUnsupported()
+{
+#ifdef NS3_MPI
+    return MpiInterface::IsEnabled() && MpiInterface::GetSize() > 1;
+#else
+    return false;
+#endif
+}
+
+std::string
+UbTrafficGen::GetMultiProcessUnsupportedMessage()
+{
+    return "UbTrafficGen does not support MPI multi-process usage in this branch. "
+           "Supported: unified-bus multi-process data path and UbTrafficGen multithreading. "
+           "Unsupported: distributed/operator-style synchronization via traffic.csv. "
+           "Use local quick-example runs or build distributed coordination separately.";
+}
+
 void UbTrafficGen::AddTask(TrafficRecord record)
 {
+    NS_ABORT_MSG_IF(IsMultiProcessRuntimeUnsupported(), GetMultiProcessUnsupportedMessage());
     std::lock_guard<std::mutex> lock(m_mutex);
     uint32_t taskId = record.taskId;
     if (m_tasks.find(taskId) != m_tasks.end()) {
@@ -59,6 +83,14 @@ void UbTrafficGen::AddTask(TrafficRecord record)
     }
 
     NS_LOG_DEBUG("Added task " << taskId << " with " << m_dependencies[taskId].size() << " dependencies");
+}
+
+void
+UbTrafficGen::SetPhaseDepend(uint32_t phaseId, uint32_t taskId)
+{
+    NS_ABORT_MSG_IF(IsMultiProcessRuntimeUnsupported(), GetMultiProcessUnsupportedMessage());
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_dependOnPhasesToTaskId[phaseId].insert(taskId);
 }
 
 TrafficRecord UbTrafficGen::GetTaskById(uint32_t taskId)

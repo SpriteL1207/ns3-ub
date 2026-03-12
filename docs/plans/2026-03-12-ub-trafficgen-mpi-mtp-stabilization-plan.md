@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stabilize `UbTrafficGen` under MTP multithreading, define the correct multi-process DAG boundary, and add regression coverage that distinguishes local-threading bugs from cross-rank dependency gaps.
+**Goal:** Stabilize `UbTrafficGen` under MTP multithreading, preserve unified-bus multi-process data-path support, and make `UbTrafficGen` explicitly reject multi-process usage with clear user-facing guidance.
 
-**Architecture:** Treat link and remote-link as pure serialized-`Packet` carriers and keep all task/DAG semantics inside unified-bus runtime code. First lock down reproducible oracles for the two verified failures: local MTP dependent-task crash and MPI cross-rank phase dependency mismatch. Then fix process-local shared-state races in `UbTrafficGen`, and finally make cross-rank DAG behavior explicit: either reject unsupported cross-rank phase dependencies early or add a dedicated completion propagation mechanism.
+**Architecture:** Treat link and remote-link as pure serialized-`Packet` carriers and keep all task/DAG semantics inside unified-bus runtime code. First lock down reproducible oracles for the local MTP crash and the current MPI misuse boundary. Then fix process-local shared-state races in `UbTrafficGen`, and finally make the product boundary explicit: `UbTrafficGen` remains a local traffic generator, supports multithreading, but does not provide multi-process/distributed-operator synchronization.
 
 **Tech Stack:** ns-3 core/test framework, unified-bus module, MPI (`mpirun`), MTP (`HybridSimulatorImpl` / `MtpInterface`), C++17
 
@@ -24,7 +24,7 @@
     - observed mixed `PASSED` / `FAILED`
 - Current evidence points to two separate issues:
   - process-local thread safety bug in `UbTrafficGen`
-  - missing or undefined cross-rank DAG completion semantics
+  - `UbTrafficGen` semantic scope mismatch in multi-process mode
 - Input note verified from `UbUtils::SetRecord(...)`:
   - `dependOnPhases` is currently parsed by whitespace tokenization, not `;`
   - regression CSV examples in this plan therefore use `10 20`, not `10;20`
@@ -209,51 +209,42 @@ git add src/unified-bus/model/ub-traffic-gen.h src/unified-bus/model/ub-traffic-
 git commit -m "fix: serialize ub trafficgen state transitions"
 ```
 
-## Chunk 3: Decide and enforce cross-rank DAG semantics
+## Chunk 3: Enforce explicit multi-process rejection for `UbTrafficGen`
 
-### Task 3: Choose one supported contract
+### Task 3: Fail fast on unsupported `UbTrafficGen` MPI usage
 
 **Files:**
 - Modify: `src/unified-bus/examples/ub-quick-example.cc`
-- Modify: `src/unified-bus/model/ub-utils.cc`
+- Modify: `src/unified-bus/model/ub-traffic-gen.cc`
+- Modify: `src/unified-bus/model/ub-traffic-gen.h`
 - Modify: `src/unified-bus/test/ub-test.cc`
-- Optional modify: `src/unified-bus/model/ub-traffic-gen.h`
-- Optional modify: `src/unified-bus/model/ub-traffic-gen.cc`
-- Optional modify: `src/unified-bus/model/ub-app.cc`
-
-- [ ] **Step 1: Make an explicit product decision**
-
-Pick exactly one:
-
-- **Option A:** quick-example currently supports only rank-local phase dependencies
-- **Option B:** quick-example must support cross-rank phase dependencies via explicit completion propagation
-
-Do not implement both in the same patch series.
-
-- [ ] **Step 2A: If choosing Option A, fail fast on unsupported cross-rank dependencies**
+- [ ] **Step 1: Reject MPI use early in quick-example**
 
 Implementation direction:
-- detect when a task owned by rank X depends on a phase produced only by tasks owned by rank Y
-- abort early with a clear error message before simulation starts
+- detect `runtime.enableMpi` in the quick-example entry path
+- abort before reading `traffic.csv` / activating `UbTrafficGen`
+- print a clear message that this branch supports:
+  - unified-bus multi-process data path
+  - `UbTrafficGen` multithreading
+  - but not `UbTrafficGen` multi-process usage
 
-Expected test:
-- cross-rank dependency system test fails deterministically with explicit explanation
-
-- [ ] **Step 2B: If choosing Option B, add a minimal cross-rank completion protocol**
+- [ ] **Step 2: Add a runtime backstop in `UbTrafficGen`**
 
 Implementation direction:
-- when a task completes on one rank, propagate completion information to dependent-task owners
-- keep message payload at task/phase completion level, not packet semantic level
-- reuse ns-3/MPI scheduling path; do not overload link-level packet payload semantics
+- guard `SetPhaseDepend(...)` / `AddTask(...)` against MPI multi-process use
+- emit a direct unsupported-runtime message instead of silently proceeding
+
+- [ ] **Step 3: Update MPI system tests to expect explicit rejection**
 
 Expected test:
-- cross-rank dependency system test passes deterministically without `--stop-ms` escape hatch
+- MPI quick-example invocations fail deterministically with explicit unsupported message
+- current cross-rank dependency case becomes a rejection test, not a distributed-DAG success test
 
-- [ ] **Step 3: Commit semantic-boundary checkpoint**
+- [ ] **Step 4: Commit semantic-boundary checkpoint**
 
 ```bash
-git add src/unified-bus/examples/ub-quick-example.cc src/unified-bus/model/ub-utils.cc src/unified-bus/test/ub-test.cc src/unified-bus/model/ub-traffic-gen.h src/unified-bus/model/ub-traffic-gen.cc src/unified-bus/model/ub-app.cc
-git commit -m "feat: define quick example cross-rank task dependency contract"
+git add src/unified-bus/examples/ub-quick-example.cc src/unified-bus/model/ub-traffic-gen.h src/unified-bus/model/ub-traffic-gen.cc src/unified-bus/test/ub-test.cc
+git commit -m "feat: reject ub trafficgen mpi usage explicitly"
 ```
 
 ## Chunk 4: Clean up secondary shared-state risks
@@ -320,20 +311,20 @@ Expected:
 mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2 --test
 ```
 
-- [ ] **Run cross-rank dependency verification**
+- [ ] **Run MPI rejection verification**
 
 ```bash
 mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=<temp-mpi-case> --mtp-threads=2 --test
 ```
 
 Expected:
-- Option A: explicit, deterministic unsupported-case failure
-- Option B: deterministic pass
+- explicit, deterministic unsupported-case failure
+- merged output contains the user-facing unsupported-runtime message
 
 ## Exit Criteria
 
 - Local dependent-DAG fanout case passes under `--mtp-threads=2`
 - Existing `unified-bus-examples` suite still passes
-- Cross-rank phase dependency behavior is explicit and regression-covered
+- `UbTrafficGen` MPI rejection behavior is explicit and regression-covered
 - No test relies on link-layer parsing of high-level protocol semantics
-- Checkpoint commits exist for: oracle, thread-safety, cross-rank semantics, trace-safety
+- Checkpoint commits exist for: oracle, thread-safety, MPI rejection semantics, trace-safety

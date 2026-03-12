@@ -4,10 +4,10 @@
  *
  * Typical usage:
  *   local:      build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=<case-dir>
- *   MPI:        mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=<case-dir>
- *   MPI + MTP:  mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=<case-dir> --mtp-threads=2
  *
- * This example is the unified config-driven user entry. The separate
+ * This example is the unified config-driven local user entry.
+ * This branch supports unified-bus MPI data-path execution, but does not support
+ * `UbTrafficGen` / `traffic.csv` in MPI multi-process mode. The separate
  * `ub-mtp-remote-tp-regression` binary remains regression-only.
  */
 #include "ns3/ub-utils.h"
@@ -62,6 +62,13 @@ struct RuntimeSelection
     Mode mode = Mode::LocalSingle;
     bool enableMpi = false;
     uint32_t mpiRank = 0;
+};
+
+struct MpiLaunchProbe
+{
+    bool initializedHere = false;
+    uint32_t rank = 0;
+    uint32_t size = 1;
 };
 
 struct PhaseTiming
@@ -134,32 +141,76 @@ void CheckExampleProcess()
     return;
 }
 
-bool ReadPositiveEnvVar(const char* name)
+MpiLaunchProbe ProbeMpiWorld(int* argc, char*** argv)
 {
-    const char* value = std::getenv(name);
-    if (value == nullptr || *value == '\0')
+    MpiLaunchProbe probe;
+#ifdef NS3_MPI
+    int initialized = 0;
+    MPI_Initialized(&initialized);
+    if (!initialized)
     {
-        return false;
+        int provided = MPI_THREAD_SINGLE;
+        const int rc = MPI_Init_thread(argc, argv, MPI_THREAD_SINGLE, &provided);
+        NS_ABORT_MSG_IF(rc != MPI_SUCCESS, "MPI_Init_thread failed while probing quick-example runtime");
+        probe.initializedHere = true;
     }
 
-    char* end = nullptr;
-    const unsigned long parsed = std::strtoul(value, &end, 10);
-    return end != value && *end == '\0' && parsed > 1;
+    int mpiRank = 0;
+    int mpiSize = 1;
+    MPI_Comm_rank(MPI_COMM_WORLD, &mpiRank);
+    MPI_Comm_size(MPI_COMM_WORLD, &mpiSize);
+    probe.rank = static_cast<uint32_t>(mpiRank);
+    probe.size = static_cast<uint32_t>(mpiSize);
+#endif
+    return probe;
 }
 
-bool DetectMpiWorld()
+void FinalizeMpiProbeIfNeeded(MpiLaunchProbe& probe)
 {
 #ifdef NS3_MPI
-    return ReadPositiveEnvVar("OMPI_COMM_WORLD_SIZE") || ReadPositiveEnvVar("PMI_SIZE") ||
-           ReadPositiveEnvVar("PMIX_SIZE") || ReadPositiveEnvVar("MV2_COMM_WORLD_SIZE");
+    if (!probe.initializedHere)
+    {
+        return;
+    }
+
+    int finalized = 0;
+    MPI_Finalized(&finalized);
+    if (!finalized)
+    {
+        MPI_Finalize();
+    }
+    probe.initializedHere = false;
 #else
-    return false;
+    (void)probe;
 #endif
 }
 
 bool IsMtpRequested(uint32_t mtpThreads)
 {
     return mtpThreads > 1;
+}
+
+int ReportUnsupportedTrafficGenMpi()
+{
+    std::cerr << UbTrafficGen::GetMultiProcessUnsupportedMessage() << std::endl;
+#ifdef NS3_MPI
+    if (MpiInterface::IsEnabled())
+    {
+        MpiInterface::Disable();
+    }
+    else
+    {
+        int initialized = 0;
+        int finalized = 0;
+        MPI_Initialized(&initialized);
+        MPI_Finalized(&finalized);
+        if (initialized && !finalized)
+        {
+            MPI_Finalize();
+        }
+    }
+#endif
+    return 1;
 }
 
 RuntimeSelection::Mode ResolveRuntimeMode(bool enableMpi, uint32_t mtpThreads)
@@ -350,8 +401,7 @@ QuickExampleOptions ParseOptions(int argc, char* argv[])
     cmd.Usage("Unified-bus config-driven user entry.\n"
               "Typical usage:\n"
               "  local:      build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=<case-dir>\n"
-              "  MPI:        mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=<case-dir>\n"
-              "  MPI + MTP:  mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=<case-dir> --mtp-threads=2\n"
+              "  MPI note:   UbTrafficGen / traffic.csv is not supported in MPI multi-process mode in this branch.\n"
               "Regression-only binary: ub-mtp-remote-tp-regression\n");
     cmd.AddValue("test", "Enable regression-test style output", options.test);
     cmd.AddValue("mtp-threads",
@@ -418,7 +468,7 @@ void EnableExampleLogging()
 RuntimeSelection PrepareRuntime(int* argc, char*** argv, const QuickExampleOptions& options)
 {
     RuntimeSelection runtime;
-    runtime.enableMpi = DetectMpiWorld();
+    runtime.enableMpi = false;
     runtime.mode = ResolveRuntimeMode(runtime.enableMpi, options.mtpThreads);
     PrepareSimulatorMode(runtime, options.mtpThreads);
 
@@ -531,8 +581,18 @@ int main(int argc, char* argv[])
     }
 
     QuickExampleOptions options = ParseOptions(argc, argv);
+    MpiLaunchProbe mpiProbe = ProbeMpiWorld(&argc, &argv);
+    if (mpiProbe.size > 1)
+    {
+        return ReportUnsupportedTrafficGenMpi();
+    }
+    FinalizeMpiProbeIfNeeded(mpiProbe);
     const auto programStart = std::chrono::high_resolution_clock::now();
     RuntimeSelection runtime = PrepareRuntime(&argc, &argv, options);
+    if (runtime.enableMpi)
+    {
+        return ReportUnsupportedTrafficGenMpi();
+    }
     PhaseTiming timing = RunScenario(options, runtime, programStart);
     ReportResult(options, runtime, timing);
     return 0;

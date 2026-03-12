@@ -528,6 +528,39 @@ class UbQuickExampleLocalMtpSystemTest : public TestCase
     }
 };
 
+class UbQuickExampleSpoofedMpiEnvSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleSpoofedMpiEnvSystemTest()
+        : TestCase("UnifiedBus - ub-quick-example ignores spoofed MPI env without launcher")
+    {
+    }
+
+    void DoRun() override
+    {
+#ifdef NS3_MPI
+        SetDataDir(NS_TEST_SOURCEDIR);
+        auto [status, output] =
+            RunQuickExampleCommand(CreateTempDirFilename("ub-quick-example-spoofed-mpi-env.log"),
+                                   "--test",
+                                   "env OMPI_COMM_WORLD_SIZE=2",
+                                   "scratch/ub-local-hybrid-minimal");
+
+        NS_TEST_ASSERT_MSG_EQ(status,
+                              0,
+                              "spoofed MPI environment without launcher should stay on local runtime");
+        NS_TEST_ASSERT_MSG_EQ(output.find(UbTrafficGen::GetMultiProcessUnsupportedMessage()),
+                              std::string::npos,
+                              "spoofed MPI environment should not trigger the multi-process rejection");
+        NS_TEST_ASSERT_MSG_NE(output.find("TEST : 00000 : PASSED"),
+                              std::string::npos,
+                              "spoofed MPI environment case should still complete locally");
+#else
+        NS_TEST_SKIP_MSG("Requires MPI support");
+#endif
+    }
+};
+
 namespace
 {
 
@@ -779,9 +812,9 @@ class UbQuickExampleHelpTextSystemTest : public TestCase
         NS_TEST_ASSERT_MSG_NE(output.find("Typical usage:"),
                               std::string::npos,
                               "help text should include quick-example usage guidance");
-        NS_TEST_ASSERT_MSG_NE(output.find("MPI + MTP"),
+        NS_TEST_ASSERT_MSG_NE(output.find("UbTrafficGen / traffic.csv is not supported in MPI multi-process mode"),
                               std::string::npos,
-                              "help text should mention the hybrid MPI + MTP entry mode");
+                              "help text should explain the MPI TrafficGen boundary");
     }
 };
 
@@ -973,7 +1006,7 @@ class UbQuickExampleMpiCrossRankPhaseDependencySystemTest : public TestCase
 {
   public:
     UbQuickExampleMpiCrossRankPhaseDependencySystemTest()
-        : TestCase("UnifiedBus - ub-quick-example cross-rank phase dependency completes globally")
+        : TestCase("UnifiedBus - ub-quick-example rejects cross-rank phase dependency under MPI")
     {
     }
 
@@ -997,13 +1030,10 @@ class UbQuickExampleMpiCrossRankPhaseDependencySystemTest : public TestCase
         std::error_code ec;
         std::filesystem::remove_all(caseDir, ec);
 
-        NS_TEST_ASSERT_MSG_EQ(status, 0, "MPI cross-rank dependent DAG command should exit cleanly");
-        NS_TEST_ASSERT_MSG_EQ(output.find("TEST : 00000 : FAILED"),
+        NS_TEST_ASSERT_MSG_NE(status, 0, "MPI cross-rank dependent DAG command should be rejected");
+        NS_TEST_ASSERT_MSG_NE(output.find(UbTrafficGen::GetMultiProcessUnsupportedMessage()),
                               std::string::npos,
-                              "cross-rank phase dependency should not leave any rank incomplete");
-        NS_TEST_ASSERT_MSG_NE(output.find("TEST : 00000 : PASSED"),
-                              std::string::npos,
-                              "cross-rank phase dependency should report PASSED");
+                              "cross-rank phase dependency should print the unsupported-runtime message");
 #else
         NS_TEST_SKIP_MSG("Requires MPI support");
 #endif
@@ -1032,12 +1062,10 @@ class UbQuickExampleMpiSystemTest : public TestCase
                                    "mpirun -np 2",
                                    m_casePathRelative);
 
-        NS_TEST_ASSERT_MSG_EQ(status, 0, "ub-quick-example MPI invocation should exit successfully");
-        NS_TEST_ASSERT_MSG_NE(output.find("Simulator finished!"),
+        NS_TEST_ASSERT_MSG_NE(status, 0, "ub-quick-example MPI invocation should be rejected");
+        NS_TEST_ASSERT_MSG_NE(output.find(UbTrafficGen::GetMultiProcessUnsupportedMessage()),
                               std::string::npos,
-                              "MPI quick-example output should contain simulator completion");
-        NS_TEST_ASSERT_MSG_EQ(output.find("TEST ERROR"), std::string::npos,
-                              "MPI quick-example should not emit smoke-specific error text");
+                              "MPI quick-example should explain the unsupported UbTrafficGen runtime");
 #else
         NS_TEST_SKIP_MSG("Requires MPI support");
 #endif
@@ -1068,23 +1096,24 @@ class UbQuickExampleSystemTestSuite : public TestSuite
         AddTestCase(new UbQuickExampleLocalDependentDagMtpRedSystemTest(),
                     TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleLocalMtpSystemTest(), TestCase::Duration::QUICK);
-        AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example MPI minimal case runs",
+        AddTestCase(new UbQuickExampleSpoofedMpiEnvSystemTest(), TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example rejects MPI minimal case",
                                                     "scratch/ub-mpi-hybrid-minimal",
                                                     ""),
                     TestCase::Duration::QUICK);
-        AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example MPI mtp-threads=1 runs",
+        AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example rejects MPI mtp-threads=1 case",
                                                     "scratch/ub-mpi-hybrid-minimal",
                                                     "--mtp-threads=1"),
                     TestCase::Duration::QUICK);
-        AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example hybrid minimal case runs",
+        AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example rejects hybrid minimal case",
                                                     "scratch/ub-mpi-hybrid-minimal",
                                                     "--mtp-threads=2"),
                     TestCase::Duration::QUICK);
-        AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example hybrid ldst case runs",
+        AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example rejects hybrid ldst case",
                                                     "scratch/ub-mpi-hybrid-ldst-minimal",
                                                     "--mtp-threads=2"),
                     TestCase::Duration::QUICK);
-        AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example hybrid multi-remote case runs",
+        AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example rejects hybrid multi-remote case",
                                                     "scratch/ub-mpi-hybrid-multi-remote",
                                                     "--mtp-threads=2"),
                     TestCase::Duration::QUICK);

@@ -39,7 +39,13 @@ public:
     UbTrafficGen();
     virtual ~UbTrafficGen();
 
+    static bool IsMultiProcessRuntimeUnsupported();
+
+    static std::string GetMultiProcessUnsupportedMessage();
+
     void AddTask(TrafficRecord record);
+
+    void SetPhaseDepend(uint32_t phaseId, uint32_t taskId);
 
     TrafficRecord GetTaskById(uint32_t taskId);
 
@@ -58,12 +64,6 @@ public:
      * @brief 调度下一批可执行的任务
      */
     void ScheduleNextTasks();
-
-    void SetPhaseDepend(uint32_t phaseId, uint32_t taskId)
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_dependOnPhasesToTaskId[phaseId].insert(taskId);
-    }
 
   private:
     enum class TaskState {
