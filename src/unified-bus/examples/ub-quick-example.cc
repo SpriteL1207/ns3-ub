@@ -96,14 +96,7 @@ void CheckNoProgress(double sim_time_us, std::ostringstream& oss)
 {
     static uint32_t last_completed_tasks = 0;
     static double last_progress_time_us = 0;
-    uint32_t completed_tasks = 0;
-    
-    // 统计已完成任务数
-    for (auto& task : UbTrafficGen::Get()->m_taskStates) {
-        if (task.second == UbTrafficGen::TaskState::COMPLETED) {
-            completed_tasks++;
-        }
-    }
+    uint32_t completed_tasks = UbTrafficGen::Get()->GetCompletedTaskCount();
 
     // 如果有新任务完成，更新状态
     if (completed_tasks > last_completed_tasks) {
