@@ -37,14 +37,7 @@ void CheckNoProgress(double sim_time_us, std::ostringstream& oss)
 {
     static uint32_t last_completed_tasks = 0;
     static double last_progress_time_us = 0;
-    uint32_t completed_tasks = 0;
-    
-    // 统计已完成任务数
-    for (auto& task : UbTrafficGen::Get()->m_taskStates) {
-        if (task.second == UbTrafficGen::TaskState::COMPLETED) {
-            completed_tasks++;
-        }
-    }
+    uint32_t completed_tasks = UbTrafficGen::Get()->GetCompletedTaskCount();
 
     // 如果有新任务完成，更新状态
     if (completed_tasks > last_completed_tasks) {
@@ -103,10 +96,8 @@ void ConfigCase(const string& configPath)
 void InitiateTasks(const string& configPath)
 {
     string TrafficConfigFile = configPath + "/traffic.csv";
-    auto trafficData = UbUtils::Get()->ReadTrafficCSV(TrafficConfigFile);
-    BooleanValue gFaultEnable;
-    UbUtils::Get()->g_fault_enable.GetValue(gFaultEnable);
-    if (gFaultEnable.Get()) {
+    auto trafficData = UbUtils::Get()->LoadTrafficConfig(TrafficConfigFile);
+    if (UbUtils::Get()->IsFaultEnabled()) {
         string FaultConfigFile = configPath + "/fault.csv";
         UbUtils::Get()->InitFaultMoudle(FaultConfigFile);
     }
@@ -224,4 +215,3 @@ int main(int argc, char* argv[])
     UbUtils::Get()->PrintTimestamp("Wall-clock (total): " + std::to_string(total_wall_s) + " s");
     return 0;
 }
-

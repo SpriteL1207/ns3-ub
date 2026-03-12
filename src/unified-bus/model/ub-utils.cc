@@ -880,7 +880,7 @@ void UbUtils::SetRecord(int fieldCount, string field, TrafficRecord &record)
     }
 }
 
-vector<TrafficRecord> UbUtils::ReadTrafficCSV(const string &filename)
+vector<TrafficRecord> UbUtils::LoadTrafficConfig(const string &filename)
 {
     vector<TrafficRecord> records;
     ifstream file(filename);

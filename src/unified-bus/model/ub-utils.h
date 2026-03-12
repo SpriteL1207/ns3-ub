@@ -60,7 +60,8 @@ public:
     // Config-driven builder surface used by ub-quick-example and white-box tests.
     void CreateNode(const std::string &filename);
 
-    std::vector<TrafficRecord> ReadTrafficCSV(const std::string &filename);
+    // Loads traffic records and initializes phase-dependency state in UbTrafficGen.
+    std::vector<TrafficRecord> LoadTrafficConfig(const std::string &filename);
 
     void CreateTopo(const std::string &filename);
 

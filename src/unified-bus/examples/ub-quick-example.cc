@@ -343,7 +343,7 @@ uint32_t ActivateTrafficFromConfig(const std::string& configPath,
                                    bool activateLocalOwnedTasksOnly,
                                    uint32_t mpiRank)
 {
-    auto trafficData = UbUtils::Get()->ReadTrafficCSV(configPath + "/traffic.csv");
+    auto trafficData = UbUtils::Get()->LoadTrafficConfig(configPath + "/traffic.csv");
     if (UbUtils::Get()->IsFaultEnabled())
     {
         UbUtils::Get()->InitFaultMoudle(configPath + "/fault.csv");
