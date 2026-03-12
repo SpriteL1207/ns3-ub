@@ -51,6 +51,15 @@ struct QuickExampleOptions
 
 struct RuntimeSelection
 {
+    enum class Mode
+    {
+        LocalSingle,
+        LocalMtp,
+        MpiSingle,
+        MpiMtp,
+    };
+
+    Mode mode = Mode::LocalSingle;
     bool enableMpi = false;
     bool mtpEnabled = false;
     uint32_t mpiRank = 0;
@@ -156,6 +165,35 @@ bool DetectMpiWorld()
 #endif
 }
 
+bool IsMtpRequested(uint32_t mtpThreads)
+{
+    return mtpThreads > 1;
+}
+
+RuntimeSelection::Mode ResolveRuntimeMode(bool enableMpi, uint32_t mtpThreads)
+{
+    const bool wantsMtp = IsMtpRequested(mtpThreads);
+    if (enableMpi)
+    {
+#ifdef NS3_MTP
+        return wantsMtp ? RuntimeSelection::Mode::MpiMtp : RuntimeSelection::Mode::MpiSingle;
+#else
+        return RuntimeSelection::Mode::MpiSingle;
+#endif
+    }
+
+#ifdef NS3_MTP
+    return wantsMtp ? RuntimeSelection::Mode::LocalMtp : RuntimeSelection::Mode::LocalSingle;
+#else
+    return RuntimeSelection::Mode::LocalSingle;
+#endif
+}
+
+bool ModeUsesMtp(RuntimeSelection::Mode mode)
+{
+    return mode == RuntimeSelection::Mode::LocalMtp || mode == RuntimeSelection::Mode::MpiMtp;
+}
+
 void PrintTestResult(bool passed, bool enableMpi, uint32_t mpiRank)
 {
     if (!passed)
@@ -177,47 +215,38 @@ void PrintTestResult(bool passed, bool enableMpi, uint32_t mpiRank)
     std::cout << "TEST : 00000 : PASSED" << std::endl;
 }
 
-bool PrepareSimulatorMode(bool enableMpi, uint32_t mtpThreads)
+void PrepareSimulatorMode(const RuntimeSelection& runtime, uint32_t mtpThreads)
 {
-#ifdef NS3_MPI
-    if (enableMpi)
+    switch (runtime.mode)
     {
+    case RuntimeSelection::Mode::LocalSingle:
+        return;
+    case RuntimeSelection::Mode::LocalMtp:
 #ifdef NS3_MTP
-        if (mtpThreads > 1)
-        {
-            MtpInterface::Enable(mtpThreads);
-            return true;
-        }
-        else
-#endif
-        {
-            GlobalValue::Bind("SimulatorImplementationType",
-                              StringValue("ns3::DistributedSimulatorImpl"));
-        }
-        return false;
-    }
-#endif
-
-#ifdef NS3_MTP
-    if (mtpThreads > 1)
-    {
         Config::SetDefault("ns3::MultithreadedSimulatorImpl::MaxThreads",
                            UintegerValue(mtpThreads));
         GlobalValue::Bind("SimulatorImplementationType",
                           StringValue("ns3::MultithreadedSimulatorImpl"));
-        return true;
-    }
+        return;
 #else
-    if (mtpThreads > 1)
-    {
-        std::cerr << "[WARNING] MTP requested but not compiled. Reconfigure with --enable-mtp"
-                  << std::endl;
-    }
+        return;
 #endif
-
-    (void)enableMpi;
-    (void)mtpThreads;
-    return false;
+    case RuntimeSelection::Mode::MpiSingle:
+#ifdef NS3_MPI
+        GlobalValue::Bind("SimulatorImplementationType",
+                          StringValue("ns3::DistributedSimulatorImpl"));
+        return;
+#else
+        return;
+#endif
+    case RuntimeSelection::Mode::MpiMtp:
+#if defined(NS3_MPI) && defined(NS3_MTP)
+        MtpInterface::Enable(mtpThreads);
+        return;
+#else
+        return;
+#endif
+    }
 }
 
 std::string NormalizeCasePath(const std::string& path)
@@ -398,7 +427,9 @@ RuntimeSelection PrepareRuntime(int* argc, char*** argv, const QuickExampleOptio
 {
     RuntimeSelection runtime;
     runtime.enableMpi = DetectMpiWorld();
-    runtime.mtpEnabled = PrepareSimulatorMode(runtime.enableMpi, options.mtpThreads);
+    runtime.mode = ResolveRuntimeMode(runtime.enableMpi, options.mtpThreads);
+    runtime.mtpEnabled = ModeUsesMtp(runtime.mode);
+    PrepareSimulatorMode(runtime, options.mtpThreads);
 
 #ifdef NS3_MPI
     if (runtime.enableMpi)
@@ -408,7 +439,7 @@ RuntimeSelection PrepareRuntime(int* argc, char*** argv, const QuickExampleOptio
     }
 #endif
 
-    if (options.mtpThreads > 1)
+    if (IsMtpRequested(options.mtpThreads))
     {
         if (runtime.mtpEnabled)
         {
@@ -416,11 +447,13 @@ RuntimeSelection PrepareRuntime(int* argc, char*** argv, const QuickExampleOptio
                       << (runtime.enableMpi ? " (hybrid MPI mode)." : " (local mode).")
                       << std::endl;
         }
+#ifndef NS3_MTP
         else
         {
             std::cerr << "[WARNING] MTP requested but not compiled. Reconfigure with --enable-mtp"
                       << std::endl;
         }
+#endif
     }
 
     return runtime;
