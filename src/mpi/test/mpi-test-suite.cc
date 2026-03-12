@@ -116,11 +116,11 @@ class MpiTestSuite : public TestSuite
 
 }; // class MpiTestSuite
 
-class MpiRemoteTpRegressionInterceptorRemovedTestCase : public TestCase
+class MpiRemoteTpRegressionDeprecatedInterceptorFailsFastTestCase : public TestCase
 {
   public:
-    MpiRemoteTpRegressionInterceptorRemovedTestCase()
-        : TestCase("mpi-example-ub-mtp-remote-tp-regression-interceptor-removed-np2")
+    MpiRemoteTpRegressionDeprecatedInterceptorFailsFastTestCase()
+        : TestCase("mpi-example-ub-mtp-remote-tp-regression-deprecated-interceptor-fails-fast-np2")
     {
     }
 
@@ -149,14 +149,14 @@ class MpiRemoteTpRegressionInterceptorRemovedTestCase : public TestCase
     }
 };
 
-class MpiRemoteTpRegressionInterceptorRemovedTestSuite : public TestSuite
+class MpiRemoteTpRegressionDeprecatedInterceptorFailsFastTestSuite : public TestSuite
 {
   public:
-    MpiRemoteTpRegressionInterceptorRemovedTestSuite()
-        : TestSuite("mpi-example-ub-mtp-remote-tp-regression-interceptor-removed-np2",
+    MpiRemoteTpRegressionDeprecatedInterceptorFailsFastTestSuite()
+        : TestSuite("mpi-example-ub-mtp-remote-tp-regression-deprecated-interceptor-fails-fast-np2",
                     Type::SYSTEM)
     {
-        AddTestCase(new MpiRemoteTpRegressionInterceptorRemovedTestCase(),
+        AddTestCase(new MpiRemoteTpRegressionDeprecatedInterceptorFailsFastTestCase(),
                     TestCase::Duration::QUICK);
     }
 };
@@ -217,7 +217,8 @@ static MpiTestSuite g_mpiUbRemoteTpRegressionNp2(
     "src/unified-bus/examples/ub-mtp-remote-tp-regression",
     NS_TEST_SOURCEDIR,
     2);
-static MpiRemoteTpRegressionInterceptorRemovedTestSuite g_mpiUbRemoteTpRegressionInterceptorRemoved;
+static MpiRemoteTpRegressionDeprecatedInterceptorFailsFastTestSuite
+    g_mpiUbRemoteTpRegressionDeprecatedInterceptorFailsFast;
 #endif
 
 /* Tests using NullMessageSimulatorImpl */

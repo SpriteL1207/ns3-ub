@@ -35,7 +35,7 @@
 - MPI black-box
   - 四条 config-driven unified-bus MPI suites
   - `build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mtp-remote-tp-regression-np2 --verbose`
-  - `build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mtp-remote-tp-regression-interceptor-removed-np2 --verbose`
+  - `build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mtp-remote-tp-regression-deprecated-interceptor-fails-fast-np2 --verbose`
   - regression-only binary spot check: `mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-mtp-remote-tp-regression-default --test`
 
 ## 仍然保留的边界
