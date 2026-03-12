@@ -294,6 +294,12 @@ QuickExampleOptions ParseOptions(int argc, char* argv[])
     std::string casePathArg;
     std::string positionalCasePath;
     CommandLine cmd;
+    cmd.Usage("Unified-bus config-driven user entry.\n"
+              "Typical usage:\n"
+              "  local:      build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=<case-dir>\n"
+              "  MPI:        mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=<case-dir>\n"
+              "  MPI + MTP:  mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=<case-dir> --mtp-threads=2\n"
+              "Regression-only binary: ub-mtp-remote-tp-regression\n");
     cmd.AddValue("test", "Enable regression-test style output", options.test);
     cmd.AddValue("mtp-threads",
                  "Number of MTP threads (0-1 to disable, >=2 to enable)",

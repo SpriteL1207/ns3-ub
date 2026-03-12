@@ -623,6 +623,41 @@ class UbQuickExampleHelpTextSystemTest : public TestCase
         NS_TEST_ASSERT_MSG_NE(output.find("Required path to the unified-bus case directory"),
                               std::string::npos,
                               "help text should describe case-path as required");
+        NS_TEST_ASSERT_MSG_NE(output.find("Typical usage:"),
+                              std::string::npos,
+                              "help text should include quick-example usage guidance");
+        NS_TEST_ASSERT_MSG_NE(output.find("MPI + MTP"),
+                              std::string::npos,
+                              "help text should mention the hybrid MPI + MTP entry mode");
+    }
+};
+
+class UbQuickExampleSameCasePathSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleSameCasePathSystemTest()
+        : TestCase("UnifiedBus - ub-quick-example accepts equivalent duplicated case-path inputs")
+    {
+    }
+
+    void DoRun() override
+    {
+        SetDataDir(NS_TEST_SOURCEDIR);
+        const std::filesystem::path repoRoot = LocateRepoRoot();
+        const std::filesystem::path sameCasePath =
+            (repoRoot / "scratch/ub-local-hybrid-minimal/../ub-local-hybrid-minimal").lexically_normal();
+        auto [status, output] =
+            RunQuickExampleCommand(CreateTempDirFilename(GetName() + ".log"),
+                                   "\"" + sameCasePath.string() + "\" --stop-ms=1",
+                                   "",
+                                   "scratch/ub-local-hybrid-minimal");
+
+        NS_TEST_ASSERT_MSG_EQ(status,
+                              0,
+                              "ub-quick-example should accept equivalent duplicated case-path inputs");
+        NS_TEST_ASSERT_MSG_EQ(output.find("conflicting case paths provided via --case-path and casePath"),
+                              std::string::npos,
+                              "equivalent duplicated case-path inputs should not trigger a conflict");
     }
 };
 
@@ -700,6 +735,7 @@ class UbQuickExampleSystemTestSuite : public TestSuite
     {
         AddTestCase(new UbQuickExampleMissingCasePathSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleHelpTextSystemTest(), TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleSameCasePathSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleConflictingCasePathSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleLocalMtpSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example MPI minimal case runs",
