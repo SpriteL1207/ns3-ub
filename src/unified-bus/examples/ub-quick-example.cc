@@ -18,6 +18,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <ctime>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -218,6 +219,11 @@ bool PrepareSimulatorMode(bool enableMpi, uint32_t mtpThreads)
     return false;
 }
 
+std::string NormalizeCasePath(const std::string& path)
+{
+    return std::filesystem::absolute(std::filesystem::path(path)).lexically_normal().string();
+}
+
 void BuildScenarioFromConfig(const std::string& configPath)
 {
     UbUtils::Get()->SetComponentsAttribute(configPath + "/network_attribute.txt");
@@ -300,6 +306,13 @@ QuickExampleOptions ParseOptions(int argc, char* argv[])
                      "Required unified-bus case directory when --case-path is omitted",
                      positionalCasePath);
     cmd.Parse(argc, argv);
+
+    if (!casePathArg.empty() && !positionalCasePath.empty() &&
+        NormalizeCasePath(casePathArg) != NormalizeCasePath(positionalCasePath))
+    {
+        std::cerr << "conflicting case paths provided via --case-path and casePath" << std::endl;
+        std::exit(1);
+    }
 
     options.configPath = casePathArg.empty() ? positionalCasePath : casePathArg;
     if (options.configPath.empty())

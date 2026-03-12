@@ -626,6 +626,34 @@ class UbQuickExampleHelpTextSystemTest : public TestCase
     }
 };
 
+class UbQuickExampleConflictingCasePathSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleConflictingCasePathSystemTest()
+        : TestCase("UnifiedBus - ub-quick-example rejects conflicting case-path inputs")
+    {
+    }
+
+    void DoRun() override
+    {
+        SetDataDir(NS_TEST_SOURCEDIR);
+        const std::filesystem::path repoRoot = LocateRepoRoot();
+        const std::filesystem::path positionalCasePath = repoRoot / "scratch/ub-mpi-hybrid-minimal";
+        auto [status, output] =
+            RunQuickExampleCommand(CreateTempDirFilename(GetName() + ".log"),
+                                   "\"" + positionalCasePath.string() + "\"",
+                                   "",
+                                   "scratch/ub-local-hybrid-minimal");
+
+        NS_TEST_ASSERT_MSG_NE(status,
+                              0,
+                              "ub-quick-example with conflicting case paths should exit with failure");
+        NS_TEST_ASSERT_MSG_NE(output.find("conflicting case paths provided via --case-path and casePath"),
+                              std::string::npos,
+                              "ub-quick-example should print a clear conflicting case-path error");
+    }
+};
+
 class UbQuickExampleMpiSystemTest : public TestCase
 {
   public:
@@ -672,6 +700,7 @@ class UbQuickExampleSystemTestSuite : public TestSuite
     {
         AddTestCase(new UbQuickExampleMissingCasePathSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleHelpTextSystemTest(), TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleConflictingCasePathSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleLocalMtpSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example MPI minimal case runs",
                                                     "scratch/ub-mpi-hybrid-minimal",
