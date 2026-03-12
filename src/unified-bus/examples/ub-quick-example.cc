@@ -16,6 +16,7 @@
 #include "ns3/ub-app.h"
 #include "ns3/ub-traffic-gen.h"
 #include <chrono>
+#include <array>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
@@ -224,6 +225,37 @@ std::string NormalizeCasePath(const std::string& path)
     return std::filesystem::absolute(std::filesystem::path(path)).lexically_normal().string();
 }
 
+void ValidateCasePathOrExit(const std::string& configPath)
+{
+    static const std::array<const char*, 5> kRequiredCaseFiles = {"network_attribute.txt",
+                                                                   "node.csv",
+                                                                   "topology.csv",
+                                                                   "routing_table.csv",
+                                                                   "traffic.csv"};
+
+    const std::filesystem::path caseDir(configPath);
+    if (!std::filesystem::exists(caseDir))
+    {
+        std::cerr << "case path does not exist: " << caseDir.string() << std::endl;
+        std::exit(1);
+    }
+    if (!std::filesystem::is_directory(caseDir))
+    {
+        std::cerr << "case path is not a directory: " << caseDir.string() << std::endl;
+        std::exit(1);
+    }
+
+    for (const char* filename : kRequiredCaseFiles)
+    {
+        const std::filesystem::path requiredFile = caseDir / filename;
+        if (!std::filesystem::exists(requiredFile))
+        {
+            std::cerr << "missing required case file: " << requiredFile.string() << std::endl;
+            std::exit(1);
+        }
+    }
+}
+
 void BuildScenarioFromConfig(const std::string& configPath)
 {
     UbUtils::Get()->SetComponentsAttribute(configPath + "/network_attribute.txt");
@@ -326,6 +358,8 @@ QuickExampleOptions ParseOptions(int argc, char* argv[])
         std::cerr << "missing required case path (--case-path or casePath)" << std::endl;
         std::exit(1);
     }
+    options.configPath = NormalizeCasePath(options.configPath);
+    ValidateCasePathOrExit(options.configPath);
 
     return options;
 }

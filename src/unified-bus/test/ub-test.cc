@@ -579,6 +579,12 @@ RunQuickExampleCommand(const std::string& testFile,
     return {status, buffer.str()};
 }
 
+std::string
+NormalizeTestPath(const std::filesystem::path& path)
+{
+    return std::filesystem::absolute(path).lexically_normal().string();
+}
+
 } // namespace
 
 class UbQuickExampleMissingCasePathSystemTest : public TestCase
@@ -602,6 +608,69 @@ class UbQuickExampleMissingCasePathSystemTest : public TestCase
         NS_TEST_ASSERT_MSG_NE(output.find("missing required case path (--case-path or casePath)"),
                               std::string::npos,
                               "ub-quick-example should print a clear missing case-path error");
+    }
+};
+
+class UbQuickExampleMissingCaseDirSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleMissingCaseDirSystemTest()
+        : TestCase("UnifiedBus - ub-quick-example rejects missing case directory")
+    {
+    }
+
+    void DoRun() override
+    {
+        SetDataDir(NS_TEST_SOURCEDIR);
+        const std::filesystem::path repoRoot = LocateRepoRoot();
+        const std::filesystem::path missingCaseDir = repoRoot / "scratch/ub-case-does-not-exist";
+        const std::string expectedError =
+            "case path does not exist: " + NormalizeTestPath(missingCaseDir);
+        auto [status, output] =
+            RunQuickExampleCommand(CreateTempDirFilename(GetName() + ".log"),
+                                   "--case-path=\"" + missingCaseDir.string() + "\"",
+                                   "",
+                                   "");
+
+        NS_TEST_ASSERT_MSG_NE(status,
+                              0,
+                              "ub-quick-example should fail when case-path directory is missing");
+        NS_TEST_ASSERT_MSG_NE(output.find(expectedError),
+                              std::string::npos,
+                              "ub-quick-example should print a clear missing case directory error");
+    }
+};
+
+class UbQuickExampleMissingCaseFileSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleMissingCaseFileSystemTest()
+        : TestCase("UnifiedBus - ub-quick-example rejects case directory with missing required files")
+    {
+    }
+
+    void DoRun() override
+    {
+        SetDataDir(NS_TEST_SOURCEDIR);
+        const std::filesystem::path caseDir =
+            std::filesystem::path(CreateTempDirFilename("ub-quick-example-missing-files-case"));
+        std::filesystem::create_directories(caseDir);
+        const std::filesystem::path expectedMissingFile = caseDir / "network_attribute.txt";
+        const std::string expectedError =
+            "missing required case file: " + NormalizeTestPath(expectedMissingFile);
+
+        auto [status, output] =
+            RunQuickExampleCommand(CreateTempDirFilename(GetName() + ".log"),
+                                   "--case-path=\"" + caseDir.string() + "\"",
+                                   "",
+                                   "");
+
+        NS_TEST_ASSERT_MSG_NE(status,
+                              0,
+                              "ub-quick-example should fail when required case files are missing");
+        NS_TEST_ASSERT_MSG_NE(output.find(expectedError),
+                              std::string::npos,
+                              "ub-quick-example should identify the first missing required case file");
     }
 };
 
@@ -734,6 +803,8 @@ class UbQuickExampleSystemTestSuite : public TestSuite
         : TestSuite("unified-bus-examples", Type::SYSTEM)
     {
         AddTestCase(new UbQuickExampleMissingCasePathSystemTest(), TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleMissingCaseDirSystemTest(), TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleMissingCaseFileSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleHelpTextSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleSameCasePathSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleConflictingCasePathSystemTest(), TestCase::Duration::QUICK);
