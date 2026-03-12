@@ -61,7 +61,6 @@ struct RuntimeSelection
 
     Mode mode = Mode::LocalSingle;
     bool enableMpi = false;
-    bool mtpEnabled = false;
     uint32_t mpiRank = 0;
 };
 
@@ -428,7 +427,6 @@ RuntimeSelection PrepareRuntime(int* argc, char*** argv, const QuickExampleOptio
     RuntimeSelection runtime;
     runtime.enableMpi = DetectMpiWorld();
     runtime.mode = ResolveRuntimeMode(runtime.enableMpi, options.mtpThreads);
-    runtime.mtpEnabled = ModeUsesMtp(runtime.mode);
     PrepareSimulatorMode(runtime, options.mtpThreads);
 
 #ifdef NS3_MPI
@@ -441,7 +439,7 @@ RuntimeSelection PrepareRuntime(int* argc, char*** argv, const QuickExampleOptio
 
     if (IsMtpRequested(options.mtpThreads))
     {
-        if (runtime.mtpEnabled)
+        if (ModeUsesMtp(runtime.mode))
         {
             std::cout << "[INFO] MTP enabled with " << options.mtpThreads << " threads."
                       << (runtime.enableMpi ? " (hybrid MPI mode)." : " (local mode).")
