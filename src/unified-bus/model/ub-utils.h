@@ -39,14 +39,6 @@ namespace utils {
  */
 class UbUtils : public ns3::Singleton<UbUtils> {
 public:
-    // Runtime trace state shared by current process.
-    inline static std::string trace_path;
-
-    inline static std::map<std::string, std::ofstream *> files;  // 存储文件名和对应的文件句柄
-
-    ns3::GlobalValue g_fault_enable =
-    ns3::GlobalValue("UB_FAULT_ENABLE", "fault moudle enabled", ns3::BooleanValue(false), ns3::MakeBooleanChecker());
-
     // Runtime / trace lifecycle helpers used by examples and tests.
     void PrintTimestamp(const std::string &message);
 
@@ -92,6 +84,14 @@ public:
     void InitFaultMoudle(const std::string &FaultConfigFile);
 
 private:
+    // Runtime trace state shared by current process.
+    inline static std::string trace_path;
+
+    inline static std::map<std::string, std::ofstream *> files;  // 存储文件名和对应的文件句柄
+
+    ns3::GlobalValue g_fault_enable =
+    ns3::GlobalValue("UB_FAULT_ENABLE", "fault moudle enabled", ns3::BooleanValue(false), ns3::MakeBooleanChecker());
+
     // 读取Traffic配置文件
     enum class FIELDCOUNT : int {
        TASKID = 0,
