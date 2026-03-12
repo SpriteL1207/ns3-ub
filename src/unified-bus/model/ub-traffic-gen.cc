@@ -45,15 +45,6 @@ UbTrafficGen::IsMultiProcessRuntimeUnsupported()
 #endif
 }
 
-std::string
-UbTrafficGen::GetMultiProcessUnsupportedMessage()
-{
-    return "UbTrafficGen does not support MPI multi-process usage in this branch. "
-           "Supported: unified-bus multi-process data path and UbTrafficGen multithreading. "
-           "Unsupported: distributed/operator-style synchronization via traffic.csv. "
-           "Use local quick-example runs or build distributed coordination separately.";
-}
-
 void UbTrafficGen::AddTask(TrafficRecord record)
 {
     NS_ABORT_MSG_IF(IsMultiProcessRuntimeUnsupported(), GetMultiProcessUnsupportedMessage());
