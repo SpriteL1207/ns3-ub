@@ -585,6 +585,32 @@ NormalizeTestPath(const std::filesystem::path& path)
     return std::filesystem::absolute(path).lexically_normal().string();
 }
 
+std::filesystem::path
+CopyCaseDirWithoutFile(const std::string& sourceCasePathRelative, const std::string& omittedFilename)
+{
+    namespace fs = std::filesystem;
+
+    const fs::path repoRoot = LocateRepoRoot();
+    const fs::path sourceCaseDir = repoRoot / sourceCasePathRelative;
+    const auto uniqueSuffix =
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    const fs::path tempCaseDir =
+        (fs::temp_directory_path() / ("ub-quick-example-case-copy-" + uniqueSuffix)).lexically_normal();
+
+    fs::create_directories(tempCaseDir);
+    for (const auto& entry : fs::directory_iterator(sourceCaseDir))
+    {
+        const fs::path destination = tempCaseDir / entry.path().filename();
+        if (entry.path().filename() == omittedFilename)
+        {
+            continue;
+        }
+        fs::copy(entry.path(), destination, fs::copy_options::recursive);
+    }
+
+    return tempCaseDir;
+}
+
 } // namespace
 
 class UbQuickExampleMissingCasePathSystemTest : public TestCase
@@ -701,6 +727,31 @@ class UbQuickExampleHelpTextSystemTest : public TestCase
     }
 };
 
+class UbQuickExampleLocalSingleThreadSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleLocalSingleThreadSystemTest()
+        : TestCase("UnifiedBus - ub-quick-example local mtp-threads=1 runs as single-thread")
+    {
+    }
+
+    void DoRun() override
+    {
+        SetDataDir(NS_TEST_SOURCEDIR);
+        auto [status, output] =
+            RunQuickExampleCommand(CreateTempDirFilename(GetName() + ".log"),
+                                   "--mtp-threads=1",
+                                   "",
+                                   "scratch/ub-local-hybrid-minimal");
+
+        NS_TEST_ASSERT_MSG_EQ(status,
+                              0,
+                              "ub-quick-example local mtp-threads=1 should exit successfully");
+        NS_TEST_ASSERT_MSG_EQ(output.find("MPI_Testany() ... before MPI_INIT"), std::string::npos,
+                              "ub-quick-example local mtp-threads=1 should not touch MPI before MPI_Init");
+    }
+};
+
 class UbQuickExampleSameCasePathSystemTest : public TestCase
 {
   public:
@@ -758,6 +809,34 @@ class UbQuickExampleConflictingCasePathSystemTest : public TestCase
     }
 };
 
+class UbQuickExampleOptionalTransportChannelSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleOptionalTransportChannelSystemTest()
+        : TestCase("UnifiedBus - ub-quick-example succeeds without transport_channel.csv")
+    {
+    }
+
+    void DoRun() override
+    {
+        SetDataDir(NS_TEST_SOURCEDIR);
+        const std::filesystem::path caseDir =
+            CopyCaseDirWithoutFile("scratch/ub-local-hybrid-minimal", "transport_channel.csv");
+        auto [status, output] =
+            RunQuickExampleCommand(CreateTempDirFilename(GetName() + ".log"),
+                                   "--case-path=\"" + caseDir.string() + "\"",
+                                   "",
+                                   "");
+
+        std::error_code ec;
+        std::filesystem::remove_all(caseDir, ec);
+
+        NS_TEST_ASSERT_MSG_EQ(status,
+                              0,
+                              "ub-quick-example should accept case directories without transport_channel.csv");
+    }
+};
+
 class UbQuickExampleMpiSystemTest : public TestCase
 {
   public:
@@ -806,12 +885,19 @@ class UbQuickExampleSystemTestSuite : public TestSuite
         AddTestCase(new UbQuickExampleMissingCaseDirSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleMissingCaseFileSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleHelpTextSystemTest(), TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleLocalSingleThreadSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleSameCasePathSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleConflictingCasePathSystemTest(), TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleOptionalTransportChannelSystemTest(),
+                    TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleLocalMtpSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example MPI minimal case runs",
                                                     "scratch/ub-mpi-hybrid-minimal",
                                                     ""),
+                    TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example MPI mtp-threads=1 runs",
+                                                    "scratch/ub-mpi-hybrid-minimal",
+                                                    "--mtp-threads=1"),
                     TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example hybrid minimal case runs",
                                                     "scratch/ub-mpi-hybrid-minimal",
