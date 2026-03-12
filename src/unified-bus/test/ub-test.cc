@@ -611,6 +611,64 @@ CopyCaseDirWithoutFile(const std::string& sourceCasePathRelative, const std::str
     return tempCaseDir;
 }
 
+std::filesystem::path
+CopyCaseDirWithTrafficFile(const std::string& sourceCasePathRelative, const std::string& trafficCsvContent)
+{
+    namespace fs = std::filesystem;
+
+    const fs::path repoRoot = LocateRepoRoot();
+    const fs::path sourceCaseDir = repoRoot / sourceCasePathRelative;
+    const auto uniqueSuffix =
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    const fs::path tempCaseDir =
+        (fs::temp_directory_path() / ("ub-quick-example-traffic-copy-" + uniqueSuffix))
+            .lexically_normal();
+
+    fs::create_directories(tempCaseDir);
+    for (const auto& entry : fs::directory_iterator(sourceCaseDir))
+    {
+        const fs::path destination = tempCaseDir / entry.path().filename();
+        fs::copy(entry.path(), destination, fs::copy_options::recursive);
+    }
+
+    std::ofstream trafficFile(tempCaseDir / "traffic.csv");
+    trafficFile << trafficCsvContent;
+    trafficFile.close();
+
+    return tempCaseDir;
+}
+
+std::pair<int, std::string>
+RunQuickExampleAbsoluteCaseCommand(const std::string& testFile,
+                                   const std::string& extraArgs,
+                                   const std::string& commandPrefix,
+                                   const std::filesystem::path& casePath)
+{
+    const std::filesystem::path repoRoot = LocateRepoRoot();
+    const std::filesystem::path binaryPath =
+        repoRoot / "build/src/unified-bus/examples/ns3.44-ub-quick-example-default";
+
+    std::string command;
+    if (!commandPrefix.empty())
+    {
+        command += commandPrefix + " ";
+    }
+    command += "\"" + binaryPath.string() + "\"";
+    command += " --case-path=\"" + casePath.string() + "\"";
+    if (!extraArgs.empty())
+    {
+        command += " " + extraArgs;
+    }
+    command += " > \"" + testFile + "\" 2>&1";
+
+    const int status = std::system(command.c_str());
+
+    std::ifstream input(testFile);
+    std::stringstream buffer;
+    buffer << input.rdbuf();
+    return {status, buffer.str()};
+}
+
 } // namespace
 
 class UbQuickExampleMissingCasePathSystemTest : public TestCase
@@ -837,6 +895,121 @@ class UbQuickExampleOptionalTransportChannelSystemTest : public TestCase
     }
 };
 
+class UbQuickExampleLocalDependentDagSingleThreadSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleLocalDependentDagSingleThreadSystemTest()
+        : TestCase("UnifiedBus - ub-quick-example local dependent DAG runs in single-thread")
+    {
+    }
+
+    void DoRun() override
+    {
+        SetDataDir(NS_TEST_SOURCEDIR);
+        const std::string trafficCsv =
+            "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases\n"
+            "0,0,3,4096,URMA_WRITE,7,10ns,10,\n"
+            "1,3,0,4096,URMA_WRITE,7,10ns,20,\n"
+            "2,0,3,4096,URMA_WRITE,7,10ns,30,10 20\n";
+        const std::filesystem::path caseDir =
+            CopyCaseDirWithTrafficFile("scratch/ub-local-hybrid-minimal", trafficCsv);
+
+        auto [status, output] =
+            RunQuickExampleAbsoluteCaseCommand(CreateTempDirFilename(GetName() + ".log"),
+                                               "--mtp-threads=1 --test",
+                                               "",
+                                               caseDir);
+
+        std::error_code ec;
+        std::filesystem::remove_all(caseDir, ec);
+
+        NS_TEST_ASSERT_MSG_EQ(status, 0, "single-thread dependent DAG case should exit successfully");
+        NS_TEST_ASSERT_MSG_NE(output.find("TEST : 00000 : PASSED"),
+                              std::string::npos,
+                              "single-thread dependent DAG case should report PASSED");
+    }
+};
+
+class UbQuickExampleLocalDependentDagMtpRedSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleLocalDependentDagMtpRedSystemTest()
+        : TestCase("UnifiedBus - ub-quick-example local dependent DAG fanout runs in MTP")
+    {
+    }
+
+    void DoRun() override
+    {
+        SetDataDir(NS_TEST_SOURCEDIR);
+        std::ostringstream traffic;
+        traffic << "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,"
+                   "dependOnPhases\n";
+        traffic << "0,0,3,4096,URMA_WRITE,7,10ns,10,\n";
+        traffic << "1,3,0,4096,URMA_WRITE,7,10ns,20,\n";
+        for (uint32_t taskId = 2; taskId <= 40; ++taskId)
+        {
+            traffic << taskId << ",0,3,4096,URMA_WRITE,7,10ns," << (100 + taskId) << ",10 20\n";
+        }
+        const std::filesystem::path caseDir =
+            CopyCaseDirWithTrafficFile("scratch/ub-local-hybrid-minimal", traffic.str());
+
+        auto [status, output] =
+            RunQuickExampleAbsoluteCaseCommand(CreateTempDirFilename(GetName() + ".log"),
+                                               "--mtp-threads=2 --test",
+                                               "",
+                                               caseDir);
+
+        std::error_code ec;
+        std::filesystem::remove_all(caseDir, ec);
+
+        NS_TEST_ASSERT_MSG_EQ(status, 0, "MTP dependent DAG fanout case should exit successfully");
+        NS_TEST_ASSERT_MSG_NE(output.find("TEST : 00000 : PASSED"),
+                              std::string::npos,
+                              "MTP dependent DAG fanout case should report PASSED");
+    }
+};
+
+class UbQuickExampleMpiCrossRankPhaseDependencySystemTest : public TestCase
+{
+  public:
+    UbQuickExampleMpiCrossRankPhaseDependencySystemTest()
+        : TestCase("UnifiedBus - ub-quick-example cross-rank phase dependency completes globally")
+    {
+    }
+
+    void DoRun() override
+    {
+#ifdef NS3_MPI
+        SetDataDir(NS_TEST_SOURCEDIR);
+        const std::string trafficCsv =
+            "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases\n"
+            "0,0,3,4096,URMA_WRITE,7,10ns,10,\n"
+            "1,3,0,4096,URMA_WRITE,7,10ns,20,10\n";
+        const std::filesystem::path caseDir =
+            CopyCaseDirWithTrafficFile("scratch/ub-mpi-hybrid-minimal", trafficCsv);
+
+        auto [status, output] =
+            RunQuickExampleAbsoluteCaseCommand(CreateTempDirFilename(GetName() + ".log"),
+                                               "--mtp-threads=2 --stop-ms=1 --test",
+                                               "mpirun -np 2",
+                                               caseDir);
+
+        std::error_code ec;
+        std::filesystem::remove_all(caseDir, ec);
+
+        NS_TEST_ASSERT_MSG_EQ(status, 0, "MPI cross-rank dependent DAG command should exit cleanly");
+        NS_TEST_ASSERT_MSG_EQ(output.find("TEST : 00000 : FAILED"),
+                              std::string::npos,
+                              "cross-rank phase dependency should not leave any rank incomplete");
+        NS_TEST_ASSERT_MSG_NE(output.find("TEST : 00000 : PASSED"),
+                              std::string::npos,
+                              "cross-rank phase dependency should report PASSED");
+#else
+        NS_TEST_SKIP_MSG("Requires MPI support");
+#endif
+    }
+};
+
 class UbQuickExampleMpiSystemTest : public TestCase
 {
   public:
@@ -890,6 +1063,10 @@ class UbQuickExampleSystemTestSuite : public TestSuite
         AddTestCase(new UbQuickExampleConflictingCasePathSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleOptionalTransportChannelSystemTest(),
                     TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleLocalDependentDagSingleThreadSystemTest(),
+                    TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleLocalDependentDagMtpRedSystemTest(),
+                    TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleLocalMtpSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example MPI minimal case runs",
                                                     "scratch/ub-mpi-hybrid-minimal",
@@ -910,6 +1087,8 @@ class UbQuickExampleSystemTestSuite : public TestSuite
         AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example hybrid multi-remote case runs",
                                                     "scratch/ub-mpi-hybrid-multi-remote",
                                                     "--mtp-threads=2"),
+                    TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleMpiCrossRankPhaseDependencySystemTest(),
                     TestCase::Duration::QUICK);
     }
 };
