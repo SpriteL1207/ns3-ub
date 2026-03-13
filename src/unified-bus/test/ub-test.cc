@@ -137,6 +137,7 @@ class UbCreateNodeSystemIdTest : public TestCase
     }
 };
 
+#ifdef NS3_MPI
 class UbCreateTopoRemoteLinkTest : public TestCase
 {
   public:
@@ -147,7 +148,6 @@ class UbCreateTopoRemoteLinkTest : public TestCase
 
     void DoRun() override
     {
-#ifdef NS3_MPI
         namespace fs = std::filesystem;
 
         const uint32_t beforeNodes = NodeList::GetNNodes();
@@ -195,12 +195,11 @@ class UbCreateTopoRemoteLinkTest : public TestCase
         NS_TEST_ASSERT_MSG_EQ(p1->GetChannel(), p0->GetChannel(), "Both ports should share the same link");
 
         fs::remove_all(caseDir, ec);
-#else
-        NS_TEST_SKIP_MSG("Requires MPI support");
-#endif
     }
 };
+#endif
 
+#if defined(NS3_MPI) && defined(NS3_MTP)
 class UbCreateTopoPackedSystemIdLocalLinkTest : public TestCase
 {
   public:
@@ -211,7 +210,6 @@ class UbCreateTopoPackedSystemIdLocalLinkTest : public TestCase
 
     void DoRun() override
     {
-#if defined(NS3_MPI) && defined(NS3_MTP)
         namespace fs = std::filesystem;
 
         const uint32_t beforeNodes = NodeList::GetNNodes();
@@ -261,11 +259,9 @@ class UbCreateTopoPackedSystemIdLocalLinkTest : public TestCase
         NS_TEST_ASSERT_MSG_EQ(p1->GetChannel(), p0->GetChannel(), "Both ports should share the same local link");
 
         fs::remove_all(caseDir, ec);
-#else
-        NS_TEST_SKIP_MSG("Requires MPI+MTP packed systemId support");
-#endif
     }
 };
+#endif
 
 class UbCreateTpPreloadInstancesTest : public TestCase
 {
@@ -477,8 +473,12 @@ UbTestSuite::UbTestSuite()
     AddTestCase(new UbSameMpiRankHelperTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbSystemOwnedByRankHelperTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbCreateNodeSystemIdTest(), TestCase::Duration::QUICK);
+#ifdef NS3_MPI
     AddTestCase(new UbCreateTopoRemoteLinkTest(), TestCase::Duration::QUICK);
+#endif
+#if defined(NS3_MPI) && defined(NS3_MTP)
     AddTestCase(new UbCreateTopoPackedSystemIdLocalLinkTest(), TestCase::Duration::QUICK);
+#endif
     AddTestCase(new UbCreateTpPreloadInstancesTest(), TestCase::Duration::QUICK);
 }
 
@@ -504,6 +504,7 @@ RunNs3RunCommand(const std::string& testFile,
 
 } // namespace
 
+#ifdef NS3_MTP
 class UbQuickExampleLocalMtpSystemTest : public TestCase
 {
   public:
@@ -514,7 +515,6 @@ class UbQuickExampleLocalMtpSystemTest : public TestCase
 
     void DoRun() override
     {
-#ifdef NS3_MTP
         SetDataDir(NS_TEST_SOURCEDIR);
         auto [status, output] =
             RunQuickExampleCommand(CreateTempDirFilename("ub-quick-example-local-mtp.log"),
@@ -527,12 +527,11 @@ class UbQuickExampleLocalMtpSystemTest : public TestCase
                               "ub-quick-example local MTP mode should exit successfully");
         NS_TEST_ASSERT_MSG_EQ(output.find("MPI_Testany() ... before MPI_INIT"), std::string::npos,
                               "ub-quick-example local MTP mode should not touch MPI before MPI_Init");
-#else
-        NS_TEST_SKIP_MSG("Requires MTP support");
-#endif
     }
 };
+#endif
 
+#ifdef NS3_MPI
 class UbQuickExampleSpoofedMpiEnvSystemTest : public TestCase
 {
   public:
@@ -543,7 +542,6 @@ class UbQuickExampleSpoofedMpiEnvSystemTest : public TestCase
 
     void DoRun() override
     {
-#ifdef NS3_MPI
         SetDataDir(NS_TEST_SOURCEDIR);
         auto [status, output] =
             RunQuickExampleCommand(CreateTempDirFilename("ub-quick-example-spoofed-mpi-env.log"),
@@ -560,11 +558,9 @@ class UbQuickExampleSpoofedMpiEnvSystemTest : public TestCase
         NS_TEST_ASSERT_MSG_NE(output.find("TEST : 00000 : PASSED"),
                               std::string::npos,
                               "spoofed MPI environment case should still complete locally");
-#else
-        NS_TEST_SKIP_MSG("Requires MPI support");
-#endif
     }
 };
+#endif
 
 namespace
 {
@@ -1056,6 +1052,7 @@ class UbQuickExampleLocalDependentDagMtpRedSystemTest : public TestCase
     }
 };
 
+#ifdef NS3_MPI
 class UbQuickExampleMpiCrossRankPhaseDependencySystemTest : public TestCase
 {
   public:
@@ -1066,7 +1063,6 @@ class UbQuickExampleMpiCrossRankPhaseDependencySystemTest : public TestCase
 
     void DoRun() override
     {
-#ifdef NS3_MPI
         SetDataDir(NS_TEST_SOURCEDIR);
         const std::string trafficCsv =
             "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases\n"
@@ -1088,9 +1084,6 @@ class UbQuickExampleMpiCrossRankPhaseDependencySystemTest : public TestCase
         NS_TEST_ASSERT_MSG_NE(output.find(UbTrafficGen::GetMultiProcessUnsupportedMessage()),
                               std::string::npos,
                               "cross-rank phase dependency should print the unsupported-runtime message");
-#else
-        NS_TEST_SKIP_MSG("Requires MPI support");
-#endif
     }
 };
 
@@ -1108,7 +1101,6 @@ class UbQuickExampleMpiSystemTest : public TestCase
 
     void DoRun() override
     {
-#ifdef NS3_MPI
         SetDataDir(NS_TEST_SOURCEDIR);
         auto [status, output] =
             RunQuickExampleCommand(CreateTempDirFilename(GetName() + ".log"),
@@ -1120,15 +1112,13 @@ class UbQuickExampleMpiSystemTest : public TestCase
         NS_TEST_ASSERT_MSG_NE(output.find(UbTrafficGen::GetMultiProcessUnsupportedMessage()),
                               std::string::npos,
                               "MPI quick-example should explain the unsupported UbTrafficGen runtime");
-#else
-        NS_TEST_SKIP_MSG("Requires MPI support");
-#endif
     }
 
   private:
     std::string m_casePathRelative;
     std::string m_extraArgs;
 };
+#endif
 
 class UbQuickExampleSystemTestSuite : public TestSuite
 {
@@ -1150,7 +1140,10 @@ class UbQuickExampleSystemTestSuite : public TestSuite
                     TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleLocalDependentDagMtpRedSystemTest(),
                     TestCase::Duration::QUICK);
+#ifdef NS3_MTP
         AddTestCase(new UbQuickExampleLocalMtpSystemTest(), TestCase::Duration::QUICK);
+#endif
+#ifdef NS3_MPI
         AddTestCase(new UbQuickExampleSpoofedMpiEnvSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example rejects MPI minimal case",
                                                     "scratch/ub-mpi-hybrid-minimal",
@@ -1174,6 +1167,7 @@ class UbQuickExampleSystemTestSuite : public TestSuite
                     TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleMpiCrossRankPhaseDependencySystemTest(),
                     TestCase::Duration::QUICK);
+#endif
     }
 };
 
