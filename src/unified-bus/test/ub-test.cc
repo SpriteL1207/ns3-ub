@@ -497,6 +497,11 @@ RunQuickExampleCommand(const std::string& testFile,
                        const std::string& commandPrefix,
                        const std::string& casePathRelative = "");
 
+std::pair<int, std::string>
+RunNs3RunCommand(const std::string& testFile,
+                 const std::string& programAndArgs,
+                 const std::string& commandPrefix = "");
+
 } // namespace
 
 class UbQuickExampleLocalMtpSystemTest : public TestCase
@@ -602,6 +607,30 @@ RunQuickExampleCommand(const std::string& testFile,
     {
         command += " " + extraArgs;
     }
+    command += " > \"" + testFile + "\" 2>&1";
+
+    const int status = std::system(command.c_str());
+
+    std::ifstream input(testFile);
+    std::stringstream buffer;
+    buffer << input.rdbuf();
+    return {status, buffer.str()};
+}
+
+std::pair<int, std::string>
+RunNs3RunCommand(const std::string& testFile,
+                 const std::string& programAndArgs,
+                 const std::string& commandPrefix)
+{
+    const std::filesystem::path repoRoot = LocateRepoRoot();
+
+    std::string command;
+    if (!commandPrefix.empty())
+    {
+        command += commandPrefix + " ";
+    }
+    command += "python3 \"" + (repoRoot / "ns3").string() + "\" run \"" + programAndArgs +
+               "\" --no-build";
     command += " > \"" + testFile + "\" 2>&1";
 
     const int status = std::system(command.c_str());
@@ -812,7 +841,7 @@ class UbQuickExampleHelpTextSystemTest : public TestCase
         NS_TEST_ASSERT_MSG_NE(output.find("Typical usage:"),
                               std::string::npos,
                               "help text should include quick-example usage guidance");
-        NS_TEST_ASSERT_MSG_NE(output.find("UbTrafficGen / traffic.csv is not supported in MPI multi-process mode"),
+        NS_TEST_ASSERT_MSG_NE(output.find("traffic.csv / UbTrafficGen is single-process only"),
                               std::string::npos,
                               "help text should explain the MPI TrafficGen boundary");
     }
@@ -840,6 +869,31 @@ class UbQuickExampleLocalSingleThreadSystemTest : public TestCase
                               "ub-quick-example local mtp-threads=1 should exit successfully");
         NS_TEST_ASSERT_MSG_EQ(output.find("MPI_Testany() ... before MPI_INIT"), std::string::npos,
                               "ub-quick-example local mtp-threads=1 should not touch MPI before MPI_Init");
+    }
+};
+
+class UbQuickScratchLegacyAliasSystemTest : public TestCase
+{
+  public:
+    UbQuickScratchLegacyAliasSystemTest()
+        : TestCase("UnifiedBus - legacy scratch ub-quick-example remains usable")
+    {
+    }
+
+    void DoRun() override
+    {
+        SetDataDir(NS_TEST_SOURCEDIR);
+        const std::filesystem::path repoRoot = LocateRepoRoot();
+        const std::filesystem::path casePath = repoRoot / "scratch/ub-local-hybrid-minimal";
+        auto [status, output] =
+            RunNs3RunCommand(CreateTempDirFilename(GetName() + ".log"),
+                             "scratch/ub-quick-example --case-path=" + casePath.string() +
+                                 " --test");
+
+        NS_TEST_ASSERT_MSG_EQ(status, 0, "legacy scratch quick-example should exit successfully");
+        NS_TEST_ASSERT_MSG_NE(output.find("TEST : 00000 : PASSED"),
+                              std::string::npos,
+                              "legacy scratch quick-example should complete the local case");
     }
 };
 
@@ -1087,6 +1141,7 @@ class UbQuickExampleSystemTestSuite : public TestSuite
         AddTestCase(new UbQuickExampleMissingCaseFileSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleHelpTextSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleLocalSingleThreadSystemTest(), TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickScratchLegacyAliasSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleSameCasePathSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleConflictingCasePathSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleOptionalTransportChannelSystemTest(),

@@ -14,7 +14,9 @@ endif()
 
 build_lib_example(
   NAME ub-quick-example
-  SOURCE_FILES ub-quick-example.cc
+  SOURCE_FILES
+    ub-quick-example.cc
+    ub-case-runner.cc
   LIBRARIES_TO_LINK ${ub_quick_example_libraries}
 )
 

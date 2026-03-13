@@ -1,87 +1,79 @@
-# `ub-quick-example` 入口文档
+# `ub-quick-example` 使用说明
 
-`ub-quick-example` 是当前 unified-bus 配置驱动场景的统一用户入口。
+`ub-quick-example` 用来读取一个 case 目录中的配置文件，并据此创建 unified-bus 场景、运行仿真、输出 trace 与统计结果。
 
-它的定位有两层：
-- 作为可直接运行的 config-driven 示例入口
-- 作为 unified-bus 在 ns-3 中的建模/运行步骤说明
+推荐入口：
 
-## 当前能力边界
+```bash
+./ns3 run 'scratch/ub-quick-example --case-path=scratch/<case-dir>'
+```
 
-| 模式 | 状态 | 说明 |
+如果你已经启用了 examples，也可以使用：
+
+```bash
+./ns3 run 'src/unified-bus/examples/ub-quick-example --case-path=scratch/<case-dir>'
+```
+
+## 支持的运行方式
+
+| 运行方式 | 是否支持 | 说明 |
 |---|---|---|
-| 本地单进程单线程 | 支持 | 默认模式 |
-| 本地单进程 MTP 多线程 | 支持 | 使用 `--mtp-threads=<N>`，`N>=2` |
-| MPI 多进程 + `traffic.csv` / `UbTrafficGen` | 不支持 | 纯 MPI 与 MPI+MTP 都会显式 fail-fast |
-| `ub-mtp-remote-tp-regression` | 仅回归用途 | 不是用户入口 |
-
-当前分支里，统一-bus 的多进程数据路径适配已经具备，但 `UbTrafficGen` 仍被定义为**进程内 traffic generator**，不提供跨 rank 的 DAG / operator 同步。因此：
-
-- `ub-quick-example` 可以作为本地 config-driven 用户入口
-- `ub-quick-example` 在 MPI 多进程下会显式拒绝 `traffic.csv` 场景
+| 单进程单线程 | 支持 | 默认模式 |
+| 单进程 MTP 多线程 | 支持 | 使用 `--mtp-threads=<N>`，`N>=2` |
+| MPI 多进程 + `traffic.csv` | 不支持 | 会直接退出并打印提示 |
 
 ## 构建
 
-最小本地入口：
+默认推荐直接使用 `scratch` 入口：
 
 ```bash
-cmake --build ./cmake-cache -j 7 --target ub-quick-example
+./ns3 configure
+./ns3 build
 ```
 
-如果要跑本地 MTP：
+如果要启用 MTP：
 
 ```bash
-./ns3 configure --enable-mtp --enable-examples
-cmake --build ./cmake-cache -j 7 --target ub-quick-example
+./ns3 configure --enable-mtp
+./ns3 build
 ```
 
-如果只是为了验证当前纯 MPI fail-fast 边界：
+如果要运行 `src/unified-bus/examples/ub-quick-example`，需要额外启用 examples：
 
 ```bash
-./ns3 configure --enable-mpi --enable-examples
-cmake --build ./cmake-cache -j 7 --target ub-quick-example
+./ns3 configure --enable-examples
+./ns3 build
 ```
 
-如果还要验证 MPI+MTP hybrid fail-fast 边界：
+## 常用命令
+
+单进程：
 
 ```bash
-./ns3 configure --enable-mpi --enable-mtp --enable-examples
-cmake --build ./cmake-cache -j 7 --target ub-quick-example
+./ns3 run 'scratch/ub-quick-example --case-path=scratch/ub-local-hybrid-minimal'
 ```
 
-## 运行命令
-
-本地单进程：
+单进程 MTP 多线程：
 
 ```bash
-build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=scratch/ub-local-hybrid-minimal
-```
-
-本地 MTP 多线程：
-
-```bash
-build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=scratch/ub-local-hybrid-minimal --mtp-threads=2
+./ns3 run 'scratch/ub-quick-example --case-path=scratch/ub-local-hybrid-minimal --mtp-threads=2'
 ```
 
 测试模式：
 
 ```bash
-build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=scratch/ub-local-hybrid-minimal --test
+./ns3 run 'scratch/ub-quick-example --case-path=scratch/ub-local-hybrid-minimal --test'
 ```
 
-当前分支下，下面这些 MPI 多进程命令**都预期会被拒绝**：
+如果你需要显式使用 example 入口：
 
 ```bash
-mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=scratch/ub-mpi-hybrid-minimal --test
-```
-
-```bash
-mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-quick-example-default --case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2 --test
+./ns3 run 'src/unified-bus/examples/ub-quick-example --case-path=scratch/ub-local-hybrid-minimal --test'
 ```
 
 ## `case-path` 目录
 
-一个最小 case 目录通常包含：
+最小 case 目录需要包含：
 
 - `network_attribute.txt`
 - `node.csv`
@@ -89,57 +81,58 @@ mpirun -np 2 build/src/unified-bus/examples/ns3.44-ub-quick-example-default --ca
 - `routing_table.csv`
 - `traffic.csv`
 
-可选：
+可选文件：
 
 - `transport_channel.csv`
 - `fault.csv`
 
-更完整的字段定义、格式约束、工具链生成方式见： `scratch/README.md`
+更完整的字段定义、约束和示例见： `scratch/README.md`
 
-## 入口执行顺序
+## 程序会做什么
 
-`ub-quick-example` 按如下顺序执行：
+程序按下面的顺序工作：
 
-1. 解析 CLI
-2. 校验 `case-path`
-3. 选择 runtime 模式（本地单线程 / 本地 MTP）
-4. 加载 `network_attribute.txt`
-5. 创建 node / topo / routing / TP
-6. 加载 `traffic.csv` 并初始化 `UbTrafficGen`
-7. 激活 `UbApp`
-8. 运行仿真
-9. 解析 trace 并输出 wall-clock
+1. 解析 CLI 参数
+2. 校验 `--case-path`
+3. 读取 `network_attribute.txt`
+4. 创建 node、topology、routing、TP
+5. 读取 `traffic.csv`
+6. 激活应用并运行仿真
+7. 解析 trace 并输出统计结果
 
-这条路径对应的核心实现位于： `src/unified-bus/examples/ub-quick-example.cc`
+## 常见提示
 
-## 常见问题
+### `missing required case path (--case-path or casePath)`
 
-### 1. `missing required case path`
+没有提供 case 目录。请使用：
 
-没有提供 `--case-path`，或者没有给 positional `casePath`。
+```bash
+./ns3 run 'scratch/ub-quick-example --case-path=scratch/<case-dir>'
+```
 
-### 2. `missing required case file`
+### `missing required case file`
 
-`case-path` 下缺少必需配置文件。
+`case-path` 目录下缺少必需文件。请检查上面的最小文件列表。
 
-### 3. `UbTrafficGen does not support MPI multi-process usage in this branch`
+### MPI 多进程模式下直接退出
 
-这是当前分支的预期行为，不是误报。
+如果你看到 `UbTrafficGen does not support MPI multi-process usage in this branch`，含义是：当前版本中，`traffic.csv` 驱动的任务生成仅支持单进程运行。
 
-含义是：
-- unified-bus 多进程数据路径已适配
-- 但 `traffic.csv` / `UbTrafficGen` 仍不支持多进程分布式 DAG 同步
+因此，下面这类命令会被拒绝：
 
-### 4. trace 没有后处理结果
+```bash
+mpirun -np 2 build/scratch/ns3.44-ub-quick-example-default --case-path=scratch/ub-mpi-hybrid-minimal --test
+```
 
-检查：
+### trace 后处理没有输出
+
+请检查：
+
 - `UB_PARSE_TRACE_ENABLE`
 - `UB_PYTHON_SCRIPT_PATH`
 
 ## 相关文档
 
-- 项目总览： `README.md`
 - 快速开始： `QUICK_START.md`
-- Unison / MPI / MTP 背景： `UNISON_README.md`
 - case 配置格式： `scratch/README.md`
-- 阶段报告： `docs/reports/2026-03-11-ub-quick-example-mpi-unification-report.md`
+- Unison / MTP 背景： `UNISON_README.md`

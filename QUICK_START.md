@@ -92,16 +92,16 @@ conda install pandas matplotlib seaborn
 ./ns3 build
 
 # 运行时可通过 --mtp-threads 参数启用多线程（需 >= 2）
-./ns3 run 'src/unified-bus/examples/ub-quick-example scratch/2nodes_single-tp --mtp-threads=8'
+./ns3 run 'scratch/ub-quick-example --case-path=scratch/2nodes_single-tp --mtp-threads=8'
 ```
 
 说明：启用并行仿真通常还需要在仿真程序中调用 `MtpInterface::Enable(...)`（并用 `#ifdef NS3_MTP` 保护）；更多用法与注意事项请参阅 [UNISON_README.md](UNISON_README.md)。
 
-提示：当前统一入口程序 [src/unified-bus/examples/ub-quick-example.cc](src/unified-bus/examples/ub-quick-example.cc) 已包含 Unison/MTP 运行路径，如需使用请通过命令行传入 `--mtp-threads`。
+提示：默认推荐使用 `scratch/ub-quick-example`；如已启用 examples，也可以使用 `src/unified-bus/examples/ub-quick-example`。
 
 ## 运行简单示例
 
-`ub-quick-example` 是本项目提供的仿真入口程序，本质上是一个标准的 ns-3 应用程序。它遵循 ns-3 的标准运行方式，即通过 `./ns3 run` 命令调用，并将**配置文件所在的目录路径**作为参数传递给它。程序启动后会读取指定目录下的配置文件（如 `topology.csv`, `traffic.csv` 等）来自动构建网络拓扑、配置协议栈并生成流量。这种设计使得用户无需修改 C++ 源码，仅需通过命令行参数切换不同的配置目录，即可运行多种仿真场景。
+`ub-quick-example` 会读取 case 目录中的配置文件（如 `topology.csv`、`traffic.csv` 等），自动创建 unified-bus 场景并运行仿真。推荐命令形式为 `./ns3 run 'scratch/ub-quick-example --case-path=...'`。
 
 ```bash
 # 如使用 Conda，请确保其 bin 在 PATH 前（或先激活环境）
@@ -111,7 +111,7 @@ export PATH=/home/ytxing/miniconda3/bin:$PATH
 python3 -m pip install --user -r scratch/ns-3-ub-tools/requirements.txt
 
 # 运行小示例并触发 trace 分析
-./ns3 run 'src/unified-bus/examples/ub-quick-example scratch/2nodes_single-tp'
+./ns3 run 'scratch/ub-quick-example --case-path=scratch/2nodes_single-tp'
 
 # 验证输出
 ls scratch/2nodes_single-tp/output/
@@ -126,36 +126,36 @@ ls scratch/2nodes_single-tp/output/
 
 - 2 节点（单 TP）：
   ```bash
-  ./ns3 run 'src/unified-bus/examples/ub-quick-example scratch/2nodes_single-tp'
+  ./ns3 run 'scratch/ub-quick-example --case-path=scratch/2nodes_single-tp'
   ```
 
 - 2 节点（多 TP）：
   ```bash
-  ./ns3 run 'src/unified-bus/examples/ub-quick-example scratch/2nodes_multiple-tp'
+  ./ns3 run 'scratch/ub-quick-example --case-path=scratch/2nodes_multiple-tp'
   ```
 
 - 2 节点（包喷洒）：
   ```bash
-  ./ns3 run 'src/unified-bus/examples/ub-quick-example scratch/2nodes_packet-spray'
+  ./ns3 run 'scratch/ub-quick-example --case-path=scratch/2nodes_packet-spray'
   ```
 
 - 2D FullMesh 4x4（多路径 All-to-All）：
   ```bash
-  ./ns3 run 'src/unified-bus/examples/ub-quick-example scratch/2dfm4x4-multipath_a2a'
+  ./ns3 run 'scratch/ub-quick-example --case-path=scratch/2dfm4x4-multipath_a2a'
   # 启用多线程加速（需 --enable-mtp 编译）
-  ./ns3 run 'src/unified-bus/examples/ub-quick-example scratch/2dfm4x4-multipath_a2a --mtp-threads=8'
+  ./ns3 run 'scratch/ub-quick-example --case-path=scratch/2dfm4x4-multipath_a2a --mtp-threads=8'
   ```
 
 - 2D FullMesh 4x4（分层广播）：
   ```bash
-  ./ns3 run 'src/unified-bus/examples/ub-quick-example scratch/2dfm4x4-hierarchical_broadcast'
+  ./ns3 run 'scratch/ub-quick-example --case-path=scratch/2dfm4x4-hierarchical_broadcast'
   ```
 
 - Clos（32 hosts / 4 leafs / 8 spines, pod2pod）：
   ```bash
-  ./ns3 run 'src/unified-bus/examples/ub-quick-example scratch/clos_32hosts-4leafs-8spines_pod2pod'
+  ./ns3 run 'scratch/ub-quick-example --case-path=scratch/clos_32hosts-4leafs-8spines_pod2pod'
   # 大型拓扑建议使用多线程
-  ./ns3 run 'src/unified-bus/examples/ub-quick-example scratch/clos_32hosts-4leafs-8spines_pod2pod --mtp-threads=16'
+  ./ns3 run 'scratch/ub-quick-example --case-path=scratch/clos_32hosts-4leafs-8spines_pod2pod --mtp-threads=16'
   ```
 
 说明：部分大型用例运行时间较长，可使用 `--mtp-threads=8` 启用多线程加速（需 `--enable-mtp` 编译）。
@@ -164,7 +164,7 @@ ls scratch/2nodes_single-tp/output/
 
 ```bash
 # 运行完整示例，包含 Python 后处理
-./ns3 run 'src/unified-bus/examples/ub-quick-example scratch/2dfm4x4-multipath_a2a'
+./ns3 run 'scratch/ub-quick-example --case-path=scratch/2dfm4x4-multipath_a2a'
 
 # 预期输出：
 [01:23:37]:Run case: scratch/2dfm4x4-multipath_a2a
