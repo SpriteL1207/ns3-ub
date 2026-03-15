@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "ub-utils.h"
+#include <algorithm>
 #include <filesystem>
 
 using namespace std;
@@ -950,11 +951,58 @@ bool UbUtils::QueryAttributeInfo(int argc, char *argv[])
 {
     std::string className;
     std::string attrName;
+    std::string globalName;
+    bool printUbGlobals = false;
 
     CommandLine cmd;
     cmd.AddValue("ClassName", "Target class name", className);
     cmd.AddValue("AttributeName", "Target attribute name (optional)", attrName);
+    cmd.AddValue("GlobalName", "Target Unified Bus global value name (optional)", globalName);
+    cmd.AddValue("PrintUbGlobals", "Print Unified Bus global values with type metadata", printUbGlobals);
     cmd.Parse(argc, argv);
+
+    auto isUbGlobal = [](const std::string& name) {
+        return name.rfind("UB_", 0) == 0;
+    };
+    auto renderGlobalInfo = [](const GlobalValue& globalValue) {
+        StringValue value;
+        globalValue.GetValue(value);
+        NS_LOG_UNCOND("Global: " << globalValue.GetName() << "\n"
+                                 << "Description: " << globalValue.GetHelp() << "\n"
+                                 << "DataType: " << globalValue.GetChecker()->GetValueTypeName() << "\n"
+                                 << "Default: " << value.Get());
+    };
+
+    if (!globalName.empty()) {
+        for (auto gvit = GlobalValue::Begin(); gvit != GlobalValue::End(); ++gvit) {
+            if ((*gvit)->GetName() == globalName && isUbGlobal(globalName)) {
+                renderGlobalInfo(*(*gvit));
+                return true;
+            }
+        }
+        NS_LOG_UNCOND("Global not found!");
+        return true;
+    }
+
+    if (printUbGlobals) {
+        std::vector<GlobalValue*> ubGlobals;
+        for (auto gvit = GlobalValue::Begin(); gvit != GlobalValue::End(); ++gvit) {
+            if (isUbGlobal((*gvit)->GetName())) {
+                ubGlobals.push_back(*gvit);
+            }
+        }
+        std::sort(
+            ubGlobals.begin(),
+            ubGlobals.end(),
+            [](const GlobalValue* lhs, const GlobalValue* rhs) {
+                return lhs->GetName() < rhs->GetName();
+            }
+        );
+        for (const auto* globalValue : ubGlobals) {
+            renderGlobalInfo(*globalValue);
+        }
+        return true;
+    }
 
     if (className == "" || className.empty()) {
         return false;

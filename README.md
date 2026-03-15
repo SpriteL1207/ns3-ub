@@ -227,6 +227,20 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 
 
 
+### 4. Repo-local OpenUSim Helper
+
+本仓库随代码库一起维护一个 repo-local 的 `openusim-helper`，目录位于 ` .codex/skills/openusim-helper/ `。
+
+它的定位不是独立工具包，而是面向当前 `ns-3-ub` 工作树的 Agent 辅助入口，用来：
+
+- 根据自然语言仿真目标逐步收口实验描述
+- 在 `scratch/openusim-generated/` 下生成新的 case 目录
+- 复用当前仓库里的 `./ns3`、`scratch/ub-quick-example` 和子模块 `scratch/ns-3-ub-tools/`
+
+这意味着它需要与主仓代码和 `ns-3-ub-tools` 子模块保持同版本协作，不建议拆成单独 submodule 维护。
+
+在仓库尚未完成初始化时，它会先依据 [README.md](README.md) 与 [QUICK_START.md](QUICK_START.md) 帮助用户完成启动，再继续做 case 生成。
+
 ## 许可证
 
 本项目遵循 ns-3 许可证协议，GPL v2。详见 `LICENSE` 文件。

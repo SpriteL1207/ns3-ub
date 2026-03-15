@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenUSim Helper"
+  short_description: "Guide one OpenUSim goal into one spec and one generated case"
+  default_prompt: "Use $openusim-helper to clarify this Unified Bus simulation goal, maintain one current experiment-spec.md, and generate a case only after explicit approval."

@@ -73,6 +73,8 @@ conda install pandas matplotlib seaborn
 
 说明： 请在运行 `trace_analysis/parse_trace.py` 前通过 `requirements.txt` 预先安装所需第三方包。
 
+提示：如果你使用支持 repo-local skill 的 Agent，本仓库提供 ` .codex/skills/openusim-helper/ `。它会基于本页与 `README.md` 的步骤先检查仓库启动状态，再帮助生成 `scratch/openusim-generated/.../case`。该 helper 依赖当前 `ns-3-ub` 工作树与 `scratch/ns-3-ub-tools/`，不作为独立 submodule 维护。
+
 ## 配置与编译
 
 ```bash

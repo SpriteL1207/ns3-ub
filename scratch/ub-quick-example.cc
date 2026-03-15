@@ -131,7 +131,7 @@ int main(int argc, char* argv[])
     // 先检查是否查询属性信息（使用独立的参数检查，不触发严格解析）
     for (int i = 1; i < argc; ++i) {
         std::string arg(argv[i]);
-        if (arg.find("--ClassName") == 0) {
+        if (arg.find("--ClassName") == 0 || arg.find("--GlobalName") == 0 || arg == "--PrintUbGlobals") {
             if (UbUtils::Get()->QueryAttributeInfo(argc, argv))
                 return 0;
             break;
@@ -142,6 +142,8 @@ int main(int argc, char* argv[])
     // 运行时通过 --mtp-threads=N 指定线程数（0-1=禁用，>=2 启用）
     uint32_t mtpThreads = 0;
     CommandLine cmd;
+    // Ensure Unified Bus globals are registered before generic ns-3 introspection flags are parsed.
+    UbUtils::Get();
     cmd.AddValue("mtp-threads", "Number of MTP threads (0-1 to disable, >=2 to enable)", mtpThreads);
     cmd.Parse(argc, argv);
 
@@ -224,4 +226,3 @@ int main(int argc, char* argv[])
     UbUtils::Get()->PrintTimestamp("Wall-clock (total): " + std::to_string(total_wall_s) + " s");
     return 0;
 }
-
