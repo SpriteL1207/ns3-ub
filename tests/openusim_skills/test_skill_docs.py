@@ -34,15 +34,15 @@ class OpenUSimStageSkillDocsTest(unittest.TestCase):
 
         self.assertIn("Hand off to `openusim-plan-experiment` when:", welcome_text)
         self.assertIn("Hand off to `openusim-run-experiment` when:", plan_text)
-        self.assertIn("Before handoff, record in `experiment-spec.md`:", plan_text)
+        self.assertIn("Before handoff, ensure `experiment-spec.md` exists", plan_text)
         self.assertIn("Return to `openusim-welcome` when:", plan_text)
         self.assertIn("scratch/ns-3-ub-tools/net_sim_builder.py", run_text)
         self.assertIn("scratch/ns-3-ub-tools/traffic_maker/build_traffic.py", run_text)
         self.assertIn("Hand off to `openusim-analyze-results` when:", run_text)
         self.assertIn("Return to `openusim-plan-experiment` when:", run_text)
-        self.assertIn("references/trace-observability.md", analyze_text)
-        self.assertIn("references/throughput-evidence.md", analyze_text)
-        self.assertIn("references/transport-channel-modes.md", analyze_text)
+        self.assertIn("../openusim-references/trace-observability.md", analyze_text)
+        self.assertIn("../openusim-references/throughput-evidence.md", analyze_text)
+        self.assertIn("../openusim-references/transport-channel-modes.md", analyze_text)
         self.assertIn("Hand off to `openusim-plan-experiment` when:", analyze_text)
 
     def test_welcome_skill_spells_out_startup_gate(self):
@@ -67,7 +67,7 @@ class OpenUSimStageSkillDocsTest(unittest.TestCase):
 
     def test_spec_rules_define_minimal_experiment_spec_shape(self):
         spec_rules_text = self.read_text(
-            ".codex/skills/openusim-plan-experiment/references/spec-rules.md"
+            ".codex/skills/openusim-references/spec-rules.md"
         )
         for marker in (
             "## Minimal template",

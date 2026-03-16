@@ -20,9 +20,23 @@ Do not use this skill to define experiment intent or to perform final result int
 
 ## The Process
 
-1. Read the current `experiment-spec.md`.
-2. Verify that startup facts do not block execution.
-3. Generate topology files through `scratch/ns-3-ub-tools/net_sim_builder.py` and its example topology scripts when applicable.
+1. **Verify prerequisites:**
+   a. **Read `experiment-spec.md`** (must exist, use Read tool)
+   b. **Check spec completeness:** verify all required sections exist (Goal, Topology, Workload, Network Overrides, Observability)
+   c. **Check repo startup readiness:**
+      - `./ns3` launcher exists
+      - `build/` directory exists
+      - `scratch/ns-3-ub-tools/` exists
+      - `scratch/ns-3-ub-tools/net_sim_builder.py` exists
+   d. **If any check fails:** stop and return to the appropriate stage (welcome for startup, plan for spec)
+
+2. Parse spec and extract execution parameters.
+3. **Generate topology script in case directory:**
+   a. Read topology family and parameters from spec
+   b. Select code template from `../openusim-references/topology-options.md` Generation Patterns
+   c. Generate `{case_dir}/generate_topology.py` by substituting parameters
+   d. Run: `python3 {case_dir}/generate_topology.py`
+   e. Verify outputs: `node.csv`, `topology.csv`, `routing_table.csv`, `transport_channel.csv`
 4. Generate `traffic.csv` through `scratch/ns-3-ub-tools/traffic_maker/build_traffic.py` when the workload is not a reference file.
 5. Write a full `network_attribute.txt` snapshot through the thin query-based writer.
 6. Run the light case-file gate before execution.
@@ -31,10 +45,9 @@ Do not use this skill to define experiment intent or to perform final result int
 
 ## Stop And Ask
 
-- The experiment specification is still missing required run facts.
-- Repo startup facts block execution.
-- Repo startup facts have not been verified for this session — verify before generating or running.
-- The topology family in the spec has no mapped example script in `../openusim-references/spec-to-toolchain.md` — ask the user whether to use `clos-spine-leaf` parameterized to match the requested sizing, or provide a custom script.
+- **The experiment specification does not exist or is incomplete** — return to plan stage.
+- **Repo startup facts block execution** — return to welcome stage.
+- The topology family in the spec has no mapped code template in `../openusim-references/topology-options.md` — ask the user to provide a custom script or restate as a supported family.
 - Existing repo tools cannot express the requested case without a new bounded decision.
 - The run fails in a way that is not self-explanatory from the error output.
 
@@ -95,9 +108,9 @@ Return to `openusim-plan-experiment` when:
 
 ## Common Mistakes
 
-- Reintroducing custom topology or workload generators instead of using repo-native tools.
+- Copying or modifying `user_topo_*.py` scripts instead of generating new scripts from code templates.
 - Treating `--mtp-threads` as part of experiment intent instead of runtime execution.
 - Turning the case checker into a heavy semantic validator.
 - Hiding explicit execution errors instead of surfacing them and using them to drive the next decision.
 - Stating default parameter values (bandwidth, delay, etc.) from memory instead of querying the runtime catalog via `load_or_build_parameter_catalog()`. Always use the catalog; do not recite static values.
-- Silently falling back to `user_topo_2layer_clos.py` when the topology family has no mapped script in `spec-to-toolchain.md`. Surface the gap and ask the user to confirm the approach.
+- Proceeding with generation when `experiment-spec.md` does not exist or is incomplete.

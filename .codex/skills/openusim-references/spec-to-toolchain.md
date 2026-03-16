@@ -2,18 +2,105 @@
 
 Use this reference when translating a stable `experiment-spec.md` into concrete tool invocations during the run stage.
 
+## Core Principle
+
+**Always generate a new Python script** in the case directory that calls `net_sim_builder.py` library. Do NOT copy or modify existing example scripts (`user_topo_*.py`). These are code templates for reference only, not reusable tools.
+
 ## Topology Slot → Topology Generation
 
-1. Choose the example topology script closest to the requested family:
-   - `clos-spine-leaf` → `scratch/ns-3-ub-tools/user_topo_2layer_clos.py`
-   - `nd-full-mesh` → `scratch/ns-3-ub-tools/user_topo_4x4_2DFM.py`
-   - `ring`, `full-mesh` → write a new script using `NetworkSimulationGraph` directly
-   - `clos-fat-tree` → **no repo-native example script exists**. Stop and ask the user whether to proceed via `clos-spine-leaf` parameterized to match the k-derived sizing (e.g. k=4 → host_num=16, leaf_sw_num=4), or to provide a custom script. Do not silently fall back to `user_topo_2layer_clos.py`.
-2. Generate a new parameterized script in the case directory, substituting spec parameters.
-3. Run the script: `python3 <generated_topo_script.py>`
-4. Outputs: `node.csv`, `topology.csv`, `routing_table.csv`, `transport_channel.csv`
+### Process
 
-Do not run `net_sim_builder.py` directly — it is a library, not a CLI.
+1. **Read topology family and parameters** from `experiment-spec.md`
+2. **Select the matching code template** from `topology-options.md` Generation Patterns section
+3. **Generate a new script** `{case_dir}/generate_topology.py`:
+   - Copy the complete pattern from `topology-options.md`
+   - Substitute spec parameters (host_num, leaf_sw_num, etc.)
+   - Adjust bandwidth/delay if specified in Network Overrides
+   - Adjust priority_list if specified in Network Overrides
+4. **Run the script:** `python3 {case_dir}/generate_topology.py`
+5. **Outputs:** `node.csv`, `topology.csv`, `routing_table.csv`, `transport_channel.csv`
+
+### Important Rules
+
+- **Do NOT** copy or modify `scratch/ns-3-ub-tools/user_topo_*.py` scripts
+- **Do NOT** run `net_sim_builder.py` directly (it's a library, not a CLI)
+- **Do NOT** reuse scripts across cases (each case gets its own generated script)
+- **Always** use the complete pattern from `topology-options.md`, not abbreviated code
+
+### Example
+
+**From spec:**
+```yaml
+Topology:
+  family: clos-spine-leaf
+  host_num: 64
+  leaf_sw_num: 8
+
+Network Overrides:
+  bandwidth: 200Gbps
+  delay: 10ns
+```
+
+**Generate `{case_dir}/generate_topology.py`:**
+```python
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scratch/ns-3-ub-tools"))
+
+import net_sim_builder as netsim
+import networkx as nx
+
+def all_shortest_paths(G, source, target):
+    try:
+        return nx.all_shortest_paths(G, source, target)
+    except nx.NetworkXNoPath:
+        return []
+
+if __name__ == '__main__':
+    graph = netsim.NetworkSimulationGraph()
+
+    # Parameters from experiment-spec.md
+    host_num = 64
+    leaf_sw_num = 8
+    spine_sw_num = host_num // leaf_sw_num
+
+    # Add hosts (0 to host_num-1)
+    for host_id in range(host_num):
+        graph.add_netisim_host(host_id, forward_delay='1ns')
+
+    # Add leaf switches
+    for leaf_idx in range(leaf_sw_num):
+        graph.add_netisim_node(host_num + leaf_idx, forward_delay='1ns')
+
+    # Add spine switches
+    for spine_idx in range(spine_sw_num):
+        graph.add_netisim_node(host_num + leaf_sw_num + spine_idx, forward_delay='1ns')
+
+    # Connect hosts to leaves (bandwidth/delay from Network Overrides)
+    host_per_leaf = host_num // leaf_sw_num
+    for host_id in range(host_num):
+        leaf_id = host_num + (host_id // host_per_leaf)
+        graph.add_netisim_edge(host_id, leaf_id, bandwidth='200Gbps', delay='10ns')
+
+    # Connect leaves to spines (full mesh)
+    for leaf_idx in range(leaf_sw_num):
+        for spine_idx in range(spine_sw_num):
+            leaf_id = host_num + leaf_idx
+            spine_id = host_num + leaf_sw_num + spine_idx
+            graph.add_netisim_edge(leaf_id, spine_id, bandwidth='200Gbps', delay='10ns')
+
+    # Generate config files
+    graph.build_graph_config()
+    graph.gen_route_table(path_finding_algo=all_shortest_paths, multiple_workers=4)
+    graph.config_transport_channel(priority_list=[7, 8])
+    graph.write_config()
+```
+
+**Then run:**
+```bash
+cd {case_dir}
+python3 generate_topology.py
+```
 
 ## Workload Slot → Traffic Generation
 

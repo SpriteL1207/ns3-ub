@@ -31,7 +31,10 @@ Do not use this skill to verify repo startup or to interpret completed run resul
    - `approval_ready`
 4. Ask only one smallest blocking question per turn.
 5. Use bounded `1/2/3/4` choices only when they help the user decide.
-6. Write back to `experiment-spec.md` only when a slot becomes stable enough to survive handoff.
+6. **When all slots are resolved and user approves generation/execution:**
+   a. **Use Write tool to create `experiment-spec.md`** (template: `../openusim-references/spec-rules.md`)
+   b. **Verify spec completeness** (use Read tool, check all required sections exist)
+   c. **Announce handoff readiness** ("Spec written at `experiment-spec.md`, ready to hand off to run stage")
 
 ## Stop And Ask
 
@@ -50,11 +53,12 @@ Stay in this skill when:
 
 Hand off to `openusim-run-experiment` when:
 
-- the experiment goal is stable
-- topology, workload, network parameters, and observability are concrete enough to run
-- the user explicitly approves generation or execution
+- Step 6 of The Process is complete (spec written and verified)
+- The experiment goal is stable
+- Topology, workload, network parameters, and observability are concrete enough to run
+- The user explicitly approved generation or execution
 
-Before handoff, write `experiment-spec.md` using the minimal template from `../openusim-references/spec-rules.md`. Do not just verbally summarize — write the file. Record:
+Before handoff, ensure `experiment-spec.md` exists on disk with all required sections from `../openusim-references/spec-rules.md`. The file must contain:
 
 - the confirmed experiment goal
 - the chosen topology path
