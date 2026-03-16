@@ -75,6 +75,18 @@ endfunction()
 
 # Scan *.cc files in ns-3-dev/scratch and build a target for each
 file(GLOB single_source_file_scratches CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/[^.]*.cc)
+list(REMOVE_ITEM single_source_file_scratches ${CMAKE_CURRENT_SOURCE_DIR}/ub-quick-example.cc)
+
+build_exec(
+        EXECNAME ub-quick-example
+        EXECNAME_PREFIX scratch_
+        SOURCE_FILES
+          ${CMAKE_CURRENT_SOURCE_DIR}/ub-quick-example.cc
+          ${PROJECT_SOURCE_DIR}/src/unified-bus/examples/ub-case-runner.cc
+        LIBRARIES_TO_LINK "${ns3-libs}" "${ns3-contrib-libs}"
+        EXECUTABLE_DIRECTORY_PATH ${CMAKE_OUTPUT_DIRECTORY}/scratch/
+)
+
 foreach(scratch_src ${single_source_file_scratches})
   create_scratch(${scratch_src})
 endforeach()

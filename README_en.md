@@ -6,6 +6,8 @@
 
 **Quick Start**: [QUICK_START_en.md](QUICK_START_en.md)
 
+**UB Config-Driven Entry**: See [docs/ub-quick-example.md](docs/ub-quick-example.md)
+
 ## Project Overview
 
 `ns-3-UB` is an ns-3 simulation module built based on the [UnifiedBus (UB) Base Specification](https://www.unifiedbus.com/zh). It implements the protocol frameworks and stack including the function layer, transaction layer, transport layer, network layer, and data link layer defined in the UB Base Specification. This project aims to provide a simulation platform for protocol innovation, network architecture exploration, and research on network algorithms such as congestion control, flow control, load balancing, and routing algorithms.
