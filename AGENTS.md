@@ -43,6 +43,12 @@ Keep this structure implicit rather than labeled.
 - prefer natural connective phrasing such as “你这个目标可以先按…来收口”, “先把…定下来”, “接下来只差…”
 - only switch to explicit headings when the user asks for a structured summary
 
+When confirming all slots before generation, use implicit wording rather than a labeled checklist. For example:
+
+- Good: “拓扑、负载和参数都定下来了，可以生成了吗？”
+- Good: “目标、拓扑、workload 都齐了，确认一下就可以跑。”
+- Bad: “**goal**: 验证吞吐量 / **topology**: clos-spine-leaf / **workload**: ar_ring / ...”
+
 ## First Reply Rule
 
 For a broad first-turn request such as “我想做一次 openusim 仿真”:

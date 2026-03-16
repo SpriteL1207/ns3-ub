@@ -38,6 +38,7 @@ Do not use this skill to verify repo startup or to interpret completed run resul
 - The requested topology or workload cannot be mapped to a bounded repo-supported path.
 - The user asks to generate or run before the planning gate is satisfied.
 - Startup facts are missing and block execution decisions.
+- Repo startup facts have not been verified for this session and the user is approaching generation approval.
 
 ## Handover
 
@@ -53,7 +54,7 @@ Hand off to `openusim-run-experiment` when:
 - topology, workload, network parameters, and observability are concrete enough to run
 - the user explicitly approves generation or execution
 
-Before handoff, record in `experiment-spec.md`:
+Before handoff, write `experiment-spec.md` using the minimal template from `../openusim-references/spec-rules.md`. Do not just verbally summarize — write the file. Record:
 
 - the confirmed experiment goal
 - the chosen topology path

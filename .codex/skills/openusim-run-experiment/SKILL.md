@@ -33,6 +33,8 @@ Do not use this skill to define experiment intent or to perform final result int
 
 - The experiment specification is still missing required run facts.
 - Repo startup facts block execution.
+- Repo startup facts have not been verified for this session — verify before generating or running.
+- The topology family in the spec has no mapped example script in `../openusim-references/spec-to-toolchain.md` — ask the user whether to use `clos-spine-leaf` parameterized to match the requested sizing, or provide a custom script.
 - Existing repo tools cannot express the requested case without a new bounded decision.
 - The run fails in a way that is not self-explanatory from the error output.
 
@@ -97,3 +99,5 @@ Return to `openusim-plan-experiment` when:
 - Treating `--mtp-threads` as part of experiment intent instead of runtime execution.
 - Turning the case checker into a heavy semantic validator.
 - Hiding explicit execution errors instead of surfacing them and using them to drive the next decision.
+- Stating default parameter values (bandwidth, delay, etc.) from memory instead of querying the runtime catalog via `load_or_build_parameter_catalog()`. Always use the catalog; do not recite static values.
+- Silently falling back to `user_topo_2layer_clos.py` when the topology family has no mapped script in `spec-to-toolchain.md`. Surface the gap and ask the user to confirm the approach.

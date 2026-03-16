@@ -8,6 +8,7 @@ Use this reference when translating a stable `experiment-spec.md` into concrete 
    - `clos-spine-leaf` → `scratch/ns-3-ub-tools/user_topo_2layer_clos.py`
    - `nd-full-mesh` → `scratch/ns-3-ub-tools/user_topo_4x4_2DFM.py`
    - `ring`, `full-mesh` → write a new script using `NetworkSimulationGraph` directly
+   - `clos-fat-tree` → **no repo-native example script exists**. Stop and ask the user whether to proceed via `clos-spine-leaf` parameterized to match the k-derived sizing (e.g. k=4 → host_num=16, leaf_sw_num=4), or to provide a custom script. Do not silently fall back to `user_topo_2layer_clos.py`.
 2. Generate a new parameterized script in the case directory, substituting spec parameters.
 3. Run the script: `python3 <generated_topo_script.py>`
 4. Outputs: `node.csv`, `topology.csv`, `routing_table.csv`, `transport_channel.csv`

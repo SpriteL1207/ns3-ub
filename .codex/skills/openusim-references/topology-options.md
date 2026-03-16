@@ -40,6 +40,7 @@ Only offer the three most relevant template choices.
 
 - Good when the user explicitly wants a canonical Clos family with a single `k` parameter.
 - Prefer this only when the user explicitly asks for `fat-tree` or gives a `k`-style input.
+- **No repo-native example script exists for this family.** At run stage, the agent must stop and ask the user whether to proceed via `clos-spine-leaf` parameterized to match the k-derived sizing, or provide a custom script. Do not silently fall back to another family's script.
 
 ### old case reference
 
