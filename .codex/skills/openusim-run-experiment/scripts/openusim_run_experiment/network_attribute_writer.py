@@ -1,0 +1,207 @@
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+from pathlib import Path
+
+from . import repo_root
+
+
+QUERY_PROGRAM = "scratch/ub-quick-example"
+QUERY_CASE = "scratch/2nodes_single-tp"
+QUERY_TIMEOUT_SECONDS = 30
+CATALOG_CACHE_PATH = Path(".openusim/project/parameter-catalog.json")
+PROJECT_TRACE_PARSER_PATH = "scratch/ns-3-ub-tools/trace_analysis/parse_trace.py"
+
+TYPE_ID_LINE_PATTERN = re.compile(r"^\s*(?P<type_id>ns3::(?:Ub\w+|TpConnectionManager))\s*$", re.MULTILINE)
+ATTRIBUTE_BLOCK_PATTERN = re.compile(
+    r"Attribute:\s*(?P<name>[^\n]+)\n"
+    r"Description:\s*(?P<description>[^\n]*)\n"
+    r"DataType:\s*(?P<value_type>[^\n]+)\n"
+    r"Default:\s*(?P<default_value>[^\n]*)",
+    re.MULTILINE,
+)
+GLOBAL_ENTRY_PATTERN = re.compile(
+    r"Global:\s*(?P<name>UB_[^\n]+)\n"
+    r"Description:\s*(?P<description>[^\n]*)\n"
+    r"DataType:\s*(?P<value_type>[^\n]+)\n"
+    r"Default:\s*(?P<default_value>[^\n]*)",
+    re.MULTILINE,
+)
+
+
+def _normalize_whitespace(text: str) -> str:
+    return " ".join((text or "").split())
+
+
+def _query_command(flag: str) -> str:
+    return f"{QUERY_PROGRAM} {QUERY_CASE} {flag}"
+
+
+def _ensure_query_prerequisites(current_repo_root: Path) -> Path:
+    launcher_path = current_repo_root / "ns3"
+    case_path = current_repo_root / QUERY_CASE
+    if not launcher_path.is_file():
+        raise FileNotFoundError(f"Missing ns-3 launcher: {launcher_path}")
+    if not case_path.is_dir():
+        raise FileNotFoundError(f"Missing query case directory: {case_path}")
+    return launcher_path
+
+
+def _run_query(flag: str) -> str:
+    current_repo_root = repo_root()
+    launcher_path = _ensure_query_prerequisites(current_repo_root)
+    result = subprocess.run(
+        [str(launcher_path), "run", _query_command(flag)],
+        cwd=current_repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=QUERY_TIMEOUT_SECONDS,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "unknown error"
+        raise RuntimeError(f"ns-3 query failed for {_query_command(flag)}: {detail}")
+    return result.stdout + result.stderr
+
+
+def _runtime_type_ids() -> list[str]:
+    output = _run_query("--PrintTypeIds")
+    return sorted(set(TYPE_ID_LINE_PATTERN.findall(output)))
+
+
+def _runtime_attribute_entries() -> list[dict]:
+    entries = []
+    for type_id in _runtime_type_ids():
+        output = _run_query(f"--ClassName={type_id}")
+        component_name = type_id.split("::")[-1]
+        for match in ATTRIBUTE_BLOCK_PATTERN.finditer(output):
+            entries.append(
+                {
+                    "parameter_key": f"{type_id}::{match.group('name')}",
+                    "kind": "AddAttribute",
+                    "value_type": _normalize_whitespace(match.group("value_type")),
+                    "default_value": _normalize_whitespace(match.group("default_value")),
+                    "module": component_name,
+                    "category": "general",
+                    "safety_sensitivity": "medium",
+                    "tuning_stage": "guided",
+                }
+            )
+    return entries
+
+
+def _runtime_global_entries() -> list[dict]:
+    output = _run_query("--PrintUbGlobals")
+    entries = []
+    for match in GLOBAL_ENTRY_PATTERN.finditer(output):
+        entries.append(
+            {
+                "parameter_key": match.group("name"),
+                "kind": "GlobalValue",
+                "value_type": _normalize_whitespace(match.group("value_type")),
+                "default_value": _normalize_whitespace(match.group("default_value")),
+                "module": "GlobalValue",
+                "category": "general",
+                "safety_sensitivity": "medium",
+                "tuning_stage": "guided",
+            }
+        )
+    return entries
+
+
+def _catalog_cache_path() -> Path:
+    return repo_root() / CATALOG_CACHE_PATH
+
+
+def _read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _write_json(path: Path, data: dict) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def load_or_build_parameter_catalog() -> tuple[dict, Path]:
+    cache_path = _catalog_cache_path()
+    if cache_path.is_file():
+        return _read_json(cache_path), cache_path
+
+    entries = _runtime_attribute_entries()
+    entries.extend(_runtime_global_entries())
+    entries = sorted(entries, key=lambda entry: entry["parameter_key"])
+    catalog = {
+        "source_root": str(repo_root() / QUERY_PROGRAM),
+        "extractor_version": "runtime-query-v1",
+        "entry_count": len(entries),
+        "entries": entries,
+    }
+    return catalog, _write_json(cache_path, catalog)
+
+
+def _normalize_override_key(parameter_key: str) -> str:
+    if parameter_key.startswith("default "):
+        return parameter_key[len("default ") :]
+    if parameter_key.startswith("global "):
+        return parameter_key[len("global ") :]
+    return parameter_key
+
+
+def _infer_kind(parameter_key: str) -> str:
+    return "default" if parameter_key.startswith("ns3::") else "global"
+
+
+def _render_line(kind: str, key: str, value: str) -> str:
+    return f'{kind} {key} "{value}"'
+
+
+def _merge_overrides(*override_groups: dict | None) -> dict:
+    merged = {}
+    for group in override_groups:
+        for key, value in (group or {}).items():
+            merged[_normalize_override_key(key)] = value
+    return merged
+
+
+def write_network_attributes(case_dir: Path, explicit_overrides=None, observability_overrides=None) -> dict:
+    case_dir = Path(case_dir)
+    case_dir.mkdir(parents=True, exist_ok=True)
+
+    catalog, catalog_path = load_or_build_parameter_catalog()
+    merged_overrides = _merge_overrides(observability_overrides, explicit_overrides)
+    resolved_values = {entry["parameter_key"]: entry["default_value"] for entry in catalog["entries"]}
+    resolved_values.update(merged_overrides)
+    resolved_values["UB_PYTHON_SCRIPT_PATH"] = PROJECT_TRACE_PARSER_PATH
+
+    catalog_entry_by_key = {entry["parameter_key"]: entry for entry in catalog["entries"]}
+    default_keys = sorted(
+        key for key, entry in catalog_entry_by_key.items() if entry["kind"] == "AddAttribute"
+    )
+    global_keys = sorted(
+        key for key, entry in catalog_entry_by_key.items() if entry["kind"] == "GlobalValue"
+    )
+    extra_default_keys = sorted(
+        key for key in resolved_values if key not in catalog_entry_by_key and _infer_kind(key) == "default"
+    )
+    extra_global_keys = sorted(
+        key for key in resolved_values if key not in catalog_entry_by_key and _infer_kind(key) == "global"
+    )
+
+    lines = [_render_line("default", key, resolved_values[key]) for key in default_keys + extra_default_keys]
+    if global_keys or extra_global_keys:
+        lines.append("")
+        lines.extend(_render_line("global", key, resolved_values[key]) for key in global_keys + extra_global_keys)
+
+    output_path = case_dir / "network_attribute.txt"
+    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {
+        "path": str(output_path),
+        "resolution_mode": "full-catalog-snapshot",
+        "parameter_catalog_source": str(catalog_path),
+        "required_project_pins": {"UB_PYTHON_SCRIPT_PATH": PROJECT_TRACE_PARSER_PATH},
+        "resolved_entry_count": len([line for line in lines if line.strip()]),
+        "applied_overrides": merged_overrides,
+    }

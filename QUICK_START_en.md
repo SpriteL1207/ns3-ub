@@ -73,6 +73,8 @@ conda install pandas matplotlib seaborn
 
 Note: Please install the required third-party packages via `requirements.txt` before running `trace_analysis/parse_trace.py`.
 
+Tip: If you use an agent that supports repo-local skills, this repository provides staged OpenUSim skills under ` .codex/skills/ `. They first establish startup facts from this page and `README_en.md`, then help with experiment definition, case generation, execution, and result analysis through `openusim-welcome`, `openusim-plan-experiment`, `openusim-run-experiment`, and `openusim-analyze-results`. These skills depend on the current `ns-3-ub` working tree and `scratch/ns-3-ub-tools/`, and are maintained with this repository instead of as a standalone submodule.
+
 ## Build
 
 ```bash

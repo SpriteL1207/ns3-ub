@@ -1,19 +1,24 @@
 # Repo Instructions
 
-This repository is standardizing on one repo-local OpenUSim skill:
+This repository standardizes on four repo-local OpenUSim stage skills:
 
-- `openusim-helper`
-- it ships inside this repository under ` .codex/skills/openusim-helper/ `
-- it is maintained with the main repo, not as a separate git submodule
+- `openusim-welcome`
+- `openusim-plan-experiment`
+- `openusim-run-experiment`
+- `openusim-analyze-results`
+
+All four ship inside this repository under ` .codex/skills/ ` and are maintained with the main repo.
 
 ## Skill Routing
 
-When the user wants to design, clarify, or generate a Unified Bus / OpenUSim experiment in this repository:
+When the user wants help with Unified Bus / OpenUSim work in this repository, route by stage:
 
-- prefer the repo-local `openusim-helper`
-- do not route the user into legacy `openusim-*` skills unless the user explicitly asks to inspect or modify that legacy multi-skill system
+- use `openusim-welcome` for repo initialization, readiness, and bounded Quick Start smoke runs
+- use `openusim-plan-experiment` for experiment definition and clarification
+- use `openusim-run-experiment` for case generation, execution, and explicit run errors
+- use `openusim-analyze-results` for result interpretation and likely-cause analysis
 
-Legacy names such as `openusim-goal-to-experiment`, `openusim-prepare-experiment`, and `openusim-run-experiment` are implementation history, not the recommended user-facing entrypoint for this repo.
+Do not route the user into legacy `openusim-*` skills unless the user explicitly asks to inspect or modify that legacy multi-skill system.
 
 ## User-Facing Reply Surface
 
@@ -42,7 +47,7 @@ Keep this structure implicit rather than labeled.
 
 For a broad first-turn request such as “我想做一次 openusim 仿真”:
 
-- stay in clarification mode
+- stay in planning mode
 - explain that the workflow will first define the experiment goal, topology, workload, and key parameters
 - ask one question about what the user wants to learn from the simulation
 
@@ -91,13 +96,13 @@ This means:
 
 ## Generation Gate
 
-Only generate a case after:
+Only generate or run a case after:
 
 - the goal is stable enough to summarize
 - the user has confirmed the main topology/workload/parameter choices
-- the user gives explicit approval for generation
+- the user gives explicit approval for generation or execution
 
-If the user asks to generate before this gate is satisfied:
+If the user asks to generate or run before this gate is satisfied:
 
 - do not start commands
 - do not inspect backend scripts or code paths just because the user said `generate`
@@ -151,6 +156,6 @@ When the discussion turns to a specialized OpenUSim domain topic that is easy to
 
 Current required card:
 
-- for `trace/debug` semantics and recommendations: ` .codex/skills/openusim-helper/references/domain/trace-observability.md `
-- for `transport_channel.mode` semantics: ` .codex/skills/openusim-helper/references/domain/transport-channel-modes.md `
-- for throughput evidence and line-rate interpretation: ` .codex/skills/openusim-helper/references/domain/throughput-evidence.md `
+- for `trace/debug` semantics and recommendations: ` .codex/skills/openusim-analyze-results/references/trace-observability.md `
+- for transport-channel semantics: ` .codex/skills/openusim-analyze-results/references/transport-channel-modes.md `
+- for throughput evidence and line-rate interpretation: ` .codex/skills/openusim-analyze-results/references/throughput-evidence.md `
