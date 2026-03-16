@@ -72,15 +72,17 @@ Return to `openusim-welcome` when:
 - Hands off to: `openusim-run-experiment`
 - May return to: `openusim-welcome`
 - Required references:
-  - `references/topology-options.md`
-  - `references/workload-options.md`
-  - `references/spec-rules.md`
+  - `../openusim-references/topology-options.md`
+  - `../openusim-references/workload-options.md`
+  - `../openusim-references/spec-rules.md`
+  - `../openusim-references/spec-to-toolchain.md`
 
 ## References
 
-- `references/topology-options.md`
-- `references/workload-options.md`
-- `references/spec-rules.md`
+- `../openusim-references/topology-options.md`
+- `../openusim-references/workload-options.md`
+- `../openusim-references/spec-rules.md`
+- `../openusim-references/spec-to-toolchain.md`
 
 ## Common Mistakes
 

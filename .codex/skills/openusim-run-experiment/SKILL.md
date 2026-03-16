@@ -75,6 +75,10 @@ Return to `openusim-plan-experiment` when:
   - `QUICK_START.md`
   - `scratch/README.md`
   - `scratch/ns-3-ub-tools/README.md`
+  - `../openusim-references/spec-to-toolchain.md`
+  - `../openusim-references/topology-options.md`
+  - `../openusim-references/workload-options.md`
+  - `../openusim-references/spec-rules.md`
 
 ## References
 
@@ -82,6 +86,10 @@ Return to `openusim-plan-experiment` when:
 - `scratch/ns-3-ub-tools/user_topo_2layer_clos.py`
 - `scratch/ns-3-ub-tools/user_topo_4x4_2DFM.py`
 - `scratch/ns-3-ub-tools/traffic_maker/build_traffic.py`
+- `../openusim-references/spec-to-toolchain.md`
+- `../openusim-references/topology-options.md`
+- `../openusim-references/workload-options.md`
+- `../openusim-references/spec-rules.md`
 
 ## Common Mistakes
 

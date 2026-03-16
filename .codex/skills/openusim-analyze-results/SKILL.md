@@ -55,15 +55,15 @@ Before handoff, record in `experiment-spec.md`:
 - Called by: `openusim-run-experiment`, direct requests about existing outputs
 - Hands off to: `openusim-plan-experiment`
 - Required references:
-  - `references/throughput-evidence.md`
-  - `references/trace-observability.md`
-  - `references/transport-channel-modes.md`
+  - `../openusim-references/throughput-evidence.md`
+  - `../openusim-references/trace-observability.md`
+  - `../openusim-references/transport-channel-modes.md`
 
 ## References
 
-- `references/throughput-evidence.md`
-- `references/trace-observability.md`
-- `references/transport-channel-modes.md`
+- `../openusim-references/throughput-evidence.md`
+- `../openusim-references/trace-observability.md`
+- `../openusim-references/transport-channel-modes.md`
 
 ## Common Mistakes
 

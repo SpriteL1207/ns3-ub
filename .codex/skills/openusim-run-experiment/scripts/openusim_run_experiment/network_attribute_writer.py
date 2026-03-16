@@ -125,9 +125,19 @@ def _write_json(path: Path, data: dict) -> Path:
     return path
 
 
+def _cache_is_stale(cache_path: Path) -> bool:
+    """Return True if the cache is missing or older than the build/ directory."""
+    if not cache_path.is_file():
+        return True
+    build_dir = repo_root() / "build"
+    if not build_dir.is_dir():
+        return True
+    return build_dir.stat().st_mtime > cache_path.stat().st_mtime
+
+
 def load_or_build_parameter_catalog() -> tuple[dict, Path]:
     cache_path = _catalog_cache_path()
-    if cache_path.is_file():
+    if not _cache_is_stale(cache_path):
         return _read_json(cache_path), cache_path
 
     entries = _runtime_attribute_entries()
@@ -171,6 +181,7 @@ def write_network_attributes(case_dir: Path, explicit_overrides=None, observabil
     case_dir.mkdir(parents=True, exist_ok=True)
 
     catalog, catalog_path = load_or_build_parameter_catalog()
+    # Later groups override earlier ones: explicit user overrides take precedence
     merged_overrides = _merge_overrides(observability_overrides, explicit_overrides)
     resolved_values = {entry["parameter_key"]: entry["default_value"] for entry in catalog["entries"]}
     resolved_values.update(merged_overrides)

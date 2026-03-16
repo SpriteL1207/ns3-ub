@@ -156,6 +156,17 @@ When the discussion turns to a specialized OpenUSim domain topic that is easy to
 
 Current required card:
 
-- for `trace/debug` semantics and recommendations: ` .codex/skills/openusim-analyze-results/references/trace-observability.md `
-- for transport-channel semantics: ` .codex/skills/openusim-analyze-results/references/transport-channel-modes.md `
-- for throughput evidence and line-rate interpretation: ` .codex/skills/openusim-analyze-results/references/throughput-evidence.md `
+- for `trace/debug` semantics and recommendations: ` .codex/skills/openusim-references/trace-observability.md `
+- for transport-channel semantics: ` .codex/skills/openusim-references/transport-channel-modes.md `
+- for throughput evidence and line-rate interpretation: ` .codex/skills/openusim-references/throughput-evidence.md `
+- for spec-to-toolchain mapping: ` .codex/skills/openusim-references/spec-to-toolchain.md `
+
+## Skill Reference Maintenance
+
+When tool scripts under `scratch/ns-3-ub-tools/` change their interface (parameters, CLI arguments, constraints, output schema), the corresponding reference files under `.codex/skills/openusim-references/` must be updated in the same commit.
+
+Affected mappings:
+
+- `net_sim_builder.py` API → `topology-options.md`, `spec-to-toolchain.md`
+- `build_traffic.py` CLI → `workload-options.md`, `spec-to-toolchain.md`
+- `trace_analysis/*.py` → `throughput-evidence.md`, `spec-to-toolchain.md`
