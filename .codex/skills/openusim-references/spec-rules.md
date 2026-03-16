@@ -36,6 +36,8 @@ Use a small stable structure so every stage skill can find the same facts quickl
 ## Workload
 - chosen workload family or reference traffic file
 - concrete scale facts
+- rank_mapping (optional, default: linear)
+- phase_delay (optional, default: 0)
 
 ## Network Overrides
 - resolved parameter overrides that matter for the run
@@ -77,6 +79,12 @@ If an old case is used as reference:
 
 - summarize it in the conversation first
 - do not write it into the new spec until the user says what to keep and what to change
+
+## Parameter naming rule
+
+Use toolchain-native parameter names in the spec to avoid translation ambiguity:
+- `host_num`, `leaf_sw_num`, `comm_domain_size`, `data_size`
+- See `spec-to-toolchain.md` for the full mapping
 
 ## Readiness rule
 

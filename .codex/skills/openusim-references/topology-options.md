@@ -50,3 +50,46 @@ Only offer the three most relevant template choices.
 
 - Do not invent a custom topology generator path when the user request can be mapped to an existing `net_sim_builder.py`-style topology.
 - If the request cannot be bounded to a supported family, ask the user to restate it as a supported family or provide an old case reference.
+
+## Toolchain Interface
+
+`net_sim_builder.py` is a Python library, not a CLI. It provides the `NetworkSimulationGraph` class.
+To generate topology files, write a Python script that imports and calls this class (see example scripts below).
+
+### Actual parameter names by family
+
+#### `clos-spine-leaf`
+
+- `host_num`: total number of hosts (integer)
+- `leaf_sw_num`: number of leaf switches (integer)
+- Derived: `spine_sw_num = host_num // leaf_sw_num`
+- Constraint: `host_num % leaf_sw_num == 0`
+- Example script: `scratch/ns-3-ub-tools/user_topo_2layer_clos.py`
+
+#### `nd-full-mesh`
+
+- `row_num`: number of rows (integer)
+- `col_num`: number of columns (integer)
+- Derived: `host_num = row_num * col_num`
+- Example script: `scratch/ns-3-ub-tools/user_topo_4x4_2DFM.py`
+
+### Common parameters
+
+- `bandwidth`: link bandwidth with unit, e.g. `400Gbps` (valid: bps, Kbps, Mbps, Gbps, Tbps)
+- `delay`: link delay with unit, e.g. `20ns` (valid: ns, us, ms, s)
+- `forward_delay`: switch forward delay, e.g. `1ns`
+- `priority_list`: TP priority list, e.g. `[7, 8]`
+- `path_finding_algo`: default `nx.all_shortest_paths`
+- `multiple_workers`: parallel workers for routing, e.g. `4`
+
+### Node numbering constraint
+
+- Hosts must be numbered from 0 consecutively
+- Hosts must be added before switches via `add_netisim_host()` then `add_netisim_node()`
+
+### Generation workflow
+
+Example scripts (e.g. `user_topo_2layer_clos.py`) have hardcoded parameters.
+When the user requests different sizing, the agent must generate a new parameterized script
+based on the example, substituting the relevant parameters. The script produces:
+`node.csv`, `topology.csv`, `routing_table.csv`, `transport_channel.csv`.
