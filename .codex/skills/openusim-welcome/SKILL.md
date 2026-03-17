@@ -32,13 +32,20 @@ Do not use this skill to define experiment details or interpret simulation resul
    - `build/` exists
    - `cmake-cache/` exists
    - `scratch/2nodes_single-tp` exists
-4. If the user wants startup help, guide the bounded Quick Start commands:
-   - `git submodule update --init --recursive`
-   - `python3 -m pip install --user -r scratch/ns-3-ub-tools/requirements.txt`
-   - `./ns3 configure`
-   - `./ns3 build`
-   - `./ns3 run 'scratch/ub-quick-example scratch/2nodes_single-tp'`
-5. If an experiment workspace already exists, record only the readiness facts that affect later execution in `experiment-spec.md`.
+4. **Report readiness status to the user:**
+   - Summarize which facts are satisfied and which are missing
+   - If all facts are satisfied, announce readiness and offer to proceed to experiment planning
+   - If facts are missing, explain what needs to happen next (see step 5)
+5. **If startup actions are needed, explain before executing:**
+   - List the specific actions required and their impact, for example:
+     - `git submodule update --init --recursive` — pulls external dependencies, may download significant data
+     - `python3 -m pip install --user -r scratch/ns-3-ub-tools/requirements.txt` — installs Python packages
+     - `./ns3 configure` — configures the build system
+     - `./ns3 build` — compiles the simulator, may take several minutes
+     - `./ns3 run 'scratch/ub-quick-example scratch/2nodes_single-tp'` — runs the smoke test case
+   - **Wait for explicit user approval before executing any of these commands**
+   - Execute only the approved commands, report results after each step
+6. If an experiment workspace already exists, record only the readiness facts that affect later execution in `experiment-spec.md`.
 
 ## Stop And Ask
 
@@ -74,3 +81,4 @@ Before handoff, record in `experiment-spec.md`:
 - Claiming the repo is ready without checking the documented startup facts.
 - Inventing a custom bootstrap helper instead of using the repo docs directly.
 - Mixing startup diagnosis with experiment-planning questions in the same turn.
+- **Executing heavy operations (submodule pull, pip install, build) without first explaining what will happen and getting user approval.**
