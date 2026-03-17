@@ -9,6 +9,19 @@ This repository standardizes on four repo-local OpenUSim stage skills:
 
 All four ship inside this repository under ` .codex/skills/ ` and are maintained with the main repo.
 
+## Mandatory Welcome Gate
+
+**`openusim-welcome` is the mandatory entry point for this project.** If there is even a 1% chance the user wants to use, build, run, or experiment with this repository, you MUST invoke `openusim-welcome` BEFORE any other action or response — including clarifying questions.
+
+This is not optional. This is not negotiable. You cannot skip it because "the task is simple" or "I already know the repo structure."
+
+`openusim-welcome` will:
+- verify repo readiness (build state, submodules, tools)
+- explain what heavy operations are needed (if any)
+- get user approval before executing anything
+
+Only after `openusim-welcome` completes or the user explicitly skips it may you proceed to other stages.
+
 ## Skill Routing
 
 When the user wants help with Unified Bus / OpenUSim work in this repository, route by stage:
@@ -17,8 +30,6 @@ When the user wants help with Unified Bus / OpenUSim work in this repository, ro
 - use `openusim-plan-experiment` for experiment definition and clarification
 - use `openusim-run-experiment` for case generation, execution, and explicit run errors
 - use `openusim-analyze-results` for result interpretation and likely-cause analysis
-
-If the user has not run `openusim-welcome` in this session and wants to plan, generate, or run an experiment, remind the user that `openusim-welcome` can verify repo readiness first. For example: "建议先跑一下 openusim-welcome 确认仓库就绪，要先检查一下吗？" Only proceed to later stages after the user explicitly skips or completes the welcome check.
 
 Do not route the user into legacy `openusim-*` skills unless the user explicitly asks to inspect or modify that legacy multi-skill system.
 
