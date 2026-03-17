@@ -29,11 +29,19 @@ Do not use this skill to define experiment details or interpret simulation resul
 
 ## The Process
 
-1. **Greet the user and introduce the workflow:**
-   - Explain that this is the OpenUSim simulation workflow for the ns-3-ub repository
-   - Briefly describe the 4-stage pipeline: welcome (readiness check) → plan (experiment design) → run (case generation & execution) → analyze (result interpretation)
-   - Explain that this welcome stage will first check whether the repo is ready, and may need to perform heavy operations (submodule pull, dependency install, build) if not
-   - **Ask the user whether to proceed before doing anything else**
+1. **Greet the user with the following opening (use this exact wording, adapt language to match the user):**
+
+   > 你好！这个仓库是 ns-3-ub，一个基于 ns-3 的 Unified Bus 网络仿真平台。
+   >
+   > 我可以帮你完成从实验设计到结果分析的完整流程：
+   > - 先检查仓库是否就绪（可能需要拉子模块、装依赖、编译）
+   > - 然后一起定义实验目标、拓扑和负载
+   > - 生成仿真用例并运行
+   > - 最后分析结果
+   >
+   > 第一步我先做个只读检查，看看仓库当前的状态。要继续吗？
+
+   **Wait for user confirmation before proceeding to step 2.**
 2. Read `README.md` and `QUICK_START.md`.
 3. Check repo startup facts directly in the tree.
 4. Verify these facts before claiming readiness:
