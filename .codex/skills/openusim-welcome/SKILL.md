@@ -29,9 +29,14 @@ Do not use this skill to define experiment details or interpret simulation resul
 
 ## The Process
 
-1. Read `README.md` and `QUICK_START.md`.
-2. Check repo startup facts directly in the tree.
-3. Verify these facts before claiming readiness:
+1. **Greet the user and introduce the workflow:**
+   - Explain that this is the OpenUSim simulation workflow for the ns-3-ub repository
+   - Briefly describe the 4-stage pipeline: welcome (readiness check) → plan (experiment design) → run (case generation & execution) → analyze (result interpretation)
+   - Explain that this welcome stage will first check whether the repo is ready, and may need to perform heavy operations (submodule pull, dependency install, build) if not
+   - **Ask the user whether to proceed before doing anything else**
+2. Read `README.md` and `QUICK_START.md`.
+3. Check repo startup facts directly in the tree.
+4. Verify these facts before claiming readiness:
    - `./ns3` exists
    - `scratch/ns-3-ub-tools/` exists
    - `scratch/ns-3-ub-tools/requirements.txt` exists
@@ -41,11 +46,11 @@ Do not use this skill to define experiment details or interpret simulation resul
    - `build/` exists
    - `cmake-cache/` exists
    - `scratch/2nodes_single-tp` exists
-4. **Report readiness status to the user:**
+5. **Report readiness status to the user:**
    - Summarize which facts are satisfied and which are missing
    - If all facts are satisfied, announce readiness and offer to proceed to experiment planning
-   - If facts are missing, explain what needs to happen next (see step 5)
-5. **If startup actions are needed, explain before executing:**
+   - If facts are missing, explain what needs to happen next (see step 6)
+6. **If startup actions are needed, explain before executing:**
    - List the specific actions required and their impact, for example:
      - `git submodule update --init --recursive` — pulls external dependencies, may download significant data
      - `python3 -m pip install --user -r scratch/ns-3-ub-tools/requirements.txt` — installs Python packages
@@ -54,7 +59,7 @@ Do not use this skill to define experiment details or interpret simulation resul
      - `./ns3 run 'scratch/ub-quick-example scratch/2nodes_single-tp'` — runs the smoke test case
    - **Wait for explicit user approval before executing any of these commands**
    - Execute only the approved commands, report results after each step
-6. If an experiment workspace already exists, record only the readiness facts that affect later execution in `experiment-spec.md`.
+7. If an experiment workspace already exists, record only the readiness facts that affect later execution in `experiment-spec.md`.
 
 ## Stop And Ask
 
