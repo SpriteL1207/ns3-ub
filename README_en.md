@@ -2,9 +2,9 @@
 
 **Language**: [English](README_en.md) | [中文](README.md)
 
-**Quick Start**: [QUICK_START_en.md](QUICK_START_en.md)
+> **[NEW] Version 1.1.0 Released** · Check [Release Notes](RELEASE_NOTES_UB.md) for major updates
 
-> This project is built on ns-3.44. For detailed platform support, installation steps, system requirements, and build options, see [ns-3.44 Documentation](https://www.nsnam.org/releases/ns-3-44/documentation/), [Installation Guide](https://www.nsnam.org/docs/release/3.44/installation/singlehtml/), and [ns-3.44 Source](https://gitlab.com/nsnam/ns-3-dev/-/tree/ns-3.44?ref_type=tags).
+**Quick Start**: [QUICK_START_en.md](QUICK_START_en.md)
 
 ## Project Overview
 
@@ -97,13 +97,13 @@ The **typical simulation functionalities** supported by this project are shown i
     </tr>
     <tr>
       <td>Routing</td>
-      <td>Basic routing strategy based on destination address + header RT field, routing strategy based on path Cost, Hash-based ECMP, per-flow / per-packet Hash based on load balancing factors</td>
-      <td>User-customizable adaptive routing and other strategies</td>
+      <td>Basic routing strategy based on destination address + header RT field, routing strategy based on path Cost, Hash-based ECMP, per-flow / per-packet Hash based on load balancing factors, load-aware adaptive routing</td>
+      <td>User-customizable routing strategies</td>
     </tr>
     <tr>
       <td>Quality of Service</td>
-      <td>SL-VL mapping, SP-based inter-VL scheduling</td>
-      <td>User-customizable inter-VL scheduling strategies (such as DWRR, etc.)</td>
+      <td>SL-VL mapping, SP/DWRR-based inter-VL scheduling</td>
+      <td>User-customizable inter-VL scheduling strategies</td>
     </tr>
     <tr>
       <td>Congestion Notification</td>
@@ -118,8 +118,8 @@ The **typical simulation functionalities** supported by this project are shown i
     </tr>
     <tr>
       <td>Virtual Channels</td>
-      <td>Point-to-point links support up to 16 VLs, SP-based inter-VL scheduling</td>
-      <td>DWRR-based inter-VL scheduling</td>
+      <td>Point-to-point links support up to 16 VLs, SP/DWRR-based inter-VL scheduling</td>
+      <td>User-customizable inter-VL scheduling strategies</td>
     </tr>
     <tr>
       <td>Credit Flow Control</td>
@@ -233,3 +233,4 @@ This project follows the ns-3 license agreement, GPL v2. See the `LICENSE` file 
   year = {2025}
 }
 ```
+<a href='https://mapmyvisitors.com/web/1c1da'  title='Visit tracker'><img src='https://mapmyvisitors.com/map.png?cl=ffffff&w=a&t=tt&d=Ctk3Fz1wWGpnv9Or15k53KwUJ5GPcNoSRETpXtl4GF4&co=2d78ad&ct=ffffff'/></a>

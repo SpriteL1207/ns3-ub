@@ -6,6 +6,8 @@
 #include "protocol/ub-datalink.h"
 #include "protocol/ub-transaction.h"
 #include "ns3/ub-network-address.h"
+#include "ns3/ub-utils.h"
+
 using namespace utils;
 namespace ns3 {
 
@@ -24,6 +26,7 @@ TypeId UbController::GetTypeId()
 UbController::UbController()
 {
     NS_LOG_FUNCTION(this);
+    m_tpnConn = CreateObject<TpConnectionManager>();
 }
 
 void UbController::CreateUbFunction()
@@ -60,10 +63,9 @@ bool UbController::CreateTp(uint32_t src, uint32_t dest, uint8_t sport,
                             uint32_t dstTpn, Ptr<UbCongestionControl> congestionCtrl)
 {
     NS_LOG_FUNCTION(this << src << dest << sport << dport  << priority << srcTpn);
-
     // 检查是否已存在
     if (m_numToTp.find(srcTpn) != m_numToTp.end()) {
-        NS_LOG_ERROR("Transport channel  already exists");
+        NS_LOG_DEBUG("Transport channel already exists");
         return false;
     }
 
@@ -86,8 +88,9 @@ bool UbController::CreateTp(uint32_t src, uint32_t dest, uint8_t sport,
     m_transaction->TpInit(tp);
     m_numToTp[srcTpn] = tp;
     m_transportsCount++;
-    currentNode->GetObject<UbSwitch>()->AddTpIntoAlgroithm(tp, sport, priority);  // 把tp添加到算法
+    currentNode->GetObject<UbSwitch>()->RegisterTpWithAllocator(tp, sport, priority);  // register TP with allocator
 
+    utils::UbUtils::Get()->SingleTpTraceConnect(src, srcTpn);
     NS_LOG_DEBUG("Created transport channel success");
     return true;
 }
@@ -106,12 +109,13 @@ Ptr<UbTransportChannel> UbController::GetTp(uint32_t tpn)
 
 void UbController::DestroyTp(uint32_t tpn)
 {
-    auto it = m_numToTp.find(tpn);
-    if (it != m_numToTp.end()) {
-        m_numToTp.erase(it);
-    } else {
-        NS_LOG_WARN("Transport channel not found for destruction");
-    }
+    // 算法中删除tp记录
+    GetObject<Node>()->GetObject<UbSwitch>()->RemoveTpFromAllocator(m_numToTp[tpn]);
+    // 事务层删除tp记录
+    m_transaction->TpDeinit(tpn);
+    // 删除本地记录
+    m_numToTp.erase(tpn);
+    m_transportsCount--;
 }
 
 // Transport channel Group management
@@ -269,4 +273,8 @@ Ptr<UbTransportChannel> UbController::GetTpByMap(uint32_t key)
     return nullptr;
 }
 
+bool UbController::IsTPExists(uint32_t tpn)
+{
+    return (m_numToTp.find(tpn) != m_numToTp.end());
+}
 } // namespace ns3

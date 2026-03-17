@@ -80,6 +80,7 @@ public:
     Ptr<Packet> GetNextPacket() override;
     uint32_t GetNextPacketSize();
     bool IsEmpty() override;
+    bool IsLimited() override;
 
     Ptr<Packet> GenDataPacket(Ptr<UbWqeSegment> wqeSegment, uint32_t payload_size);
 
@@ -107,7 +108,7 @@ public:
      * @param tpack Transport acknowledgment message to process
      */
     void RecvDataPacket(Ptr<Packet> p);
-    
+
     /**
      * @brief apply ta for next wqesegment
      */
@@ -211,7 +212,7 @@ public:
     bool IsRepeatPacket(uint64_t psn);
     std::queue<Ptr<Packet>> m_ackQ; // ack queue high pg
 
-    virtual IngressQueueType GetIqType() override;
+    virtual IngressQueueType GetIngressQueueType() override;
 
     /**
      * @brief Get hash salt for packet-spray or ECMP
@@ -223,13 +224,18 @@ public:
     uint32_t GetDest() { return m_dest; }
 
     uint32_t GetMsnCnt() { return m_tpMsnCnt; }
-
+    uint32_t GetDstTpn() { return m_dstTpn; }
     void UpDateMsnCnt(uint32_t num) { m_tpMsnCnt += num; }
 
-    uint32_t GetPsnCnt() { return m_tpPsnCnt; }
+    uint64_t GetPsnCnt() { return m_tpPsnCnt; }
 
-    void UpDatePsnCnt(uint32_t num) { m_tpPsnCnt += num; }
-    void PushWqeSegment(Ptr<UbWqeSegment> segment) { m_wqeSegmentVector.push_back(segment); }
+    void UpdatePsnCnt(uint32_t num) { m_tpPsnCnt += num; }
+    void PushWqeSegment(Ptr<UbWqeSegment> segment) {
+        if (m_wqeSegmentVector.empty() && m_ackQ.empty()) {
+            m_headArrivalTime = Simulator::Now();
+        }
+        m_wqeSegmentVector.push_back(segment);
+    }
 
     uint32_t GetWqeSegmentVecSize() { return m_wqeSegmentVector.size(); }
 private:
@@ -289,8 +295,8 @@ private:
     uint64_t        m_psnSndNxt = 0;      // TP层下一个待发送的包序号
     uint64_t        m_psnSndUna = 0;      // TP层未确认的最小包序号
     uint64_t        m_psnRecvNxt { 0 };   // TP层记录最大顺序包序号
-    uint32_t        m_tpMsnCnt {0};       // TP层总计获取的消息(WQE Segment)计数
-    uint32_t        m_tpPsnCnt {0};       // TP层总计获取的数据包个数计数
+    uint64_t        m_tpMsnCnt {0};       // TP层总计获取的消息(WQE Segment)计数
+    uint64_t        m_tpPsnCnt {0};       // TP层总计获取的数据包个数计数
     static constexpr uint32_t DEFAULT_OOO_THRESHOLD = 2048;
     uint32_t m_psnOooThreshold = DEFAULT_OOO_THRESHOLD;
     std::vector<bool> m_recvPsnBitset{std::vector<bool>(DEFAULT_OOO_THRESHOLD, false)};
@@ -314,7 +320,7 @@ private:
     uint16_t m_retransAttemptsLeft ; // 剩余的重传次数
 
     // Callback functions
-    IngressQueueType m_iqType = IngressQueueType::TPCHANNEL;
+    IngressQueueType m_ingressQueueType = IngressQueueType::TP; // Transport channel queue type (TP)
 
     bool m_pktTraceEnabled = false;
 };

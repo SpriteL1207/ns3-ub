@@ -1,11 +1,11 @@
-# USAGE — Scenario configuration under `scratch/`
+# USAGE — Running cases under `scratch/`
 
-This document explains how to author, validate, and reason about all scenario configuration files under each case directory in `scratch/`. It ties together:
-- The CSV/TXT formats consumed by the runner (`scratch/ub-quick-example.cc`),
-- How the Python toolchain in the submodule `scratch/ns-3-ub-tools/` generates and analyzes them, and
-- How the Unified-Bus (UB) model in `src/unified-bus/model/` interprets these values via ns-3’s Attribute System.
+`scratch/` provides a set of scenario cases. Each case can be executed quickly by preparing the case directory and editing its configuration files (TXT/CSVs).
 
-The goal is that you can confidently create new scenarios, know what each field means, which values are legal, and how to verify them.
+This document describes:
+- The case directory layout and configuration file semantics (schema, constraints, and legal values).
+- How the example runner `scratch/ub-quick-example.cc` consumes these files to build an ns-3 simulation and schedule traffic.
+- In most cases you **do not** need to write these configuration files from scratch; you can use the Python tools in `scratch/ns-3-ub-tools/` to generate them (see https://gitcode.com/open-usim/ns-3-ub-tools). Of course, you can also author the TXT/CSV files manually following the schemas below.
 
 ---
 
@@ -21,11 +21,11 @@ Each case directory under `scratch/` usually contains:
 - `traffic.csv` — Application-level tasks (ops, size, priority, dependency, timing).
 - `fault.csv` — Optional, only if faults are enabled (see `UB_FAULT_ENABLE`).
 
-During a run, UB also emits:
+During a run, the example runner also emits:
 - `runlog/` — Packet and task traces.
 - `output/` (or `test/`) — Post-processed CSVs, e.g. `throughput.csv`, `task_statistics.csv`.
 
-The runner loads them in this order (see `scratch/ub-quick-example.cc`):
+The example runner (`scratch/ub-quick-example.cc`) builds a scenario by reading these files in the following order:
 1) `network_attribute.txt` → `UbUtils::SetComponentsAttribute`
 2) `node.csv` → `UbUtils::CreateNode`
 3) `topology.csv` → `UbUtils::CreateTopo`
@@ -35,7 +35,7 @@ The runner loads them in this order (see `scratch/ub-quick-example.cc`):
 
 ---
 
-## How `ns-3-ub-tools` generates configurations
+## How [ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools) generates configurations
 
 The submodule contains helpers to synthesize config files:
 
@@ -43,7 +43,7 @@ The submodule contains helpers to synthesize config files:
   - `user_topo_*.py` — declarative topology definitions (e.g., `user_topo_4x4_2DFM.py`, `user_topo_2layer_clos.py`).
   - `net_sim_builder.py` — expands node ranges, renders `node.csv`, `topology.csv`, `routing_table.csv`, and `transport_channel.csv` according to a chosen topology.
   - `topo_plot.py` — draw `network_topology.png` for quick visual checks.
-- Traffic makers:
+- Traffic makers  [README.md](./ns-3-ub-tools/README.md):
   - `traffic_maker/*.py` — generate `traffic.csv` for workloads (e.g., all-to-all, RDMA write/read patterns, collective-like flows).
 - Trace analysis:
   - `trace_analysis/parse_trace.py` — orchestrates post-processing, runs:
@@ -104,7 +104,7 @@ Project-level `global` keys (defined as `GlobalValue` in code and read by UB):
 - `UB_PRIORITY_NUM`/`UB_VL_NUM` (int) — QoS/virtual lanes sizing.
 - `UB_CC_ALGO` (string) — e.g., `CAQM`.
 - `UB_CC_ENABLED` (bool) — enable/disable CC.
-- Trace toggles: `UB_TRACE_ENABLE`, `UB_PARSE_TRACE_ENABLE`, `UB_RECORD_PKT_TRACE` (bool).
+- Trace toggles: `UB_TRACE_ENABLE`, `UB_TASK_TRACE_ENABLE`, `UB_PACKET_TRACE_ENABLE`, `UB_PORT_TRACE_ENABLE`, `UB_PARSE_TRACE_ENABLE`, `UB_RECORD_PKT_TRACE` (bool).
 - `UB_PYTHON_SCRIPT_PATH` — Path to the Python post-processing entry (`parse_trace.py`).
 
 Legal values and discovery:
@@ -132,6 +132,15 @@ Examples:
 0..1,DEVICE,1,1ns
 2..3,SWITCH,4,1ns
 ```
+
+Notes on `forwardDelay`:
+- **Meaning**: the optional fourth column `forwardDelay` sets the **arbitration latency** (scheduling delay) for the node's internal switch allocator.
+- **Code mapping**: when present, `UbUtils::CreateNode()` applies this value by calling `allocator->SetAttribute("AllocationTime", StringValue(forwardDelay));`.
+- **Mechanism**: In `UbRoundRobinAllocator::TriggerAllocator`, this time is used to schedule the `AllocateNextPacket` event (`Simulator::Schedule(m_allocationTime, ...)`). This simulates the hardware processing time required for the arbiter to select which ingress queue's packet gets to transmit to an egress port.
+- **Scope**: Applies to both `SWITCH` nodes and `DEVICE` nodes.
+- **Format**: use ns-3 Time literals (e.g. `10ns`, `1us`, `1ms`).
+- **Example**: `0,SWITCH,4,10ns` sets the switch allocator `AllocationTime` to `10ns` for node `0`.
+- **Inspecting at runtime**: run your case with `--PrintAttributes=ns3::UbSwitchAllocator` to see the attribute and its current/default value.
 
 ---
 
@@ -209,6 +218,24 @@ Constraints and tips:
 - `priority` should be within `UB_PRIORITY_NUM`.
 - `metric` is an unsigned integer; lower is preferred when selecting among multiple TPNs.
 
+### Automatic TP Generation (Optional)
+
+If `transport_channel.csv` is missing or empty, or if no matching TP is found for a specific traffic task, the simulator (specifically `UbApp`) will attempt to automatically generate TP configurations on demand.
+
+- **Mechanism**:
+  1. It queries the routing table (`UbRoutingProcess`) to find all reachable paths from source to destination.
+  2. It respects the `UseShortestPaths` attribute (default `true`) to filter for shortest paths or allow non-shortest ones.
+  3. If `EnableMultiPath` (in `UbApp`) is `true`, it creates TPs for **all** discovered paths.
+  4. If `EnableMultiPath` is `false`, it **randomly selects one** path to create a single TP.
+  5. TPNs are automatically assigned.
+
+- **Usage**:
+  This is useful for simple scenarios where manual TP configuration is tedious. You can simply omit this file. However, for complex scenarios requiring specific TP mappings, fixed path selection, or specific multi-path policies, providing this file is recommended.
+
+- **Performance Note**:
+  - **CSV Configuration (Pre-instantiated)**: The simulator reads `transport_channel.csv` at startup and **immediately creates all TP objects** defined in it. In large-scale topologies (e.g., thousands of nodes), this file can be huge, and creating millions of TP objects upfront consumes significant memory and initialization time, even for TPs that may never carry traffic.
+  - **Automatic Generation (On-demand)**: TPs are created dynamically only when a traffic task actually requires them. This avoids the overhead of parsing a massive CSV and instantiating unused TPs, making it **highly recommended** for large-scale simulations to reduce initialization time and memory usage.
+
 ### TPN in the code (what it does and how to set it)
 
 - TPN is an integer identifier written into packet headers and used to index `UbTransportChannel` objects via per-port maps in controllers.
@@ -228,6 +255,8 @@ Schema:
 ```
 taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases
 ```
+
+Recommendation: Generate `traffic.csv` (e.g., all-to-all, RDMA-like patterns, collective-like workloads) via `scratch/ns-3-ub-tools/traffic_maker/`. See `traffic_maker/README.md` in the `open-usim/ns-3-ub-tools` submodule repository.
 - `taskId` — integer ID (unique per file).
 - `sourceNode` / `destNode` — end-host node IDs.
 - `dataSize(Byte)` — payload size in bytes.
@@ -408,7 +437,7 @@ Examples:
 ./ns3 run scratch/ub-quick-example -- --PrintHelp
 ```
 
-Tip: You can run the same flags against any other scratch program name. This avoids relying on doxygen and guarantees you see exactly what your build exposes.
+Note: You can run the same flags against any other scratch program name. This avoids relying on doxygen and guarantees you see exactly what your build exposes.
 
 ---
 
@@ -423,4 +452,16 @@ Tip: You can run the same flags against any other scratch program name. This avo
 
 ---
 
-Happy simulating — and if something’s unclear, open the corresponding tool script (`ns-3-ub-tools`) and the UB model class to see exactly how a field is parsed and applied.
+If anything is unclear, consult the corresponding tool script (`scratch/ns-3-ub-tools/`) and the UB model class to see exactly how a field is parsed and applied.
+
+---
+
+## Related Documentation
+
+| Document | Description |
+|----------|-------------|
+| [../README.md](../README.md) | Project overview (中文) |
+| [../README_en.md](../README_en.md) | Project overview (English) |
+| [../QUICK_START.md](../QUICK_START.md) | Quick start: build, run, and tooling setup (中文) |
+| [../QUICK_START_en.md](../QUICK_START_en.md) | Quick start: build, run, and tooling setup (English) |
+| [ns-3-ub-tools/README.md](ns-3-ub-tools/README.md) | Python tools: topology/routing/traffic generation (incl. `traffic_maker/`) and trace analysis |

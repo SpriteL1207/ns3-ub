@@ -64,7 +64,7 @@ TypeId UbTransportChannel::GetTypeId(void)
                       MakeBooleanAccessor(&UbTransportChannel::m_usePacketSpray),
                       MakeBooleanChecker())
         .AddAttribute("UseShortestPaths",
-                      "Restrict routing to shortest paths only.",
+                      "Sets a packet header flag that instructs switches to restrict forwarding to shortest paths (true) or allow non-shortest paths (false).",
                       BooleanValue(true),
                       MakeBooleanAccessor(&UbTransportChannel::m_useShortestPaths),
                       MakeBooleanChecker())
@@ -111,11 +111,13 @@ UbTransportChannel::UbTransportChannel()
     } else {
         m_pktTraceEnabled = false;
     }
+    NS_LOG_FUNCTION(this);
 }
 
 UbTransportChannel::~UbTransportChannel()
 {
     // Clear WQE queues and release resources
+    NS_LOG_INFO("tp release, node:" << m_src << " tpn:" << m_tpn);
     NS_LOG_FUNCTION(this);
 }
 
@@ -130,8 +132,8 @@ void UbTransportChannel::DoDispose()
 }
 
 /**
- * @brief Send packet through specified port
- * This method is called by Port: m_tp->GetNextPacket()
+ * @brief Get next packet from transport channel queue
+ * Called by Switch Allocator during scheduling to retrieve the next packet for transmission
  */
 Ptr<Packet> UbTransportChannel::GetNextPacket()
 {
@@ -139,6 +141,9 @@ Ptr<Packet> UbTransportChannel::GetNextPacket()
     if (!m_ackQ.empty()) {
         Ptr<Packet> p = m_ackQ.front();
         m_ackQ.pop();
+        if (!IsEmpty()) {
+            m_headArrivalTime = Simulator::Now();
+        }
         return p;
     }
 
@@ -193,6 +198,7 @@ Ptr<Packet> UbTransportChannel::GetNextPacket()
         NS_LOG_DEBUG("[Transport channel] Send packet."
                   << " PacketUid: " << p->GetUid()
                   << " Tpn: " << m_tpn
+                  << " DstTpn: " << m_dstTpn
                   << " Psn: " << m_psnSndNxt
                   << " PacketType: Packet"
                   << " Src: " << m_src
@@ -215,6 +221,9 @@ Ptr<Packet> UbTransportChannel::GetNextPacket()
         // 属于本tp的这一轮wqe segment都发完了，继续向TA要
         if (m_psnSndNxt == m_tpPsnCnt) {
             ApplyNextWqeSegment();
+        }
+        if (!IsEmpty()) {
+            m_headArrivalTime = Simulator::Now();
         }
         return p;
     }
@@ -521,6 +530,9 @@ void UbTransportChannel::RecvDataPacket(Ptr<Packet> p)
         ackp->AddHeader(NetworkHeader);
         UbDataLink::GenPacketHeader(ackp, false, true, pktHeader.GetCreditTargetVL(), pktHeader.GetPacketVL(),
             0, 1, UbDatalinkHeaderConfig::PACKET_IPV4);
+        if (m_ackQ.empty()) {
+            m_headArrivalTime = Simulator::Now();
+        }
         m_ackQ.push(ackp); // 将ack放入队列
         NS_LOG_DEBUG("[Transport channel] Send ack. "
                   << " PacketUid: "  << ackp->GetUid()
@@ -587,6 +599,9 @@ void UbTransportChannel::RecvDataPacket(Ptr<Packet> p)
     ackp->AddHeader(NetworkHeader);
     UbDataLink::GenPacketHeader(ackp, false, true, pktHeader.GetCreditTargetVL(), pktHeader.GetPacketVL(),
         0, 1, UbDatalinkHeaderConfig::PACKET_IPV4);
+    if (m_ackQ.empty()) {
+        m_headArrivalTime = Simulator::Now();
+    }
     m_ackQ.push(ackp); // 将ack放入队列
     NS_LOG_DEBUG("[Transport channel] Send ack. "
                   << " PacketUid: "  << ackp->GetUid()
@@ -728,31 +743,39 @@ bool UbTransportChannel::IsEmpty()
     if (!m_ackQ.empty()) {
         return false;
     }
+    if (m_wqeSegmentVector.empty()) {
+        return true;
+    }
+    return m_psnSndNxt >= m_tpPsnCnt;
+}
+
+bool UbTransportChannel::IsLimited()
+{
+    if (!m_ackQ.empty()) {
+        return false;
+    }
     if (IsInflightLimited()) {
         m_sendWindowLimited = true;
         NS_LOG_DEBUG("Full Send Window");
         return true;
     }
     if (m_congestionCtrl->GetCongestionAlgo() == CAQM) {
-        if (m_congestionCtrl->GetRestCwnd() >= UB_MTU_BYTE && m_psnSndNxt < m_tpPsnCnt) {
-            return false;
-        } else {
+        if (m_congestionCtrl->GetRestCwnd() < UB_MTU_BYTE) {
             return true;
         }
-    } else {
-        return m_psnSndNxt >= m_tpPsnCnt;
     }
+    return false;
 }
 
-IngressQueueType UbTransportChannel::GetIqType()
+IngressQueueType UbTransportChannel::GetIngressQueueType()
 {
-    return m_iqType;
+    return m_ingressQueueType;
 }
 
 void UbTransportChannel::FirstPacketSendsNotify(uint32_t nodeId, uint32_t taskId, uint32_t mTpn,
                                                 uint32_t mDstTpn, uint32_t tpMsn, uint32_t mPsnSndNxt, uint32_t mSport)
 {
-    m_traceFirstPacketSendsNotify(nodeId, taskId, mTpn, mDstTpn, tpMsn, tpMsn, mSport);
+    m_traceFirstPacketSendsNotify(nodeId, taskId, mTpn, mDstTpn, tpMsn, mPsnSndNxt, mSport);
 }
 
 void UbTransportChannel::LastPacketSendsNotify(uint32_t nodeId, uint32_t taskId, uint32_t mTpn,
@@ -770,7 +793,7 @@ void UbTransportChannel::LastPacketACKsNotify(uint32_t nodeId, uint32_t taskId, 
 void UbTransportChannel::LastPacketReceivesNotify(uint32_t nodeId, uint32_t srcTpn, uint32_t dstTpn,
                                                   uint32_t tpMsn, uint32_t psn, uint32_t mDport)
 {
-    m_traceLastPacketReceivesNotify(nodeId, srcTpn, dstTpn, dstTpn, tpMsn, mDport);
+    m_traceLastPacketReceivesNotify(nodeId, srcTpn, dstTpn, tpMsn, psn, mDport);
 }
 
 void UbTransportChannel::WqeSegmentSendsNotify(uint32_t nodeId, uint32_t taskId, uint32_t taSsn)

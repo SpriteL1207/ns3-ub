@@ -1,5 +1,7 @@
 # 快速开始
 
+**语言**: [English](QUICK_START_en.md) | [中文](QUICK_START.md)
+
 > 本项目基于 ns-3.44 构建，已在 Linux 与 Windows WSL 系统下验证。详细的平台支持、安装步骤、系统要求及编译选项，请参阅 [ns-3.44 文档](https://www.nsnam.org/releases/ns-3-44/documentation/)、[安装指南](https://www.nsnam.org/docs/release/3.44/installation/singlehtml/) 及 [ns-3.44 源码](https://gitlab.com/nsnam/ns-3-dev/-/tree/ns-3.44?ref_type=tags)。
 
 ## 环境要求
@@ -51,7 +53,7 @@ global UB_PYTHON_SCRIPT_PATH "scratch/ns-3-ub-tools/trace_analysis/parse_trace.p
 
 ## Python 工具与依赖
 
-项目的 Python 工具集位于 `scratch/ns-3-ub-tools/`：
+Python 工具集位于 `scratch/ns-3-ub-tools/`（[open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools)），该项目提供仿真拓扑、路由表、网络流量等配置文件工具与仿真后日志解析工具，更多信息请参阅该项目主页README。工具集包括：
 
 - 拓扑/可视化：`net_sim_builder.py`、`topo_plot.py`、`user_topo_*.py`
 - 流量生成：`traffic_maker/*`
@@ -81,7 +83,25 @@ conda install pandas matplotlib seaborn
 ./ns3 build
 ```
 
+### （可选）启用 Unison 多线程并行仿真
+
+如需启用 Unison for ns-3 的多线程并行仿真（MTP），请在配置阶段加入 `--enable-mtp`（可同时启用示例）：
+
+```bash
+./ns3 configure --enable-mtp --enable-examples
+./ns3 build
+
+# 运行时可通过 --mtp-threads 参数启用多线程（需 >= 2）
+./ns3 run 'scratch/ub-quick-example scratch/2nodes_single-tp' -- --mtp-threads=8
+```
+
+说明：启用并行仿真通常还需要在仿真程序中调用 `MtpInterface::Enable(...)`（并用 `#ifdef NS3_MTP` 保护）；更多用法与注意事项请参阅 [UNISON_README.md](UNISON_README.md)。
+
+提示：主程序示例 [scratch/ub-quick-example.cc](scratch/ub-quick-example.cc) 已包含 Unison/MTP 的示例代码片段（默认注释掉），如需使用可按需取消注释并设置线程数。
+
 ## 运行简单示例
+
+`ub-quick-example` 是本项目提供的仿真入口程序，本质上是一个标准的 ns-3 应用程序。它遵循 ns-3 的标准运行方式，即通过 `./ns3 run` 命令调用，并将**配置文件所在的目录路径**作为参数传递给它。程序启动后会读取指定目录下的配置文件（如 `topology.csv`, `traffic.csv` 等）来自动构建网络拓扑、配置协议栈并生成流量。这种设计使得用户无需修改 C++ 源码，仅需通过命令行参数切换不同的配置目录，即可运行多种仿真场景。
 
 ```bash
 # 如使用 Conda，请确保其 bin 在 PATH 前（或先激活环境）
@@ -122,6 +142,8 @@ ls scratch/2nodes_single-tp/output/
 - 2D FullMesh 4x4（多路径 All-to-All）：
   ```bash
   ./ns3 run 'scratch/ub-quick-example scratch/2dfm4x4-multipath_a2a'
+  # 启用多线程加速（需 --enable-mtp 编译）
+  ./ns3 run 'scratch/ub-quick-example scratch/2dfm4x4-multipath_a2a' -- --mtp-threads=8
   ```
 
 - 2D FullMesh 4x4（分层广播）：
@@ -132,9 +154,11 @@ ls scratch/2nodes_single-tp/output/
 - Clos（32 hosts / 4 leafs / 8 spines, pod2pod）：
   ```bash
   ./ns3 run 'scratch/ub-quick-example scratch/clos_32hosts-4leafs-8spines_pod2pod'
+  # 大型拓扑建议使用多线程
+  ./ns3 run 'scratch/ub-quick-example scratch/clos_32hosts-4leafs-8spines_pod2pod' -- --mtp-threads=16
   ```
 
-说明：部分大型用例运行时间较长，请按需选择运行。
+说明：部分大型用例运行时间较长，可使用 `-- --mtp-threads=8` 启用多线程加速（需 `--enable-mtp` 编译）。
 
 ## 完整工作流程示例
 
@@ -171,3 +195,13 @@ ls scratch/2dfm4x4-multipath_a2a/output/
 - `traffic.csv` - 流量定义
 
 更多配置细节与场景文件格式说明，请参见：[scratch/README.md](scratch/README.md)。
+
+---
+
+## 相关文档
+
+| 文档 | 描述 |
+|------|------|
+| [README.md](README.md) | 项目总览：UB 模块能力、目录结构与核心概念 |
+| [scratch/README.md](scratch/README.md) | 用例执行与配置：运行 `scratch/<case>` 用例，与配置文件说明 |
+| [open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools) | 配套工具链（子模块）：用例配置生成与 trace 后处理与分析 |

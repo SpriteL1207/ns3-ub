@@ -40,6 +40,8 @@ public:
 
     void AddTask(TrafficRecord record);
 
+    TrafficRecord GetTaskById(uint32_t taskId);
+
     void MarkTaskCompleted(uint32_t taskId);
 
     bool IsCompleted() const;

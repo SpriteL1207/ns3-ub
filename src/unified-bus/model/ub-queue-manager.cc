@@ -40,7 +40,22 @@ uint32_t UbIngressQueue::GetNextPacketSize()
     return 0;
 }
 
-/*-----------------------------------------UbPacketQueue----------------------------------------------*/
+bool UbIngressQueue::IsControlFrame()
+{
+    return m_ingressPriority == 0 && m_inPortId == m_outPortId;
+}
+
+bool UbIngressQueue::IsForwardedDataPacket()
+{
+    return m_inPortId != m_outPortId;
+}
+
+bool UbIngressQueue::IsGeneratedDataPacket()
+{
+    return m_ingressPriority != 0 && m_inPortId == m_outPortId;
+}
+
+/*----------------------------------------- UbPacketQueue ----------------------------------------------*/
 bool UbPacketQueue::IsEmpty()
 {
     return m_queue.empty();
@@ -58,6 +73,9 @@ Ptr<Packet> UbPacketQueue::GetNextPacket()
 {
     auto p = m_queue.front();
     m_queue.pop();
+    if (!m_queue.empty()) {
+        m_headArrivalTime = Simulator::Now();
+    }
     return p;
 }
 
@@ -70,9 +88,9 @@ TypeId UbPacketQueue::GetTypeId(void)
     return tid;
 }
 
-IngressQueueType UbPacketQueue::GetIqType()
+IngressQueueType UbPacketQueue::GetIngressQueueType()
 {
-    return m_iqType;
+    return m_ingressQueueType;
 }
 
 uint32_t UbPacketQueue::GetNextPacketSize()
@@ -101,67 +119,126 @@ TypeId UbQueueManager::GetTypeId(void)
         .SetParent<Object>()
         .SetGroupName("UnifiedBus")
         .AddConstructor<UbQueueManager>()
-        .AddAttribute("BufferSize",
-        "Port Buffer Size in Byte.",
-        UintegerValue(utils::DEFAULT_PORT_BUFFER_SIZE),
-        MakeUintegerAccessor(&UbQueueManager::m_bufferSize),
+        .AddAttribute("BufferSizePerInportPriority",
+        "Buffer size limit per (inPort, priority) queue in bytes.",
+        UintegerValue(DEFAULT_INPORT_PRIORITY_BUFFER_SIZE),
+        MakeUintegerAccessor(&UbQueueManager::m_inPortPriorityBufferLimit),
         MakeUintegerChecker<uint32_t>());
     return tid;
 }
 
 void UbQueueManager::Init()
 {
-    m_ingressBuf.resize(m_portsNum);
-    for (auto& i : m_ingressBuf) {
-        i.resize(m_vlNum);
+    // 初始化双视图统计数组
+    m_inPortBuffer.resize(m_portsNum);
+    for (auto& i : m_inPortBuffer) {
+        i.resize(m_vlNum, 0);
     }
-    m_egressBuf.resize(m_portsNum);
-    for (auto& i : m_egressBuf) {
-        i.resize(m_vlNum);
+    m_outPortBuffer.resize(m_portsNum);
+    for (auto& i : m_outPortBuffer) {
+        i.resize(m_vlNum, 0);
     }
+    
+    NS_LOG_DEBUG("UbQueueManager Init: portsNum=" << m_portsNum 
+                 << " vlNum=" << m_vlNum
+                 << " inPortPriorityBufferLimit=" << m_inPortPriorityBufferLimit);
 }
 
-uint64_t UbQueueManager::GetIngressUsed(uint32_t port, uint32_t priority)
+// ========== VOQ Dual-View Operations ==========
+
+bool UbQueueManager::CheckVoqSpace(uint32_t inPort, uint32_t outPort, 
+                                    uint32_t priority, uint32_t pSize)
 {
-    return m_ingressBuf[port][priority];
+    // Check if both views have space
+    bool inPortOk = CheckInPortSpace(inPort, priority, pSize);
+    bool outPortOk = CheckOutPortSpace(outPort, priority, pSize);
+    
+    return inPortOk && outPortOk;
 }
 
-bool UbQueueManager::CheckIngress(uint32_t port, uint32_t priority, uint32_t pSize)
+bool UbQueueManager::CheckInPortSpace(uint32_t inPort, uint32_t priority, uint32_t pSize)
 {
-    return (m_ingressBuf[port][priority] + pSize < m_bufferSize);
+    bool hasSpace = (m_inPortBuffer[inPort][priority] + pSize < m_inPortPriorityBufferLimit);
+    
+    if (!hasSpace) {
+        NS_LOG_DEBUG("CheckInPortSpace FAIL: inPort=" << inPort 
+                     << " pri=" << priority
+                     << " used=" << m_inPortBuffer[inPort][priority] 
+                     << " limit=" << m_inPortPriorityBufferLimit);
+    }
+    
+    return hasSpace;
 }
 
-void UbQueueManager::PushIngress(uint32_t port, uint32_t priority, uint32_t pSize)
+bool UbQueueManager::CheckOutPortSpace(uint32_t outPort, uint32_t priority, uint32_t pSize)
 {
-    m_ingressBuf[port][priority] += pSize;
+    // OutPort视图纯用于统计，无物理缓冲区限制，不用于丢包决策
+    uint64_t newUsage = m_outPortBuffer[outPort][priority] + pSize;
+    
+    NS_LOG_DEBUG("CheckOutPortSpace: outPort=" << outPort 
+                 << " pri=" << priority
+                 << " currentUsed=" << m_outPortBuffer[outPort][priority]
+                 << " newUsage=" << newUsage);
+    
+    return true;  // Always return true, OutPort view has no hard limit
 }
 
-void UbQueueManager::PopIngress(uint32_t port, uint32_t priority, uint32_t pSize)
+void UbQueueManager::PushToVoq(uint32_t inPort, uint32_t outPort, 
+                                uint32_t priority, uint32_t pSize)
 {
-    m_ingressBuf[port][priority] -= pSize;
+    // 同时更新两个视图（物理上只有一个包在VOQ中）
+    m_inPortBuffer[inPort][priority] += pSize;
+    m_outPortBuffer[outPort][priority] += pSize;
+    
+    NS_LOG_DEBUG("PushToVoq: inPort=" << inPort << " outPort=" << outPort 
+                 << " pri=" << priority << " size=" << pSize
+                 << " | inPortBuf=" << m_inPortBuffer[inPort][priority]
+                 << " outPortBuf=" << m_outPortBuffer[outPort][priority]);
 }
 
-uint64_t UbQueueManager::GetEgressUsed(uint32_t port, uint32_t priority)
+void UbQueueManager::PopFromVoq(uint32_t inPort, uint32_t outPort, 
+                                 uint32_t priority, uint32_t pSize)
 {
-    return m_egressBuf[port][priority];
+    // 同时更新两个视图
+    m_inPortBuffer[inPort][priority] -= pSize;
+    m_outPortBuffer[outPort][priority] -= pSize;
+    
+    NS_LOG_DEBUG("PopFromVoq: inPort=" << inPort << " outPort=" << outPort 
+                 << " pri=" << priority << " size=" << pSize
+                 << " | inPortBuf=" << m_inPortBuffer[inPort][priority]
+                 << " outPortBuf=" << m_outPortBuffer[outPort][priority]);
 }
 
-uint64_t UbQueueManager::GetAllEgressUsed(uint32_t port)
+// ========== 查询接口：InPort视图 ==========
+
+uint64_t UbQueueManager::GetInPortBufferUsed(uint32_t inPort, uint32_t priority)
+{
+    return m_inPortBuffer[inPort][priority];
+}
+
+uint64_t UbQueueManager::GetTotalInPortBufferUsed(uint32_t inPort)
 {
     uint64_t sum = 0;
     for (uint32_t i = 0; i < m_vlNum; i++) {
-        sum += m_egressBuf[port][i];
+        sum += m_inPortBuffer[inPort][i];
     }
     return sum;
 }
 
-void UbQueueManager::PushEgress(uint32_t port, uint32_t priority, uint32_t pSize)
+// ========== 查询接口：OutPort视图 ==========
+
+uint64_t UbQueueManager::GetOutPortBufferUsed(uint32_t outPort, uint32_t priority)
 {
-    m_egressBuf[port][priority] += pSize;
+    return m_outPortBuffer[outPort][priority];
 }
 
-void UbQueueManager::PopEgress(uint32_t port, uint32_t priority, uint32_t pSize)
+uint64_t UbQueueManager::GetTotalOutPortBufferUsed(uint32_t outPort)
 {
-    m_egressBuf[port][priority] -= pSize;
+    uint64_t sum = 0;
+    for (uint32_t i = 0; i < m_vlNum; i++) {
+        sum += m_outPortBuffer[outPort][i];
+    }
+    return sum;
 }
+
 } // namespace ns3

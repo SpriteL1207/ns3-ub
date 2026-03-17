@@ -32,13 +32,6 @@ class UbCbfc;
 class UbPfc;
 class UbPort;
 
-
-enum class FcType {
-    CBFC,
-    PFC,
-    UBFC
-};
-
 /**
  * @brief 端口流量控制
  */
@@ -57,7 +50,7 @@ public:
     virtual void HandleReceivedPacket(Ptr<Packet> p) {}
     virtual FcType GetFcType()
     {
-        return FcType::UBFC;
+        return FcType::NONE;
     }
 };
 
@@ -89,7 +82,7 @@ public:
     void SendCrdAck(Ptr<Packet> cbfcPkt, uint32_t targetPortId);
     Ptr<Packet> ReleaseOccupiedCrd(Ptr<Packet> p, uint32_t targetPortId);
 
-private:
+protected:
     FcType m_fcType { FcType::CBFC };
     void DoDispose() override;
     uint32_t m_portId;
@@ -109,6 +102,34 @@ private:
     std::vector<int32_t>  m_crdTxfree;      // 发送端口每个vl信用证
     std::vector<int32_t>  m_crdToReturn;    // 用于记录每个vl需要返回的信用证
 };
+
+
+/**
+ * @brief 端口Cbfc (Shared credit)
+ */
+class UbCbfcSharedCredit : public UbCbfc {
+public:
+    static TypeId GetTypeId (void);
+    UbCbfcSharedCredit() {}
+    ~UbCbfcSharedCredit() override {}
+
+    FcType GetFcType() override;
+
+    void Init(uint8_t flitLen, uint8_t nFlitPerCell, uint8_t retCellGrainDataPacket,
+              uint8_t retCellGrainControlPacket, int32_t reservedPerVlCells,
+              int32_t sharedInitCells, uint32_t nodeId, uint32_t portId);
+
+    bool IsFcLimited(Ptr<UbIngressQueue> ingressQ) override;
+    void HandleSentPacket(Ptr<Packet> p, Ptr<UbIngressQueue> ingressQ) override;
+    void HandleReceivedControlPacket(Ptr<Packet> p) override;
+    bool CbfcSharedConsumeCrd(Ptr<Packet> p);
+    bool CbfcSharedRestoreCrd(Ptr<Packet> p);
+
+private:
+    int32_t m_shareCrd {0};
+    int32_t m_reservedPerVlCells {0};
+};
+
 
 /**
  * @brief 端口Pfc

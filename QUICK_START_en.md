@@ -1,5 +1,7 @@
 # Quick Start
 
+**Language**: [English](QUICK_START_en.md) | [中文](QUICK_START.md)
+
 > This project is built on ns-3.44 and verified on Linux and Windows WSL. For detailed platform support, installation steps, system requirements, and build options, see [ns-3.44 Documentation](https://www.nsnam.org/releases/ns-3-44/documentation/), [Installation Guide](https://www.nsnam.org/docs/release/3.44/installation/singlehtml/), and [ns-3.44 Source](https://gitlab.com/nsnam/ns-3-dev/-/tree/ns-3.44?ref_type=tags).
 
 ## Prerequisites
@@ -51,7 +53,7 @@ global UB_PYTHON_SCRIPT_PATH "scratch/ns-3-ub-tools/trace_analysis/parse_trace.p
 
 ## Python Tools & Dependencies
 
-The project's Python toolset is located in `scratch/ns-3-ub-tools/`:
+The project's Python toolset is located in `scratch/ns-3-ub-tools/` ([open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools)):
 
 - Topology/Visualization: `net_sim_builder.py`, `topo_plot.py`, `user_topo_*.py`
 - Traffic Generation: `traffic_maker/*`
@@ -80,6 +82,22 @@ Note: Please install the required third-party packages via `requirements.txt` be
 # Compile project
 ./ns3 build
 ```
+
+### (Optional) Enable Unison multi-threaded simulation
+
+To enable Unison for ns-3 multi-threaded parallel simulation (MTP), add `--enable-mtp` during configuration (you may also enable examples):
+
+```bash
+./ns3 configure --enable-mtp --enable-examples
+./ns3 build
+
+# Use --mtp-threads to enable multi-threading at runtime (must be >= 2)
+./ns3 run 'scratch/ub-quick-example scratch/2nodes_single-tp' -- --mtp-threads=8
+```
+
+Note: Enabling parallel simulation usually also requires calling `MtpInterface::Enable(...)` in your simulation program (guarded by `#ifdef NS3_MTP`). See [UNISON_README.md](UNISON_README.md) for details.
+
+Tip: The main example program [scratch/ub-quick-example.cc](scratch/ub-quick-example.cc) already includes a Unison/MTP snippet (commented out by default). You can uncomment it and set the thread count as needed.
 
 ## Run a Minimal Example
 
@@ -122,6 +140,8 @@ The following are the available use case directories and corresponding run comma
 - 2D FullMesh 4x4 (multipath All-to-All):
   ```bash
   ./ns3 run 'scratch/ub-quick-example scratch/2dfm4x4-multipath_a2a'
+  # Enable multi-threading acceleration (requires --enable-mtp compilation)
+  ./ns3 run 'scratch/ub-quick-example scratch/2dfm4x4-multipath_a2a' -- --mtp-threads=8
   ```
 
 - 2D FullMesh 4x4 (hierarchical broadcast):
@@ -132,9 +152,11 @@ The following are the available use case directories and corresponding run comma
 - Clos (32 hosts / 4 leafs / 8 spines, pod2pod):
   ```bash
   ./ns3 run 'scratch/ub-quick-example scratch/clos_32hosts-4leafs-8spines_pod2pod'
+  # Multi-threading recommended for large topologies
+  ./ns3 run 'scratch/ub-quick-example scratch/clos_32hosts-4leafs-8spines_pod2pod' -- --mtp-threads=16
   ```
 
-Note: Some large-scale use cases take a long time to run, please select and run as needed.
+Note: Some large-scale use cases take a long time to run. Please use `-- --mtp-threads=8` to enable multi-threading (requires `--enable-mtp` compilation).
 
 ## Full Workflow Example (Complete Workflow Verification)
 
@@ -171,3 +193,12 @@ Each use case directory typically contains the following files (format can refer
 - `traffic.csv` - Traffic definitions
 
 For detailed scenario configuration and file formats, see: [scratch/README.md](scratch/README.md).
+---
+
+## Related Documentation
+
+| Document | Description |
+|----------|-------------|
+| [README_en.md](README_en.md) | Project overview: UB components, repo layout, and key concepts |
+| [scratch/README.md](scratch/README.md) | Case execution and configuration: run `scratch/<case>` scenarios; define and validate case configs |
+| [open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools) | Toolchain (submodule): case generation and trace post-processing/analysis |

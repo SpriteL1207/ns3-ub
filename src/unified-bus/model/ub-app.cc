@@ -7,6 +7,9 @@
 #include "ns3/ub-datatype.h"
 #include "ns3/ub-function.h"
 #include "ub-traffic-gen.h"
+#include "ns3/ub-routing-process.h"
+#include "ns3/ub-port.h"
+#include "ns3/ub-utils.h"
 
 namespace ns3 {
 
@@ -21,9 +24,14 @@ TypeId UbApp::GetTypeId(void)
             .SetGroupName("UnifiedBus")
             .AddConstructor<UbApp>()
             .AddAttribute("EnableMultiPath",
-                          "Enable Multi Path",
+                          "Enable Multipath feature",
                           BooleanValue(false),
                           MakeBooleanAccessor(&UbApp::m_multiPathEnable),
+                          MakeBooleanChecker())
+            .AddAttribute("UseShortestPaths",
+                          "If true, only create TPs on source ports that belong to shortest paths.",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&UbApp::m_useShortestPaths),
                           MakeBooleanChecker())
             .AddTraceSource("MemTaskStartsNotify",
                             "MEM Task Starts, taskId",
@@ -46,15 +54,13 @@ TypeId UbApp::GetTypeId(void)
 
 UbApp::UbApp()
 {
+    m_random = CreateObject<UniformRandomVariable>();
+    m_random->SetAttribute("Min", DoubleValue(0.0));
+    m_random->SetAttribute("Max", DoubleValue(1.0));
 }
 
 UbApp::~UbApp()
 {
-}
-
-void UbApp::GetTpnConn(TpConnectionManager tpConnection)
-{
-    m_tpnConn = tpConnection;
 }
 
 void UbApp::SetFinishCallback(Callback<void, uint32_t, uint32_t> cb, Ptr<UbJetty> jetty)
@@ -93,7 +99,7 @@ void UbApp::SendTraffic(TrafficRecord record)
         MemTaskStartsNotify(GetNode()->GetId(), record.taskId);
         std::vector<uint32_t> threadIds = {0, 1};
         ldstInstance->HandleLdstTask(record.sourceNode, record.destNode, record.dataSize,
-                          record.taskId, type, threadIds, 0);
+                          record.taskId, record.priority, type, threadIds, 0);
     } else if (record.opType == "URMA_WRITE" || record.opType == "URMA_READ" || record.opType == "URMA_WRITE_NOTIFY") {
         const bool isRead = record.opType == "URMA_READ";
         const bool isWriteNotify = record.opType == "URMA_WRITE_NOTIFY";
@@ -106,12 +112,10 @@ void UbApp::SendTraffic(TrafficRecord record)
             return;
         }
         ubFunc->CreateJetty(record.sourceNode, record.destNode, m_jettyNum);
-        vector<uint32_t> m_tpns = m_tpnConn.GetTpns(
-            m_getTpnRule, m_useShortestPath, record.sourceNode,
+        vector<uint32_t> tpns = GetNode()->GetObject<UbController>()->GetTpConnManager()->GetTpns(
+            m_getTpnRule, m_useShortestPaths, m_multiPathEnable, record.sourceNode,
             record.destNode, UINT32_MAX, UINT32_MAX, record.priority);
-        NS_ASSERT_MSG(m_tpns.empty() == false, "Tpns Not Exist");
-        bool bindRst = ubTa->JettyBindTp(record.sourceNode, record.destNode,
-                                        m_jettyNum, m_multiPathEnable, m_tpns);
+        bool bindRst = ubTa->JettyBindTp(record.sourceNode, record.destNode, m_jettyNum, m_multiPathEnable, tpns);
         if (bindRst) {
             Ptr<UbJetty> currJetty = ubFunc->GetJetty(m_jettyNum);
             SetFinishCallback(MakeCallback(&UbApp::OnTaskCompleted, this), currJetty);
@@ -155,6 +159,10 @@ void UbApp::OnTaskCompleted(uint32_t taskId, uint32_t jettyNum)
     NS_LOG_INFO("WQE Completes, jettyNum: " << jettyNum << " taskId: " << taskId);
     WqeTaskCompletesNotify(GetNode()->GetId(), jettyNum, taskId);
     NS_LOG_INFO("[APPLICATION INFO] taskId: " << taskId << ",finish time:" << Simulator::Now().GetNanoSeconds() << "ns");
+    // 删除无用tp
+    TrafficRecord record = UbTrafficGen::Get()->GetTaskById(taskId);
+    GetNode()->GetObject<UbController>()->GetTpConnManager()->RemoveUselessTps(jettyNum,
+        record.sourceNode, record.destNode, record.priority);
     UbTrafficGen::Get()->OnTaskCompleted(taskId);
 }
 

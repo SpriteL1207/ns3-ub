@@ -60,6 +60,16 @@ void UbTrafficGen::AddTask(TrafficRecord record)
     NS_LOG_DEBUG("Added task " << taskId << " with " << m_dependencies[taskId].size() << " dependencies");
 }
 
+TrafficRecord UbTrafficGen::GetTaskById(uint32_t taskId)
+{
+    auto it = m_tasks.find(taskId);
+    if (it != m_tasks.end()) {
+        return it->second;
+    } else {
+        NS_ASSERT_MSG(0, "Can't find task from TrafficRecord.");
+    }
+}
+
 void UbTrafficGen::MarkTaskCompleted(uint32_t taskId)
 {
     // 检查任务是否正在运行
@@ -127,12 +137,16 @@ void UbTrafficGen::ScheduleNextTasks()
 
             auto taskIt = m_tasks.find(taskId);
             if (taskIt != m_tasks.end()) {
+                if (taskIt->second.priority == 0) {
+                    NS_LOG_WARN("It is strongly recommended not to set the task priority to 0. " <<
+                                "Priority level 0 is reserved for control frames.");
+                }
                 auto app = DynamicCast<UbApp>(NodeList::GetNode(taskIt->second.sourceNode)->GetApplication(0));
                 Time taskDelay = Time(0);
                 if (!taskIt->second.delay.empty()) {
                     taskDelay = Time(taskIt->second.delay);
                 }
-                Simulator::Schedule(taskDelay, &UbApp::SendTraffic, app, taskIt->second);
+                Simulator::ScheduleWithContext(app->GetNode()->GetId(), taskDelay, &UbApp::SendTraffic, app, taskIt->second);
                 NS_LOG_DEBUG("Scheduled task " << taskId);
             }
         }

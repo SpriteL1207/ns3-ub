@@ -13,9 +13,11 @@
 #include "ns3/ub-ldst-api.h"
 #include "ub-tp-connection-manager.h"
 #include "ub-network-address.h"
+#include "ns3/random-variable-stream.h"
 
 using namespace utils;
 namespace ns3 {
+
 /**
  * @brief 任务图应用,管理多个wqe任务及依赖关系
  */
@@ -31,16 +33,14 @@ public:
 
     void SetNode(Ptr<Node> node); // 设置当前节点
 
-    void GetTpnConn(TpConnectionManager tpConnection); // 获取tpnconnection
-
     void SetGetTpnRule(GetTpnRuleT type)
     {
         m_getTpnRule = type;
     }
 
-    void SetUseShortestPath(bool useShortestPath)
+    void SetUseShortestPaths(bool useShortestPaths)
     {
-        m_useShortestPath = useShortestPath;
+        m_useShortestPaths = useShortestPaths;
     }
 
     /**
@@ -83,10 +83,10 @@ private:
     bool m_multiPathEnable;
 
     GetTpnRuleT m_getTpnRule = GetTpnRuleT::BY_PEERNODE_PRIORITY; // 获取Tpn的方式
-    bool m_useShortestPath = true; // 是否根据跳数寻找最短路径
+    bool m_useShortestPaths = true; // 是否根据跳数寻找最短路径
 
     Ptr<Node> m_node;              // 当前节点
-    TpConnectionManager m_tpnConn; // 当前节点维护的tpnConn
+
     uint32_t m_jettyNum = 0;       // 当前节点维护的jettynum,不会重复
 
     static constexpr uint32_t WRITE_NOTIFY_BYTE_SIZE = 8;
@@ -103,6 +103,8 @@ private:
     {
         return baseTaskId | NOTIFY_TASK_MASK;
     }
+    Ptr<UniformRandomVariable> m_random;
+
 };
 
 } // namespace ns3

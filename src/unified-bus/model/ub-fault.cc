@@ -61,7 +61,7 @@ void UbFault::ReadCongestionOrLowerDataRateParams(map<uint32_t, FaultInfo> &faul
                 // 在开始跑仿真前将拓扑的带宽减为一半（可以提前跑一遍流量看下端口级带宽，选择有流量的端口进行降lane）
                 SetPortCongestion(lowerDataRate);
             } else {
-                NS_LOG_DEBUG("lowerDataRate set error please check");
+                NS_LOG_WARN("Invalid fault injection config (LOWERDATARATE): incorrect number of parameters. Line ignored.");
             }
         }
     }
@@ -77,7 +77,7 @@ void UbFault::ReadShutDownParams(map<uint32_t, FaultInfo> &faultMap, const strin
                 faultMap[taskId].shutDownPacketDrop = {static_cast<uint32_t>(stoi(spaceParts[0])),
                                                     static_cast<uint32_t>(stoi(spaceParts[1]))};
             } else {
-                NS_LOG_DEBUG("lowerDataRate set error please check");
+                NS_LOG_WARN("Invalid fault injection config (SHUTDOWNUP): incorrect number of parameters. Line ignored.");
             }
         }
     }

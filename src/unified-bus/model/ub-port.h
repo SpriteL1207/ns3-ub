@@ -34,6 +34,7 @@ class UbIngressQueue;
 class UbLink;
 class UbFlowControl;
 class UbCbfc;
+class UbCbfcSharedCredit;
 class UbPfc;
 
 // Egress queue enqueue item: (inPortId, priority, packet)
@@ -41,13 +42,14 @@ using PacketEntry = std::tuple<uint32_t, uint32_t, Ptr<Packet>>;
 
 /**
  * \class UbEgressQueue
- * \brief Port Egress Queue Management
+ * \brief Port Egress Queue Management (物理输出队列，用于传输调度)
  */
 class UbEgressQueue : public Object {
 public:
     std::queue<PacketEntry> m_egressQ; // 通过算法分配到的包, inPortId, priority, packet
 
-    uint32_t m_maxIngressQueues;   // eq存储最大包数
+    uint64_t m_maxEgressBytes;     // Max bytes accepted by egress queue
+    uint64_t m_currentBytes = 0;   // Current bytes in egress queue (用于拥塞控制等)
 
     static TypeId GetTypeId(void);
     explicit UbEgressQueue();
@@ -59,15 +61,22 @@ public:
     void AddPacketHeader(Ptr<UbTransportChannel> tp, Ptr<Packet> p, bool credit, bool ack);
 
     bool IsEmpty();
+    
+    /**
+     * @brief 获取EgressQueue当前字节占用（用于拥塞控制等）
+     */
+    uint64_t GetCurrentBytes() const { return m_currentBytes; }
 
     TracedCallback<Ptr<const Packet>, uint32_t> m_traceUbEnqueue;
     TracedCallback<Ptr<const Packet>, uint32_t> m_traceUbDequeue;
 };
 
+/**
+ * @brief Port transmission state machine
+ */
 enum class SendState {
-    READY,        // The transmitter is ready to begin transmission of a packet
-    BUSY,         // The transmitter is busy transmitting a packet
-    ALLOCATION    // The transmitter is waiting allocation
+    READY,  // Port is idle and ready to transmit next packet
+    BUSY    // Port is actively transmitting a packet
 };
 
 /**
@@ -124,7 +133,7 @@ public:
     void IncreaseRcvQueueSize(Ptr<Packet> p, Ptr<UbPort> port);
     void DecreaseRcvQueueSize(Ptr<Packet> p, uint32_t portId);
 
-    void CreateAndInitFc(const std::string& type);
+    void CreateAndInitFc(FcType type);
 
     Ptr<UbFlowControl> GetFlowControl()
     {
@@ -196,7 +205,7 @@ private:
 
     DataRate m_bps;
 
-    SendState m_ubSendState;
+    SendState m_sendState;  // Current transmission state
 
     bool m_linkUp;
 
@@ -220,6 +229,7 @@ private:
     uint8_t m_cbfcRetCellGrainDataPacket;       // 数据包返回的CRD的粒度，通常从以下选项中选择 {1, 2, 4, 8, 16, 32, 64, 128}
     uint8_t m_cbfcRetCellGrainControlPacket;    // 控制报文返回的CRD的粒度，通常从以下选项中选择 {1, 2, 4, 8, 16, 32, 64, 128}
     int32_t m_cbfcPortTxfree;
+    int32_t m_cbfcSharedInitCells;
 
     // pfc
     int32_t m_pfcUpThld;
