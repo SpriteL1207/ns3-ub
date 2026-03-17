@@ -176,3 +176,4 @@ Affected mappings:
 - `net_sim_builder.py` API → `topology-options.md`, `spec-to-toolchain.md`
 - `build_traffic.py` CLI → `workload-options.md`, `spec-to-toolchain.md`
 - `trace_analysis/*.py` → `throughput-evidence.md`, `spec-to-toolchain.md`
+- `src/unified-bus/model/ub-utils.h` trace GlobalValue 定义 → `network_attribute_writer.py` `_OBSERVABILITY_PRESETS`, `trace-observability.md`

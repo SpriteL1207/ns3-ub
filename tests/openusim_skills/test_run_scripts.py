@@ -67,6 +67,39 @@ class OpenUSimRunScriptsTest(unittest.TestCase):
             self.assertGreaterEqual(result["resolved_entry_count"], 3)
             self.assertEqual(result["applied_overrides"]["ns3::UbPort::UbDataRate"], "800Gbps")
 
+    def test_observability_preset_returns_valid_tiers(self):
+        for tier in ("minimal", "balanced", "detailed"):
+            overrides = network_attribute_writer.observability_preset(tier)
+            self.assertIsInstance(overrides, dict)
+            self.assertEqual(overrides["UB_TRACE_ENABLE"], "true")
+            self.assertEqual(overrides["UB_PARSE_TRACE_ENABLE"], "true")
+
+    def test_observability_preset_minimal_disables_heavy_traces(self):
+        overrides = network_attribute_writer.observability_preset("minimal")
+        self.assertEqual(overrides["UB_PACKET_TRACE_ENABLE"], "false")
+        self.assertEqual(overrides["UB_PORT_TRACE_ENABLE"], "false")
+        self.assertEqual(overrides["UB_RECORD_PKT_TRACE"], "false")
+
+    def test_observability_preset_balanced_enables_packet_and_port(self):
+        overrides = network_attribute_writer.observability_preset("balanced")
+        self.assertEqual(overrides["UB_PACKET_TRACE_ENABLE"], "true")
+        self.assertEqual(overrides["UB_PORT_TRACE_ENABLE"], "true")
+        self.assertEqual(overrides["UB_RECORD_PKT_TRACE"], "false")
+
+    def test_observability_preset_detailed_enables_all(self):
+        overrides = network_attribute_writer.observability_preset("detailed")
+        self.assertEqual(overrides["UB_RECORD_PKT_TRACE"], "true")
+
+    def test_observability_preset_rejects_unknown_tier(self):
+        with self.assertRaises(ValueError):
+            network_attribute_writer.observability_preset("turbo")
+
+    def test_observability_preset_returns_copy(self):
+        a = network_attribute_writer.observability_preset("balanced")
+        b = network_attribute_writer.observability_preset("balanced")
+        a["UB_TRACE_ENABLE"] = "false"
+        self.assertEqual(b["UB_TRACE_ENABLE"], "true")
+
     def test_checker_only_reports_missing_major_files(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             case_dir = Path(temp_dir) / "case"

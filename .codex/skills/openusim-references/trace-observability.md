@@ -2,6 +2,18 @@
 
 Use this reference when discussing `trace/debug` choices, especially `minimal`, `balanced`, and `detailed`.
 
+## Tier Definitions
+
+| Tier | Intent | Post-processing output |
+|------|--------|----------------------|
+| minimal | 只要任务级统计，最快跑完 | `task_statistics.csv`（仅任务起止，无首包/末ACK） |
+| balanced | 任务 + 包 + 端口，够用的排查能力 | `task_statistics.csv`（含首包/末ACK）+ `throughput.csv` |
+| detailed | 全开，含逐包逐跳路径证据 | 同 balanced + `AllPacketTrace_*.tr` |
+| custom | 用户自选开关组合 | 取决于所选开关 |
+
+Use `observability_preset(tier)` from `network_attribute_writer` to get the concrete overrides dict.
+Do not hardcode switch names in experiment specs or agent logic.
+
 ## Hard Facts
 
 - `trace/debug` mode changes observability and logging overhead.

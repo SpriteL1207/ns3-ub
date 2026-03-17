@@ -152,6 +152,45 @@ def load_or_build_parameter_catalog() -> tuple[dict, Path]:
     return catalog, _write_json(cache_path, catalog)
 
 
+_OBSERVABILITY_PRESETS = {
+    "minimal": {
+        "UB_TRACE_ENABLE": "true",
+        "UB_TASK_TRACE_ENABLE": "true",
+        "UB_PACKET_TRACE_ENABLE": "false",
+        "UB_PORT_TRACE_ENABLE": "false",
+        "UB_RECORD_PKT_TRACE": "false",
+        "UB_PARSE_TRACE_ENABLE": "true",
+    },
+    "balanced": {
+        "UB_TRACE_ENABLE": "true",
+        "UB_TASK_TRACE_ENABLE": "true",
+        "UB_PACKET_TRACE_ENABLE": "true",
+        "UB_PORT_TRACE_ENABLE": "true",
+        "UB_RECORD_PKT_TRACE": "false",
+        "UB_PARSE_TRACE_ENABLE": "true",
+    },
+    "detailed": {
+        "UB_TRACE_ENABLE": "true",
+        "UB_TASK_TRACE_ENABLE": "true",
+        "UB_PACKET_TRACE_ENABLE": "true",
+        "UB_PORT_TRACE_ENABLE": "true",
+        "UB_RECORD_PKT_TRACE": "true",
+        "UB_PARSE_TRACE_ENABLE": "true",
+    },
+}
+
+
+def observability_preset(tier: str) -> dict:
+    """Return observability_overrides dict for a named tier.
+
+    Valid tiers: "minimal", "balanced", "detailed".
+    Raises ValueError for unknown tiers.
+    """
+    if tier not in _OBSERVABILITY_PRESETS:
+        raise ValueError(f"Unknown observability tier {tier!r}, expected one of {sorted(_OBSERVABILITY_PRESETS)}")
+    return dict(_OBSERVABILITY_PRESETS[tier])
+
+
 def _normalize_override_key(parameter_key: str) -> str:
     if parameter_key.startswith("default "):
         return parameter_key[len("default ") :]

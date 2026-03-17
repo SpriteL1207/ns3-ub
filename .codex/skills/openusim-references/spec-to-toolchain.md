@@ -141,10 +141,25 @@ This writes a full catalog snapshot. Explicit overrides take precedence over obs
 
 ## Observability Slot → Observability Overrides
 
-Map the chosen trace/debug posture to concrete attribute overrides passed as
-`observability_overrides` to `write_network_attributes()`.
+```python
+from openusim_run_experiment.network_attribute_writer import observability_preset
 
-Refer to `trace-observability.md` for the semantic constraints on trace modes.
+# Use a named tier
+overrides = observability_preset("balanced")
+
+# Or customize: start from a tier, then tweak
+overrides = observability_preset("minimal")
+overrides["UB_PORT_TRACE_ENABLE"] = "true"  # add port trace to minimal
+
+# Pass to write_network_attributes
+write_network_attributes(
+    case_dir=Path("<case_dir>"),
+    explicit_overrides={...},
+    observability_overrides=overrides,
+)
+```
+
+Refer to `trace-observability.md` for tier semantics and safe wording constraints.
 
 ## Execution
 
