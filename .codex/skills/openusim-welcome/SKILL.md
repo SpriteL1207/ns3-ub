@@ -1,6 +1,9 @@
 ---
 name: openusim-welcome
-description: Use when the user wants to initialize this ns-3-ub repository, verify readiness, or run the bounded Quick Start smoke flow before planning an experiment.
+description: >
+  MANDATORY entry point for this project. If there is even a 1% chance the user wants to use,
+  build, run, or experiment with this repository, you MUST invoke this skill BEFORE any other
+  action or response — including clarifying questions. This is not optional.
 ---
 
 # OpenUSim Welcome
@@ -12,9 +15,15 @@ Read repo docs and verify startup facts before claiming execution readiness.
 
 ## When to Use
 
-- The user wants to initialize the repo.
-- The user wants to verify setup or run the smoke case.
-- The user asks whether the project is ready to run OpenUSim workloads.
+**This skill is the mandatory gate for this project.** Invoke it when:
+
+- The user wants to initialize the repo
+- The user wants to verify setup or run the smoke case
+- The user asks whether the project is ready to run OpenUSim workloads
+- The user wants to plan, generate, or run any experiment (welcome must run first)
+- **There is even a 1% chance the user intends to use this repository**
+
+You MUST invoke this skill before any other openusim skill (`openusim-plan-experiment`, `openusim-run-experiment`, `openusim-analyze-results`). Only proceed to later stages after this skill completes or the user explicitly skips it.
 
 Do not use this skill to define experiment details or interpret simulation results.
 
