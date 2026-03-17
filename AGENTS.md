@@ -18,6 +18,8 @@ When the user wants help with Unified Bus / OpenUSim work in this repository, ro
 - use `openusim-run-experiment` for case generation, execution, and explicit run errors
 - use `openusim-analyze-results` for result interpretation and likely-cause analysis
 
+If the user has not run `openusim-welcome` in this session and wants to plan, generate, or run an experiment, remind the user that `openusim-welcome` can verify repo readiness first. For example: "建议先跑一下 openusim-welcome 确认仓库就绪，要先检查一下吗？" Only proceed to later stages after the user explicitly skips or completes the welcome check.
+
 Do not route the user into legacy `openusim-*` skills unless the user explicitly asks to inspect or modify that legacy multi-skill system.
 
 ## User-Facing Reply Surface
