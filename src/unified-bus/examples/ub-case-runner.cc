@@ -95,6 +95,13 @@ std::string FormatTime(double time_us)
     return oss.str();
 }
 
+std::string FormatSummaryLine(const std::string& label, double time_us)
+{
+    std::ostringstream oss;
+    oss << "[summary]   " << std::left << std::setw(6) << label << " : " << FormatTime(time_us);
+    return oss.str();
+}
+
 void CheckNoProgress(double sim_time_us, std::ostringstream& oss)
 {
     static uint32_t last_completed_tasks = 0;
@@ -350,7 +357,7 @@ uint32_t ActivateTrafficFromConfig(const std::string& configPath,
     }
 
     uint32_t localTaskCount = 0;
-    UbUtils::Get()->PrintTimestamp("Start Client.");
+    UbUtils::Get()->PrintTimestamp("[traffic] Activate clients and enqueue tasks.");
     for (const auto& record : trafficData)
     {
         Ptr<Node> sourceNode = NodeList::GetNode(record.sourceNode);
@@ -371,6 +378,8 @@ uint32_t ActivateTrafficFromConfig(const std::string& configPath,
     }
 
     UbTrafficGen::Get()->ScheduleNextTasks();
+    UbUtils::Get()->PrintTimestamp("[traffic] Scheduled local tasks: " +
+                                   std::to_string(localTaskCount));
     CheckExampleProcess();
     return localTaskCount;
 }
@@ -512,7 +521,7 @@ PhaseTiming RunScenario(const QuickExampleOptions& options,
 
     EnableExampleLogging();
 
-    UbUtils::Get()->PrintTimestamp("Run case: " + options.configPath);
+    UbUtils::Get()->PrintTimestamp("[case] Run case: " + options.configPath);
     RngSeedManager::SetSeed(10);
 
     timing.simulationStart = std::chrono::high_resolution_clock::now();
@@ -534,7 +543,7 @@ PhaseTiming RunScenario(const QuickExampleOptions& options,
     }
 #endif
 
-    UbUtils::Get()->PrintTimestamp("Simulator finished!");
+    UbUtils::Get()->PrintTimestamp("[run] Simulation finished.");
     timing.traceStart = std::chrono::high_resolution_clock::now();
     UbUtils::Get()->ParseTrace(options.test);
     timing.programEnd = std::chrono::high_resolution_clock::now();
@@ -545,31 +554,27 @@ void ReportResult(const QuickExampleOptions& options,
                   const RuntimeSelection& runtime,
                   const PhaseTiming& timing)
 {
-    UbUtils::Get()->PrintTimestamp("Program finished.");
-    double config_wall_s =
+    const double config_wall_us =
         std::chrono::duration_cast<std::chrono::microseconds>(timing.simulationStart -
                                                               timing.programStart)
-            .count() /
-        1e6;
-    double run_wall_s =
+            .count();
+    const double run_wall_us =
         std::chrono::duration_cast<std::chrono::microseconds>(timing.simulationEnd -
                                                               timing.simulationStart)
-            .count() /
-        1e6;
-    double trace_wall_s =
+            .count();
+    const double trace_wall_us =
         std::chrono::duration_cast<std::chrono::microseconds>(timing.programEnd - timing.traceStart)
-            .count() /
-        1e6;
-    double total_wall_s =
+            .count();
+    const double total_wall_us =
         std::chrono::duration_cast<std::chrono::microseconds>(timing.programEnd - timing.programStart)
-            .count() /
-        1e6;
-    UbUtils::Get()->PrintTimestamp("Wall-clock (config phase): " + std::to_string(config_wall_s) +
-                                   " s");
-    UbUtils::Get()->PrintTimestamp("Wall-clock (run phase): " + std::to_string(run_wall_s) + " s");
-    UbUtils::Get()->PrintTimestamp("Wall-clock (trace phase): " + std::to_string(trace_wall_s) +
-                                   " s");
-    UbUtils::Get()->PrintTimestamp("Wall-clock (total): " + std::to_string(total_wall_s) + " s");
+            .count();
+
+    UbUtils::Get()->PrintTimestamp("[summary] Program finished.");
+    UbUtils::Get()->PrintTimestamp("[summary] Wall-clock:");
+    UbUtils::Get()->PrintTimestamp(FormatSummaryLine("config", config_wall_us));
+    UbUtils::Get()->PrintTimestamp(FormatSummaryLine("run", run_wall_us));
+    UbUtils::Get()->PrintTimestamp(FormatSummaryLine("trace", trace_wall_us));
+    UbUtils::Get()->PrintTimestamp(FormatSummaryLine("total", total_wall_us));
     if (options.test)
     {
         PrintTestResult(UbTrafficGen::Get()->IsCompleted(), runtime.enableMpi, runtime.mpiRank);

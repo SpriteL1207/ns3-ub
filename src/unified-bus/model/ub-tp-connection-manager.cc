@@ -64,6 +64,7 @@ TpConnectionManager::~TpConnectionManager()
 // 添加连接（不需要nodeId参数）
 void TpConnectionManager::AddConnection(const Connection& conn)
 {
+    std::lock_guard<std::mutex> lock(m_stateLock);
     // 存储连接
     m_allConnections.push_back(conn);
 
@@ -75,6 +76,7 @@ void TpConnectionManager::AddConnection(const Connection& conn)
 // 添加单边连接
 void TpConnectionManager::AddUnilateralConnection(const Connection& conn, const uint32_t src)
 {
+    std::lock_guard<std::mutex> lock(m_stateLock);
     // 存储连接
     m_allConnections.push_back(conn);
     // 如果源节点既不是conn的node1也不是node2，则判错
@@ -91,6 +93,7 @@ Ptr<TpConnectionManager> TpConnectionManager::GetConnectionManagerByNode(uint32_
     Ptr<TpConnectionManager> nodeManager = CreateObject<TpConnectionManager>();
 
     // 复制与该节点相关的连接
+    std::lock_guard<std::mutex> lock(m_stateLock);
     auto it = m_nodeConnections.find(nodeId);
     if (it != m_nodeConnections.end()) {
         for (const auto& conn : it->second) {
@@ -153,6 +156,7 @@ std::vector<uint32_t> TpConnectionManager::GetTpns(GetTpnRuleT ruler,
 // 1. 获取节点相关的所有连接
 std::vector<Connection> TpConnectionManager::GetNodeConnections(uint32_t nodeId) const
 {
+    std::lock_guard<std::mutex> lock(m_stateLock);
     auto it = m_nodeConnections.find(nodeId);
     if (it != m_nodeConnections.end()) {
         return it->second;
@@ -165,6 +169,7 @@ std::vector<std::pair<uint32_t, uint32_t>> TpConnectionManager::GetTpnsByPeerNod
     uint32_t localNodeId, uint32_t peerNodeId) const
 {
     std::vector<std::pair<uint32_t, uint32_t>> tpns;
+    std::lock_guard<std::mutex> lock(m_stateLock);
     auto key = std::make_pair(localNodeId, peerNodeId);
     auto it = m_peerNodeIndex.find(key);
     if (it != m_peerNodeIndex.end()) {
@@ -185,6 +190,7 @@ std::vector<std::pair<uint32_t, uint32_t>> TpConnectionManager::GetTpnsByPeerNod
     uint32_t localNodeId, uint32_t peerNodeId, uint32_t priority) const
 {
     std::vector<std::pair<uint32_t, uint32_t>> tpns;
+    std::lock_guard<std::mutex> lock(m_stateLock);
     auto key = std::make_tuple(localNodeId, peerNodeId, priority);
     auto it = m_peerNodePriorityIndex.find(key);
     if (it != m_peerNodePriorityIndex.end()) {
@@ -205,6 +211,7 @@ std::vector<std::pair<uint32_t, uint32_t>> TpConnectionManager::GetTpnsByPeerNod
     uint32_t localNodeId, uint32_t peerNodeId, uint32_t localPort) const
 {
     std::vector<std::pair<uint32_t, uint32_t>> tpns;
+    std::lock_guard<std::mutex> lock(m_stateLock);
     auto key = std::make_tuple(localNodeId, peerNodeId, localPort);
     auto it = m_peerNodeLocalPortIndex.find(key);
     if (it != m_peerNodeLocalPortIndex.end()) {
@@ -225,6 +232,7 @@ std::vector<std::pair<uint32_t, uint32_t>> TpConnectionManager::GetTpnsByPeerNod
     uint32_t localNodeId, uint32_t peerNodeId, uint32_t localPort, uint32_t peerPort) const
 {
     std::vector<std::pair<uint32_t, uint32_t>> tpns;
+    std::lock_guard<std::mutex> lock(m_stateLock);
     auto key = std::make_tuple(localNodeId, peerNodeId, localPort, peerPort);
     auto it = m_bothPortsIndex.find(key);
     if (it != m_bothPortsIndex.end()) {
@@ -245,6 +253,7 @@ std::vector<std::pair<uint32_t, uint32_t>> TpConnectionManager::GetTpnsByFullCri
     uint32_t localNodeId, uint32_t peerNodeId, uint32_t localPort, uint32_t peerPort, uint32_t priority) const
 {
     std::vector<std::pair<uint32_t, uint32_t>> tpns;
+    std::lock_guard<std::mutex> lock(m_stateLock);
 
     // 遍历本节点的所有连接，找到匹配条件的
     auto it = m_nodeConnections.find(localNodeId);
@@ -282,6 +291,7 @@ std::vector<std::pair<uint32_t, uint32_t>> TpConnectionManager::GetTpnsByFullCri
 std::vector<uint32_t> TpConnectionManager::GetAllTpnsForNode(uint32_t nodeId) const
 {
     std::vector<uint32_t> tpns;
+    std::lock_guard<std::mutex> lock(m_stateLock);
     auto it = m_nodeConnections.find(nodeId);
     if (it != m_nodeConnections.end()) {
         for (const auto& conn : it->second) {
@@ -299,6 +309,7 @@ std::vector<uint32_t> TpConnectionManager::GetAllTpnsForNode(uint32_t nodeId) co
 std::set<uint32_t> TpConnectionManager::GetNeighborNodes(uint32_t nodeId) const
 {
     std::set<uint32_t> neighbors;
+    std::lock_guard<std::mutex> lock(m_stateLock);
     auto it = m_nodeConnections.find(nodeId);
     if (it != m_nodeConnections.end()) {
         for (const auto& conn : it->second) {
@@ -315,6 +326,7 @@ std::set<uint32_t> TpConnectionManager::GetNeighborNodes(uint32_t nodeId) const
 // 获取与该tp相关的conn
 Connection TpConnectionManager::GetConnection(uint32_t tpn, uint32_t src, uint32_t dst, uint32_t priority)
 {
+    std::lock_guard<std::mutex> lock(m_stateLock);
     auto key = std::make_tuple(src, dst, priority);
     auto it = m_peerNodePriorityIndex.find(key);
     bool exists = false;
@@ -333,6 +345,7 @@ Connection TpConnectionManager::GetConnection(uint32_t tpn, uint32_t src, uint32
 // 获取与该tp相关的conn,不限优先级
 Connection TpConnectionManager::GetConnection(uint32_t tpn, uint32_t src, uint32_t dst)
 {
+    std::lock_guard<std::mutex> lock(m_stateLock);
     auto key = std::make_pair(src, dst);
     auto it = m_peerNodeIndex.find(key);
     bool exists = false;
@@ -352,6 +365,7 @@ Connection TpConnectionManager::GetConnection(uint32_t tpn, uint32_t src, uint32
 // 清空指定节点的连接
 void TpConnectionManager::ClearNodeConnections(uint32_t nodeId)
 {
+    std::lock_guard<std::mutex> lock(m_stateLock);
     m_nodeConnections.erase(nodeId);
     ClearNodeFromIndexes(nodeId);
 
@@ -368,12 +382,15 @@ void TpConnectionManager::ClearNodeConnections(uint32_t nodeId)
 // 清空所有连接
 void TpConnectionManager::Clear()
 {
+    std::lock_guard<std::mutex> lock(m_stateLock);
     m_allConnections.clear();
     m_nodeConnections.clear();
     m_peerNodeIndex.clear();
     m_peerNodePriorityIndex.clear();
     m_peerNodeLocalPortIndex.clear();
     m_bothPortsIndex.clear();
+    m_tpnList.clear();
+    m_reservedTpnList.clear();
 }
 
 // 为指定节点建立各种索引
@@ -422,7 +439,9 @@ void TpConnectionManager::BuildIndexesForNode(uint32_t localNodeId, Connection c
     // 索引5: 对端节点+本端端口+对端端口
     m_bothPortsIndex[{localNodeId, peerNodeId, localPort, peerPort}].push_back(conn);
 
-    NS_ASSERT_MSG(m_tpnList.find(localTpn) == m_tpnList.end(), "Tpn already exists!");
+    if (m_reservedTpnList.erase(localTpn) == 0) {
+        NS_ASSERT_MSG(m_tpnList.find(localTpn) == m_tpnList.end(), "Tpn already exists!");
+    }
     m_tpnList.insert(localTpn);
 }
 
@@ -622,11 +641,21 @@ void TpConnectionManager::RemoveUselessTps(uint32_t jettyNum, uint32_t src, uint
 
 uint32_t TpConnectionManager::GetNextTpn()
 {
-    std::lock_guard<std::mutex> lock(m_nextTpnLock);
-    while (m_tpnList.find(m_nextTpn) != m_tpnList.end()) {
+    std::lock_guard<std::mutex> lock(m_stateLock);
+    return ReserveNextTpnLocked();
+}
+
+uint32_t TpConnectionManager::ReserveNextTpnLocked()
+{
+    while (m_tpnList.find(m_nextTpn) != m_tpnList.end() ||
+           m_reservedTpnList.find(m_nextTpn) != m_reservedTpnList.end()) {
         ++m_nextTpn;
     }
-    return m_nextTpn;
+
+    const uint32_t reservedTpn = m_nextTpn;
+    m_reservedTpnList.insert(reservedTpn);
+    ++m_nextTpn;
+    return reservedTpn;
 }
 
 }
