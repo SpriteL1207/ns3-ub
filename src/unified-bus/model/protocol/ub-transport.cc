@@ -269,7 +269,11 @@ uint32_t UbTransportChannel::GetNextPacketSize()
 }
 Ptr<Packet> UbTransportChannel::GenDataPacket(Ptr<UbWqeSegment> wqeSegment, uint32_t payload_size)
 {
-    Ptr<Packet> p = Create<Packet>(payload_size);
+    uint32_t reqPayload = payload_size;
+    if (wqeSegment->GetType() == TaOpcode::TA_OPCODE_READ) {
+        reqPayload = 0;
+    }
+    Ptr<Packet> p = Create<Packet>(reqPayload);
     UbFlowTag flowTag(wqeSegment->GetTaskId(), wqeSegment->GetWqeSize());
     p->AddPacketTag(flowTag);
     // add UbMAExtTah
