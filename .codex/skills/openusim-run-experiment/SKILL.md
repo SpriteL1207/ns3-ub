@@ -49,7 +49,6 @@ Do not use this skill to define experiment intent or to perform final result int
 - **Repo startup facts block execution** — return to welcome stage.
 - The topology family in the spec has no mapped code template in `../openusim-references/topology-options.md` — ask the user to provide a custom script or restate as a supported family.
 - Existing repo tools cannot express the requested case without a new bounded decision.
-- The run fails in a way that is not self-explanatory from the error output.
 
 ## Handover
 
@@ -62,6 +61,7 @@ Stay in this skill when:
 Hand off to `openusim-analyze-results` when:
 
 - the simulation completed and output artifacts exist
+- the simulation failed or stalled, and there are console messages, partial outputs, or error logs to interpret
 - the user wants interpretation rather than more execution retries
 
 Before handoff, record in `experiment-spec.md`:
@@ -94,6 +94,7 @@ Return to `openusim-plan-experiment` when:
   - `../openusim-references/topology-options.md`
   - `../openusim-references/workload-options.md`
   - `../openusim-references/spec-rules.md`
+  - `../openusim-references/transport-channel-modes.md`
 
 ## References
 
@@ -105,6 +106,7 @@ Return to `openusim-plan-experiment` when:
 - `../openusim-references/topology-options.md`
 - `../openusim-references/workload-options.md`
 - `../openusim-references/spec-rules.md`
+- `../openusim-references/transport-channel-modes.md`
 
 ## Common Mistakes
 

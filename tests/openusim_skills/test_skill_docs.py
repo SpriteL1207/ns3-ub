@@ -43,6 +43,8 @@ class OpenUSimStageSkillDocsTest(unittest.TestCase):
         self.assertIn("../openusim-references/trace-observability.md", analyze_text)
         self.assertIn("../openusim-references/throughput-evidence.md", analyze_text)
         self.assertIn("../openusim-references/transport-channel-modes.md", analyze_text)
+        self.assertIn("../openusim-references/queue-backpressure-vs-topology.md", analyze_text)
+        self.assertIn("## Failure Interpretation Checklist", analyze_text)
         self.assertIn("Hand off to `openusim-plan-experiment` when:", analyze_text)
 
     def test_welcome_skill_spells_out_startup_gate(self):

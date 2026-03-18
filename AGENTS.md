@@ -166,6 +166,7 @@ Current required card:
 - for transport-channel semantics: ` .codex/skills/openusim-references/transport-channel-modes.md `
 - for throughput evidence and line-rate interpretation: ` .codex/skills/openusim-references/throughput-evidence.md `
 - for spec-to-toolchain mapping: ` .codex/skills/openusim-references/spec-to-toolchain.md `
+- for queue backpressure vs topology capacity: ` .codex/skills/openusim-references/queue-backpressure-vs-topology.md `
 
 ## Skill Reference Maintenance
 
@@ -177,3 +178,4 @@ Affected mappings:
 - `build_traffic.py` CLI → `workload-options.md`, `spec-to-toolchain.md`
 - `trace_analysis/*.py` → `throughput-evidence.md`, `spec-to-toolchain.md`
 - `src/unified-bus/model/ub-utils.h` trace GlobalValue 定义 → `network_attribute_writer.py` `_OBSERVABILITY_PRESETS`, `trace-observability.md`
+- `SKILL.md` Required references 变更 → `test_skill_docs.py` 断言
