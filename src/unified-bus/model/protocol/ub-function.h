@@ -55,6 +55,12 @@ namespace ns3 {
          * @brief Assemble wqe
          * @param Client传入URMA任务
          */
+        Ptr<UbWqe> CreateWqe(uint32_t src,
+                             uint32_t dest,
+                             uint32_t size,
+                             uint32_t wqeId,
+                             TaOpcode type);
+
         Ptr<UbWqe> CreateWqe(uint32_t src, uint32_t dest, uint32_t size, uint32_t wqeId);
 
         /**

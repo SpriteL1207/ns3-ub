@@ -95,6 +95,10 @@ namespace ns3 {
 
         void OnScheduleWqeSegmentFinish(Ptr<UbWqeSegment> segment);
 
+        bool IsUrmaReadWriteRequest(const Ptr<UbWqeSegment>& segment);
+
+        void ValidateUrmaServiceModeOrDie(uint32_t jettyNum, const Ptr<UbWqeSegment>& segment);
+
         uint32_t m_nodeId;
 
         // Tpn和Tp的对应map

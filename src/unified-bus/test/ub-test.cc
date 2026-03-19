@@ -96,6 +96,92 @@ void UbFunctionalityTest::DoRun()
     NS_LOG_INFO("All basic tests completed successfully");
 }
 
+class UbUrmaReadWqeMetadataPropagationTest : public TestCase
+{
+  public:
+    UbUrmaReadWqeMetadataPropagationTest()
+        : TestCase("UnifiedBus - URMA_READ WQE metadata propagates through Jetty segmentation")
+    {
+    }
+
+    void DoRun() override
+    {
+        Ptr<Node> node = CreateObject<Node>();
+        Ptr<UbController> controller = CreateObject<UbController>();
+        node->AggregateObject(controller);
+        controller->CreateUbFunction();
+        controller->CreateUbTransaction();
+
+        Ptr<UbFunction> function = controller->GetUbFunction();
+        const uint32_t jettyNum = 7;
+        const uint32_t taskId = 1234;
+        const uint32_t payloadBytes = 4096;
+        function->CreateJetty(node->GetId(), node->GetId() + 1, jettyNum);
+
+        Ptr<UbWqe> wqe = function->CreateWqe(node->GetId(),
+                                             node->GetId() + 1,
+                                             payloadBytes,
+                                             taskId,
+                                             TaOpcode::TA_OPCODE_READ);
+        NS_TEST_ASSERT_MSG_NE(wqe, nullptr, "CreateWqe should return a valid WQE");
+        NS_TEST_ASSERT_MSG_EQ(static_cast<uint8_t>(wqe->GetType()),
+                              static_cast<uint8_t>(TaOpcode::TA_OPCODE_READ),
+                              "URMA_READ must map to TA_OPCODE_READ");
+        NS_TEST_ASSERT_MSG_EQ(static_cast<uint8_t>(wqe->GetSegmentKind()),
+                              static_cast<uint8_t>(UbTransactionSegmentKind::REQUEST),
+                              "CreateWqe should initialize segment kind as request");
+        NS_TEST_ASSERT_MSG_EQ(wqe->GetOriginJettyNum(),
+                              UINT32_MAX,
+                              "originJettyNum should be invalid before enqueue");
+        NS_TEST_ASSERT_MSG_EQ(wqe->GetRequestTassn(),
+                              UINT32_MAX,
+                              "requestTassn should be invalid before enqueue");
+        NS_TEST_ASSERT_MSG_EQ(static_cast<uint8_t>(wqe->GetRequestOpcode()),
+                              static_cast<uint8_t>(TaOpcode::TA_OPCODE_READ),
+                              "requestOpcode should preserve read opcode");
+        NS_TEST_ASSERT_MSG_EQ(wqe->GetResponseBytes(),
+                              payloadBytes,
+                              "CreateWqe should initialize read response bytes");
+        NS_TEST_ASSERT_MSG_EQ(wqe->NeedsTransactionResponse(),
+                              true,
+                              "URMA read must require transaction response");
+
+        function->PushWqeToJetty(wqe, jettyNum);
+        NS_TEST_ASSERT_MSG_EQ(wqe->GetOriginJettyNum(),
+                              jettyNum,
+                              "PushWqe must assign originJettyNum from bound Jetty");
+        NS_TEST_ASSERT_MSG_EQ(wqe->GetRequestTassn(),
+                              wqe->GetTaSsnStart(),
+                              "PushWqe must assign requestTassn from WQE TA SSN start");
+
+        Ptr<UbJetty> jetty = function->GetJetty(jettyNum);
+        NS_TEST_ASSERT_MSG_NE(jetty, nullptr, "Jetty should exist after CreateJetty");
+        Ptr<UbWqeSegment> segment = jetty->GetNextWqeSegment();
+        NS_TEST_ASSERT_MSG_NE(segment, nullptr, "Jetty should generate a segment for queued WQE");
+        NS_TEST_ASSERT_MSG_EQ(static_cast<uint8_t>(segment->GetType()),
+                              static_cast<uint8_t>(TaOpcode::TA_OPCODE_READ),
+                              "Segment opcode should remain TA_OPCODE_READ");
+        NS_TEST_ASSERT_MSG_EQ(static_cast<uint8_t>(segment->GetSegmentKind()),
+                              static_cast<uint8_t>(UbTransactionSegmentKind::REQUEST),
+                              "Segment should preserve request kind");
+        NS_TEST_ASSERT_MSG_EQ(segment->GetOriginJettyNum(),
+                              jettyNum,
+                              "Segment should inherit originJettyNum");
+        NS_TEST_ASSERT_MSG_EQ(segment->GetRequestTassn(),
+                              wqe->GetRequestTassn(),
+                              "Segment should inherit requestTassn");
+        NS_TEST_ASSERT_MSG_EQ(static_cast<uint8_t>(segment->GetRequestOpcode()),
+                              static_cast<uint8_t>(TaOpcode::TA_OPCODE_READ),
+                              "Segment should preserve requestOpcode");
+        NS_TEST_ASSERT_MSG_EQ(segment->GetResponseBytes(),
+                              payloadBytes,
+                              "Segment should carry read response byte count");
+        NS_TEST_ASSERT_MSG_EQ(segment->NeedsTransactionResponse(),
+                              true,
+                              "Segment should preserve response-required flag");
+    }
+};
+
 class UbCreateNodeSystemIdTest : public TestCase
 {
   public:
@@ -468,6 +554,7 @@ UbTestSuite::UbTestSuite()
     : TestSuite("unified-bus", Type::UNIT)
 {
     AddTestCase(new UbFunctionalityTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbUrmaReadWqeMetadataPropagationTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbTraceDirSetupTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbMpiRankExtractionHelperTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbSameMpiRankHelperTest(), TestCase::Duration::QUICK);
@@ -1013,6 +1100,39 @@ class UbQuickExampleLocalDependentDagSingleThreadSystemTest : public TestCase
     }
 };
 
+class UbQuickExampleLocalSingleUrmaReadSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleLocalSingleUrmaReadSystemTest()
+        : TestCase("UnifiedBus - ub-quick-example local single URMA_READ runs in single-thread")
+    {
+    }
+
+    void DoRun() override
+    {
+        SetDataDir(NS_TEST_SOURCEDIR);
+        const std::string trafficCsv =
+            "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases\n"
+            "0,0,3,4096,URMA_READ,7,10ns,10,\n";
+        const std::filesystem::path caseDir =
+            CopyCaseDirWithTrafficFile("scratch/ub-local-hybrid-minimal", trafficCsv);
+
+        auto [status, output] =
+            RunQuickExampleAbsoluteCaseCommand(CreateTempDirFilename(GetName() + ".log"),
+                                               "--mtp-threads=1 --test",
+                                               "",
+                                               caseDir);
+
+        std::error_code ec;
+        std::filesystem::remove_all(caseDir, ec);
+
+        NS_TEST_ASSERT_MSG_EQ(status, 0, "single URMA_READ case should exit successfully");
+        NS_TEST_ASSERT_MSG_NE(output.find("TEST : 00000 : PASSED"),
+                              std::string::npos,
+                              "single URMA_READ case should report PASSED");
+    }
+};
+
 class UbQuickExampleLocalDependentDagMtpRedSystemTest : public TestCase
 {
   public:
@@ -1135,6 +1255,8 @@ class UbQuickExampleSystemTestSuite : public TestSuite
         AddTestCase(new UbQuickExampleSameCasePathSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleConflictingCasePathSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleOptionalTransportChannelSystemTest(),
+                    TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleLocalSingleUrmaReadSystemTest(),
                     TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleLocalDependentDagSingleThreadSystemTest(),
                     TestCase::Duration::QUICK);

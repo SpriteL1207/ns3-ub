@@ -182,6 +182,28 @@ void UbTransaction::ApplyScheduleWqeSegment(Ptr<UbTransportChannel> tp)
     Simulator::ScheduleNow(&UbTransaction::ScheduleWqeSegment, this, tp);
 }
 
+bool UbTransaction::IsUrmaReadWriteRequest(const Ptr<UbWqeSegment>& segment)
+{
+    if (segment == nullptr) {
+        return false;
+    }
+    if (segment->GetSegmentKind() != UbTransactionSegmentKind::REQUEST) {
+        return false;
+    }
+    return segment->GetType() == TaOpcode::TA_OPCODE_WRITE ||
+           segment->GetType() == TaOpcode::TA_OPCODE_READ;
+}
+
+void UbTransaction::ValidateUrmaServiceModeOrDie(uint32_t jettyNum, const Ptr<UbWqeSegment>& segment)
+{
+    if (!IsUrmaReadWriteRequest(segment)) {
+        return;
+    }
+    TransactionServiceMode mode = GetTransactionServiceMode(jettyNum);
+    NS_ABORT_MSG_IF(mode != TransactionServiceMode::ROI,
+                    "URMA read/write currently only supports ROI service mode.");
+}
+
 void UbTransaction::ScheduleWqeSegment(Ptr<UbTransportChannel> tp)
 {
     if (tp == nullptr) {
@@ -251,6 +273,7 @@ void UbTransaction::ScheduleWqeSegment(Ptr<UbTransportChannel> tp)
             if (wqeSegment == nullptr) {
                 continue;
             }
+            ValidateUrmaServiceModeOrDie(currentJetty->GetJettyNum(), wqeSegment);
         } else { // 轮询remoteRequest
             uint32_t remoteIndex = rrIndex - jettyCount;
             auto it = remoteRequestSegMap.begin();
