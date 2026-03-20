@@ -127,6 +127,7 @@ void UbTransportChannel::DoDispose()
     NS_LOG_FUNCTION(this);
     m_ackQ = queue<Ptr<Packet>>();
     m_wqeSegmentVector.clear();
+    m_inboundTaUnits.clear();
     m_congestionCtrl = nullptr;
     m_recvPsnBitset.clear();
 }
@@ -283,10 +284,14 @@ Ptr<Packet> UbTransportChannel::GenDataPacket(Ptr<UbWqeSegment> wqeSegment, uint
     // add TaHeader
     UbTransactionHeader TaHeader;
     TaHeader.SetTaOpcode(wqeSegment->GetType());
-    TaHeader.SetIniTaSsn(wqeSegment->GetTaSsn());
+    const uint16_t wireIniTaSsn =
+        wqeSegment->GetSegmentKind() == UbTransactionSegmentKind::RESPONSE
+            ? static_cast<uint16_t>(wqeSegment->GetRequestTassn())
+            : wqeSegment->GetTaSsn();
+    TaHeader.SetIniTaSsn(wireIniTaSsn);
     TaHeader.SetOrder(wqeSegment->GetOrderType());
     TaHeader.SetIniRcType(0x01);
-    TaHeader.SetIniRcId(0xFFFFF);
+    TaHeader.SetIniRcId(wqeSegment->GetOriginJettyNum());
     p->AddHeader(TaHeader);
     // add TpHeader
     UbTransportHeader TpHeader;
@@ -325,6 +330,83 @@ Ptr<Packet> UbTransportChannel::GenDataPacket(Ptr<UbWqeSegment> wqeSegment, uint
     UbDataLink::GenPacketHeader(p, false, false, m_priority, m_priority, m_usePacketSpray,
                                 m_useShortestPaths, UbDatalinkHeaderConfig::PACKET_IPV4);
     return p;
+}
+
+Ptr<UbWqeSegment> UbTransportChannel::TrackInboundTaPacket(const UbTransportHeader& tpHeader,
+                                                           const UbTransactionHeader& taHeader,
+                                                           uint32_t payloadBytes,
+                                                           uint32_t taskId)
+{
+    const auto key = std::make_pair(tpHeader.GetSrcTpn(), tpHeader.GetTpMsn());
+    auto& state = m_inboundTaUnits[key];
+    if (state.segment == nullptr)
+    {
+        state.segment = CreateObject<UbWqeSegment>();
+        state.segment->SetSrc(m_dest);
+        state.segment->SetDest(m_src);
+        state.segment->SetSport(m_dport);
+        state.segment->SetDport(m_sport);
+        state.segment->SetPriority(m_priority);
+        state.segment->SetTaskId(taskId);
+        state.segment->SetWqeSize(0);
+        state.segment->SetJettyNum(taHeader.GetIniRcId());
+        state.segment->SetTaMsn(tpHeader.GetTpMsn());
+        state.segment->SetTaSsn(taHeader.GetIniTaSsn());
+        state.segment->SetOriginJettyNum(taHeader.GetIniRcId());
+        state.segment->SetRequestTassn(taHeader.GetIniTaSsn());
+        state.segment->SetTpMsn(tpHeader.GetTpMsn());
+        state.segment->SetTpn(m_tpn);
+    }
+
+    const auto taOpcode = static_cast<TaOpcode>(taHeader.GetTaOpcode());
+    state.segment->SetType(taOpcode);
+    state.segment->SetOrderType(static_cast<OrderType>(taHeader.GetOrder()));
+    state.segment->SetSegmentKind(
+        taOpcode == TaOpcode::TA_OPCODE_TRANSACTION_ACK ||
+                taOpcode == TaOpcode::TA_OPCODE_READ_RESPONSE
+            ? UbTransactionSegmentKind::RESPONSE
+            : UbTransactionSegmentKind::REQUEST);
+    if (taOpcode == TaOpcode::TA_OPCODE_TRANSACTION_ACK)
+    {
+        state.segment->SetRequestOpcode(TaOpcode::TA_OPCODE_WRITE);
+    }
+    else if (taOpcode == TaOpcode::TA_OPCODE_READ_RESPONSE)
+    {
+        state.segment->SetRequestOpcode(TaOpcode::TA_OPCODE_READ);
+    }
+    else
+    {
+        state.segment->SetRequestOpcode(taOpcode);
+    }
+    state.segment->SetResponseBytes(taOpcode == TaOpcode::TA_OPCODE_READ_RESPONSE ? payloadBytes : 0);
+    state.segment->SetNeedsTransactionResponse(
+        taOpcode == TaOpcode::TA_OPCODE_WRITE || taOpcode == TaOpcode::TA_OPCODE_READ);
+
+    state.bytesReceived += payloadBytes;
+    state.segment->SetSize(state.bytesReceived);
+    state.segment->SetWqeSize(state.bytesReceived);
+
+    if (!tpHeader.GetLastPacket())
+    {
+        return nullptr;
+    }
+
+    Ptr<UbWqeSegment> completed = state.segment;
+    m_inboundTaUnits.erase(key);
+    return completed;
+}
+
+bool UbTransportChannel::ShouldCompleteOnTpAck(const Ptr<UbWqeSegment>& segment) const
+{
+    if (segment == nullptr)
+    {
+        return false;
+    }
+    if (segment->GetSegmentKind() == UbTransactionSegmentKind::RESPONSE)
+    {
+        return false;
+    }
+    return !segment->NeedsTransactionResponse();
 }
 
 /**
@@ -391,17 +473,19 @@ void UbTransportChannel::RecvTpAck(Ptr<Packet> p)
                 LastPacketACKsNotify(m_nodeId, m_wqeSegmentVector[i]->GetTaskId(), m_tpn, m_dstTpn,
                     TpHeader.GetTpMsn(), TpHeader.GetPsn(), m_sport);
             }
-            auto ubTa = GetTransaction();
-            if (ubTa->ProcessWqeSegmentComplete(m_wqeSegmentVector[i])) {
+            if (ShouldCompleteOnTpAck(m_wqeSegmentVector[i])) {
+                auto ubTa = GetTransaction();
+                if (!ubTa->ProcessWqeSegmentComplete(m_wqeSegmentVector[i])) {
+                    ++i;
+                    continue;
+                }
                 WqeSegmentCompletesNotify(m_nodeId, m_wqeSegmentVector[i]->GetTaskId(),
                     m_wqeSegmentVector[i]->GetTaSsn());
-                m_wqeSegmentVector.erase(m_wqeSegmentVector.begin() + i);
-                // 当前vector中的segment数量小于2时申请调度Segment
-                if (m_wqeSegmentVector.size() < 2) {
-                    ApplyNextWqeSegment();
-                }
-            } else {
-                ++i;
+            }
+            m_wqeSegmentVector.erase(m_wqeSegmentVector.begin() + i);
+            // 当前vector中的segment数量小于2时申请调度Segment
+            if (m_wqeSegmentVector.size() < 2) {
+                ApplyNextWqeSegment();
             }
         } else {
             ++i;
@@ -501,6 +585,7 @@ void UbTransportChannel::RecvDataPacket(Ptr<Packet> p)
                   << " PacketSize: " << p->GetSize());
     UbFlowTag flowTag;
     p->PeekPacketTag(flowTag);
+    Ptr<UbWqeSegment> completedTaUnit = nullptr;
     if (m_pktTraceEnabled) {
         UbPacketTraceTag traceTag;
         p->PeekPacketTag(traceTag);
@@ -566,6 +651,8 @@ void UbTransportChannel::RecvDataPacket(Ptr<Packet> p)
                         << "} expectedPsn:{" << m_psnRecvNxt << "}");
             return; // 未开启sack的情况下乱序包不用回复ack，只用记录了bitmap
         }
+        completedTaUnit =
+            TrackInboundTaPacket(TpHeader, TaHeader, MAExtTaHeader.GetLength(), flowTag.GetFlowId());
         uint32_t oldRecvNxt = m_psnRecvNxt;
         while (m_psnRecvNxt < oldRecvNxt + m_psnOooThreshold) {
             uint32_t currentBitIndex = m_psnRecvNxt - oldRecvNxt;
@@ -617,6 +704,10 @@ void UbTransportChannel::RecvDataPacket(Ptr<Packet> p)
                   << " PacketSize: " << ackp->GetSize());
     Ptr<UbPort> port = DynamicCast<UbPort>(NodeList::GetNode(m_nodeId)->GetDevice(m_sport));
     port->TriggerTransmit(); // 触发发送
+    if (completedTaUnit != nullptr)
+    {
+        GetTransaction()->HandleInboundTaUnit(m_tpn, completedTaUnit);
+    }
 }
 
 void UbTransportChannel::ReTxTimeout()
