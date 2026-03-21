@@ -34,7 +34,7 @@ class OpenUSimStageSkillDocsTest(unittest.TestCase):
 
         self.assertIn("Hand off to `openusim-plan-experiment` when:", welcome_text)
         self.assertIn("Hand off to `openusim-run-experiment` when:", plan_text)
-        self.assertIn("Before handoff, ensure `experiment-spec.md` exists", plan_text)
+        self.assertIn("Before handoff, ensure `{case_dir}/experiment-spec.md` exists", plan_text)
         self.assertIn("Return to `openusim-welcome` when:", plan_text)
         self.assertIn("scratch/ns-3-ub-tools/net_sim_builder.py", run_text)
         self.assertIn("scratch/ns-3-ub-tools/traffic_maker/build_traffic.py", run_text)
