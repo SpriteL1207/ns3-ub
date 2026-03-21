@@ -36,10 +36,10 @@ Shared knowledge cards in `openusim-references/`:
 - `spec-rules.md` - Experiment spec format rules
 - `queue-backpressure-vs-topology.md` - Queue backpressure concepts
 
-## For Claude Code Users
+## Skill Discovery
 
-These skills are automatically discovered via:
+These skills can be discovered via:
 - `.codex/skills/` (canonical location)
-- `.claude/` (symlinks for convenience)
+- `.claude/skills/` (symlinks)
 
-Each skill's `SKILL.md` defines when and how Claude should use it.
+Each skill's `SKILL.md` defines its purpose and usage conditions.
