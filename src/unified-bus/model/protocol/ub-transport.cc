@@ -269,7 +269,11 @@ uint32_t UbTransportChannel::GetNextPacketSize()
 }
 Ptr<Packet> UbTransportChannel::GenDataPacket(Ptr<UbWqeSegment> wqeSegment, uint32_t payload_size)
 {
-    Ptr<Packet> p = Create<Packet>(payload_size);
+    uint32_t reqPayload = payload_size;
+    if (wqeSegment->GetType() == TaOpcode::TA_OPCODE_READ) {
+        reqPayload = 0;
+    }
+    Ptr<Packet> p = Create<Packet>(reqPayload);
     UbFlowTag flowTag(wqeSegment->GetTaskId(), wqeSegment->GetWqeSize());
     p->AddPacketTag(flowTag);
     // add UbMAExtTah
@@ -474,7 +478,6 @@ void UbTransportChannel::RecvDataPacket(Ptr<Packet> p)
     UdpHeader udpHeader;
     Ipv4Header ipv4Header;
     UbMAExtTah MAExtTaHeader;
-    Ptr<Packet> ackp = Create<Packet>(0); // ack不需要payloadsize
     p->RemoveHeader(pktHeader);
     p->RemoveHeader(NetworkHeader);
     p->RemoveHeader(ipv4Header);
@@ -483,6 +486,11 @@ void UbTransportChannel::RecvDataPacket(Ptr<Packet> p)
     p->RemoveHeader(TaHeader); // 处理接收包信息
     p->RemoveHeader(MAExtTaHeader);
     uint64_t psn = TpHeader.GetPsn();
+    uint32_t responsePayload = 0;
+    if (TaHeader.GetTaOpcode() == static_cast<uint8_t>(TaOpcode::TA_OPCODE_READ)) {
+        responsePayload = MAExtTaHeader.GetLength();
+    }
+    Ptr<Packet> ackp = Create<Packet>(responsePayload);
     NS_LOG_DEBUG("[Transport channel] Recv packet."
                   << " PacketUid: "  << p->GetUid()
                   << " Tpn: " << m_tpn
