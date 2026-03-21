@@ -520,7 +520,7 @@ class UbQuickExampleLocalMtpSystemTest : public TestCase
             RunQuickExampleCommand(CreateTempDirFilename("ub-quick-example-local-mtp.log"),
                                    "--mtp-threads=2",
                                    "",
-                                   "scratch/ub-local-hybrid-minimal");
+                                   "scratch/2nodes_single-tp");
 
         NS_TEST_ASSERT_MSG_EQ(status,
                               0,
@@ -547,7 +547,7 @@ class UbQuickExampleSpoofedMpiEnvSystemTest : public TestCase
             RunQuickExampleCommand(CreateTempDirFilename("ub-quick-example-spoofed-mpi-env.log"),
                                    "--test",
                                    "env OMPI_COMM_WORLD_SIZE=2",
-                                   "scratch/ub-local-hybrid-minimal");
+                                   "scratch/2nodes_single-tp");
 
         NS_TEST_ASSERT_MSG_EQ(status,
                               0,
@@ -858,7 +858,7 @@ class UbQuickExampleLocalSingleThreadSystemTest : public TestCase
             RunQuickExampleCommand(CreateTempDirFilename(GetName() + ".log"),
                                    "--mtp-threads=1",
                                    "",
-                                   "scratch/ub-local-hybrid-minimal");
+                                   "scratch/2nodes_single-tp");
 
         NS_TEST_ASSERT_MSG_EQ(status,
                               0,
@@ -880,7 +880,7 @@ class UbQuickScratchLegacyAliasSystemTest : public TestCase
     {
         SetDataDir(NS_TEST_SOURCEDIR);
         const std::filesystem::path repoRoot = LocateRepoRoot();
-        const std::filesystem::path casePath = repoRoot / "scratch/ub-local-hybrid-minimal";
+        const std::filesystem::path casePath = repoRoot / "scratch/2nodes_single-tp";
         auto [status, output] =
             RunNs3RunCommand(CreateTempDirFilename(GetName() + ".log"),
                              "scratch/ub-quick-example --case-path=" + casePath.string() +
@@ -906,12 +906,12 @@ class UbQuickExampleSameCasePathSystemTest : public TestCase
         SetDataDir(NS_TEST_SOURCEDIR);
         const std::filesystem::path repoRoot = LocateRepoRoot();
         const std::filesystem::path sameCasePath =
-            (repoRoot / "scratch/ub-local-hybrid-minimal/../ub-local-hybrid-minimal").lexically_normal();
+            (repoRoot / "scratch/2nodes_single-tp/../2nodes_single-tp").lexically_normal();
         auto [status, output] =
             RunQuickExampleCommand(CreateTempDirFilename(GetName() + ".log"),
                                    "\"" + sameCasePath.string() + "\" --stop-ms=1",
                                    "",
-                                   "scratch/ub-local-hybrid-minimal");
+                                   "scratch/2nodes_single-tp");
 
         NS_TEST_ASSERT_MSG_EQ(status,
                               0,
@@ -934,12 +934,12 @@ class UbQuickExampleConflictingCasePathSystemTest : public TestCase
     {
         SetDataDir(NS_TEST_SOURCEDIR);
         const std::filesystem::path repoRoot = LocateRepoRoot();
-        const std::filesystem::path positionalCasePath = repoRoot / "scratch/ub-mpi-hybrid-minimal";
+        const std::filesystem::path positionalCasePath = repoRoot / "scratch/ub-mpi-minimal";
         auto [status, output] =
             RunQuickExampleCommand(CreateTempDirFilename(GetName() + ".log"),
                                    "\"" + positionalCasePath.string() + "\"",
                                    "",
-                                   "scratch/ub-local-hybrid-minimal");
+                                   "scratch/2nodes_single-tp");
 
         NS_TEST_ASSERT_MSG_NE(status,
                               0,
@@ -962,7 +962,7 @@ class UbQuickExampleOptionalTransportChannelSystemTest : public TestCase
     {
         SetDataDir(NS_TEST_SOURCEDIR);
         const std::filesystem::path caseDir =
-            CopyCaseDirWithoutFile("scratch/ub-local-hybrid-minimal", "transport_channel.csv");
+            CopyCaseDirWithoutFile("scratch/2nodes_single-tp", "transport_channel.csv");
         auto [status, output] =
             RunQuickExampleCommand(CreateTempDirFilename(GetName() + ".log"),
                                    "--case-path=\"" + caseDir.string() + "\"",
@@ -995,7 +995,7 @@ class UbQuickExampleLocalDependentDagSingleThreadSystemTest : public TestCase
             "1,3,0,4096,URMA_WRITE,7,10ns,20,\n"
             "2,0,3,4096,URMA_WRITE,7,10ns,30,10 20\n";
         const std::filesystem::path caseDir =
-            CopyCaseDirWithTrafficFile("scratch/ub-local-hybrid-minimal", trafficCsv);
+            CopyCaseDirWithTrafficFile("scratch/2nodes_single-tp", trafficCsv);
 
         auto [status, output] =
             RunQuickExampleAbsoluteCaseCommand(CreateTempDirFilename(GetName() + ".log"),
@@ -1034,7 +1034,7 @@ class UbQuickExampleLocalDependentDagMtpRedSystemTest : public TestCase
             traffic << taskId << ",0,3,4096,URMA_WRITE,7,10ns," << (100 + taskId) << ",10 20\n";
         }
         const std::filesystem::path caseDir =
-            CopyCaseDirWithTrafficFile("scratch/ub-local-hybrid-minimal", traffic.str());
+            CopyCaseDirWithTrafficFile("scratch/2nodes_single-tp", traffic.str());
 
         auto [status, output] =
             RunQuickExampleAbsoluteCaseCommand(CreateTempDirFilename(GetName() + ".log"),
@@ -1069,7 +1069,7 @@ class UbQuickExampleMpiCrossRankPhaseDependencySystemTest : public TestCase
             "0,0,3,4096,URMA_WRITE,7,10ns,10,\n"
             "1,3,0,4096,URMA_WRITE,7,10ns,20,10\n";
         const std::filesystem::path caseDir =
-            CopyCaseDirWithTrafficFile("scratch/ub-mpi-hybrid-minimal", trafficCsv);
+            CopyCaseDirWithTrafficFile("scratch/ub-mpi-minimal", trafficCsv);
 
         auto [status, output] =
             RunQuickExampleAbsoluteCaseCommand(CreateTempDirFilename(GetName() + ".log"),
@@ -1146,23 +1146,23 @@ class UbQuickExampleSystemTestSuite : public TestSuite
 #ifdef NS3_MPI
         AddTestCase(new UbQuickExampleSpoofedMpiEnvSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example rejects MPI minimal case",
-                                                    "scratch/ub-mpi-hybrid-minimal",
+                                                    "scratch/ub-mpi-minimal",
                                                     ""),
                     TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example rejects MPI mtp-threads=1 case",
-                                                    "scratch/ub-mpi-hybrid-minimal",
+                                                    "scratch/ub-mpi-minimal",
                                                     "--mtp-threads=1"),
                     TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example rejects hybrid minimal case",
-                                                    "scratch/ub-mpi-hybrid-minimal",
+                                                    "scratch/ub-mpi-minimal",
                                                     "--mtp-threads=2"),
                     TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example rejects hybrid ldst case",
-                                                    "scratch/ub-mpi-hybrid-ldst-minimal",
+                                                    "scratch/ub-mpi-minimal",
                                                     "--mtp-threads=2"),
                     TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleMpiSystemTest("UnifiedBus - ub-quick-example rejects hybrid multi-remote case",
-                                                    "scratch/ub-mpi-hybrid-multi-remote",
+                                                    "scratch/ub-mpi-minimal",
                                                     "--mtp-threads=2"),
                     TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleMpiCrossRankPhaseDependencySystemTest(),

@@ -240,18 +240,18 @@ static MpiTestSuite g_mpiSimple2("mpi-example-simple-2",
 static MpiTestSuite g_mpiThird2("mpi-example-third-2", "third-distributed", NS_TEST_SOURCEDIR, 2);
 static MpiUbQuickExampleRejectTestSuite g_mpiUbConfigSmoke2(
     "mpi-example-ub-quick-example-reject-mpi-minimal-2",
-    "--case-path=scratch/ub-mpi-hybrid-minimal --stop-ms=50");
+    "--case-path=scratch/ub-mpi-minimal --stop-ms=50");
 
 #ifdef NS3_MTP
 static MpiUbQuickExampleRejectTestSuite g_mpiUbConfigHybridSmoke2(
     "mpi-example-ub-quick-example-reject-hybrid-minimal-2",
-    "--case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2 --stop-ms=50");
+    "--case-path=scratch/ub-mpi-minimal --mtp-threads=2 --stop-ms=50");
 static MpiUbQuickExampleRejectTestSuite g_mpiUbConfigHybridLdst2(
     "mpi-example-ub-quick-example-reject-hybrid-ldst-2",
-    "--case-path=scratch/ub-mpi-hybrid-ldst-minimal --mtp-threads=2 --stop-ms=50");
+    "--case-path=scratch/ub-mpi-minimal --mtp-threads=2 --stop-ms=50");
 static MpiUbQuickExampleRejectTestSuite g_mpiUbConfigHybridMultiRemote2(
     "mpi-example-ub-quick-example-reject-hybrid-multi-remote-2",
-    "--case-path=scratch/ub-mpi-hybrid-multi-remote --mtp-threads=2 --stop-ms=50");
+    "--case-path=scratch/ub-mpi-minimal --mtp-threads=2 --stop-ms=50");
 static MpiTestSuite g_mpiUbRemoteTpRegressionNp2(
     "mpi-example-ub-mtp-remote-tp-regression-np2",
     "src/unified-bus/examples/ub-mtp-remote-tp-regression",

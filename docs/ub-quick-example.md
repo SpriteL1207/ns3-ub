@@ -50,25 +50,25 @@
 单进程：
 
 ```bash
-./ns3 run 'scratch/ub-quick-example --case-path=scratch/ub-local-hybrid-minimal'
+./ns3 run 'scratch/ub-quick-example --case-path=scratch/2nodes_single-tp'
 ```
 
 单进程 MTP 多线程：
 
 ```bash
-./ns3 run 'scratch/ub-quick-example --case-path=scratch/ub-local-hybrid-minimal --mtp-threads=2'
+./ns3 run 'scratch/ub-quick-example --case-path=scratch/2nodes_single-tp --mtp-threads=2'
 ```
 
 测试模式：
 
 ```bash
-./ns3 run 'scratch/ub-quick-example --case-path=scratch/ub-local-hybrid-minimal --test'
+./ns3 run 'scratch/ub-quick-example --case-path=scratch/2nodes_single-tp --test'
 ```
 
 如果你需要显式使用 example 入口：
 
 ```bash
-./ns3 run 'src/unified-bus/examples/ub-quick-example --case-path=scratch/ub-local-hybrid-minimal --test'
+./ns3 run 'src/unified-bus/examples/ub-quick-example --case-path=scratch/2nodes_single-tp --test'
 ```
 
 ## `case-path` 目录
@@ -121,7 +121,7 @@
 因此，下面这类命令会被拒绝：
 
 ```bash
-mpirun -np 2 build/scratch/ns3.44-ub-quick-example-default --case-path=scratch/ub-mpi-hybrid-minimal --test
+mpirun -np 2 build/scratch/ns3.44-ub-quick-example-default --case-path=scratch/ub-mpi-minimal --test
 ```
 
 ### trace 后处理没有输出
