@@ -20,7 +20,7 @@ Only offer the three most relevant template choices.
 
 ### `ar_nhr`
 
-- Neighbor-halving reduction AllReduce.
+- NHR (Nonuniform Hierarchical Ring) AllReduce.
 - Good when the user wants an AllReduce variant with a different phase structure.
 
 ### `ar_rhd`
