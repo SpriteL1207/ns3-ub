@@ -37,6 +37,11 @@ UbRemoteLink::TransmitStart(Ptr<Packet> p, Ptr<UbPort> src, Time txTime)
     IsInitialized();
 
     Ptr<UbPort> dst = GetDestination(src);
+    if (!m_transmitObserver.IsNull())
+    {
+        m_transmitObserver(p->Copy(), src, dst);
+    }
+
     Time rxTime = Simulator::Now() + txTime + GetDelay();
     MpiInterface::SendPacket(p->Copy(), rxTime, dst->GetNode()->GetId(), dst->GetIfIndex());
     return true;
@@ -46,6 +51,18 @@ bool
 UbRemoteLink::IsRemote(void) const
 {
     return true;
+}
+
+void
+UbRemoteLink::SetTransmitObserver(TransmitObserver observer)
+{
+    m_transmitObserver = observer;
+}
+
+void
+UbRemoteLink::ClearTransmitObserver()
+{
+    m_transmitObserver = MakeNullCallback<void, Ptr<const Packet>, Ptr<UbPort>, Ptr<UbPort>>();
 }
 
 } // namespace ns3

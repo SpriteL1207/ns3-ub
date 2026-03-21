@@ -78,15 +78,30 @@ In addition to the DCTCP example, you can find other adapted examples in `exampl
 Meanwhile, Unison also supports manual partition, and you can find a minimal example in `src/mtp/examples/simple-mtp.cc`
 For hybrid simulation with MPI, you can find a minimal example in `src/mpi/examples/simple-hybrid.cc`.
 
-We also provide three detailed fat-tree examples for Unison, traditional MPI parallel simulation and hybrid simulation:
+We also provide several detailed examples for Unison, traditional MPI parallel simulation, hybrid simulation, and unified-bus config-driven runs:
 
 | Name | Location | Required configuration flags | Running commands |
 | - | - | - | - |
 | fat-tree-mtp | src/mtp/examples/fat-tree-mtp.cc | `--enable-mtp --enable-exaples` without `--enable-mpi` | `./ns3 run "fat-tree-mtp --thread=4"` |
 | fat-tree-mpi | src/mpi/examples/fat-tree-mpi.cc | `--enable-mpi --enable-exaples` without `--enable-mtp` | `./ns3 run fat-tree-mpi --command-template "mpirun -np 4 %s"` |
 | fat-tree-hybrid | src/mpi/examples/fat-tree-hybrid.cc | `--enable-mtp --enable-mpi --enable-exaples` | `./ns3 run fat-tree-hybrid --command-template "mpirun -np 2 %s --thread=2"` |
+| ub-quick-example | scratch/ub-quick-example.cc | local: default configure/build; local MTP: `--enable-mtp`; MPI reject boundary: `--enable-mpi`; MPI+MTP reject boundary: `--enable-mpi --enable-mtp` | local: `./ns3 run 'scratch/ub-quick-example --case-path=scratch/ub-local-hybrid-minimal'`; local MTP: `./ns3 run 'scratch/ub-quick-example --case-path=scratch/ub-local-hybrid-minimal --mtp-threads=2'`; MPI reject boundary: `mpirun -np 2 build/scratch/ns3.44-ub-quick-example-default --case-path=scratch/ub-mpi-hybrid-minimal --test`; MPI+MTP reject boundary: `mpirun -np 2 build/scratch/ns3.44-ub-quick-example-default --case-path=scratch/ub-mpi-hybrid-minimal --mtp-threads=2 --test` |
+| ub-mtp-remote-tp-regression | src/unified-bus/examples/ub-mtp-remote-tp-regression.cc | `--enable-mtp --enable-mpi --enable-examples` | regression-only binary; exercised by `build/utils/ns3.44-test-runner-default --suite=mpi-example-ub-mtp-remote-tp-regression-np2 --verbose` |
 
 Feel free to explore these examples, compare code changes and adjust the `-np` and `--thread` arguments.
+
+### Unified-bus config MPI notes
+
+For config-driven unified-bus runs, use `scratch/ub-quick-example` as the default entry. If you prefer the example binary, `src/unified-bus/examples/ub-quick-example.cc` provides the same CLI after enabling examples. See also `docs/ub-quick-example.md`.
+
+For config-driven unified-bus MPI runs, keep the following rules explicit:
+
+- In the current version, `UbTrafficGen` / `traffic.csv` is unsupported in MPI multi-process mode. `ub-quick-example` therefore fails fast under `mpirun` instead of pretending distributed DAG/task synchronization is available.
+
+- `node.csv` should provide an explicit `systemId` column for multi-process placement. In single-process compatibility mode, omitted `systemId` still defaults to `0`.
+- In `MTP+MPI` hybrid runs, `node.csv` still uses the MPI-rank ownership value in `systemId`. Do not pre-pack the high 16 bits in config; `HybridSimulatorImpl` assigns packed local-system ids at runtime.
+- `topology.csv` may connect endpoints on different MPI ranks. Local vs. remote channel selection is decided by the builder from endpoint placement; config files do not choose link type directly.
+- `transport_channel.csv` describes TP connectivity metadata between endpoints. It is not an instruction to create remote-side TP objects on the current rank.
 
 ## Running Evaluations
 

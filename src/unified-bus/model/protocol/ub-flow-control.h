@@ -83,10 +83,14 @@ public:
     Ptr<Packet> ReleaseOccupiedCrd(Ptr<Packet> p, uint32_t targetPortId);
 
 protected:
+    void ControlCreditRestoreNotify(uint32_t nodeId,
+                                    uint32_t portId,
+                                    const std::vector<uint8_t>& credits);
     FcType m_fcType { FcType::CBFC };
     void DoDispose() override;
     uint32_t m_portId;
     uint32_t m_nodeId;
+    TracedCallback<uint32_t, uint32_t, std::vector<uint8_t>> m_traceControlCreditRestoreNotify;
 
     /**
     * @brief cbfc相关参数配置

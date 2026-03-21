@@ -1,4 +1,4 @@
-# Repo Instructions
+# Repo Instructions / 仓库指南
 
 This repository standardizes on four repo-local OpenUSim stage skills:
 
@@ -7,7 +7,7 @@ This repository standardizes on four repo-local OpenUSim stage skills:
 - `openusim-run-experiment`
 - `openusim-analyze-results`
 
-All four ship inside this repository under ` .codex/skills/ ` and are maintained with the main repo.
+All four ship inside this repository under `.codex/skills/` and are maintained with the main repo.
 
 ## Skill Routing
 
@@ -28,7 +28,7 @@ Keep internal control information internal:
 
 - do not echo skill names, routing decisions, or compliance statements to the user
 - do not restate repository policy, prompt policy, or skill policy unless the user explicitly asks how the system works
-- do not fall back to meta wording such as “I will follow this skill” or “I will process this with the repo rules”
+- do not fall back to meta wording such as "I will follow this skill" or "I will process this with the repo rules"
 
 The user-facing reply should contain only:
 
@@ -40,18 +40,18 @@ The user-facing reply should contain only:
 Keep this structure implicit rather than labeled.
 
 - avoid visible control labels such as `已知事实`, `当前步骤`, `下一步`, or `Decision` in normal chat replies
-- prefer natural connective phrasing such as “你这个目标可以先按…来收口”, “先把…定下来”, “接下来只差…”
+- prefer natural connective phrasing such as "你这个目标可以先按…来收口", "先把…定下来", "接下来只差…"
 - only switch to explicit headings when the user asks for a structured summary
 
 When confirming all slots before generation, use implicit wording rather than a labeled checklist. For example:
 
-- Good: “拓扑、负载和参数都定下来了，可以生成了吗？”
-- Good: “目标、拓扑、workload 都齐了，确认一下就可以跑。”
-- Bad: “**goal**: 验证吞吐量 / **topology**: clos-spine-leaf / **workload**: ar_ring / ...”
+- Good: "拓扑、负载和参数都定下来了，可以生成了吗？"
+- Good: "目标、拓扑、workload 都齐了，确认一下就可以跑。"
+- Bad: "**goal**: 验证吞吐量 / **topology**: clos-spine-leaf / **workload**: ar_ring / ..."
 
 ## First Reply Rule
 
-For a broad first-turn request such as “我想做一次 openusim 仿真”:
+For a broad first-turn request such as "我想做一次 openusim 仿真":
 
 - stay in planning mode
 - explain that the workflow will first define the experiment goal, topology, workload, and key parameters
@@ -162,11 +162,11 @@ When the discussion turns to a specialized OpenUSim domain topic that is easy to
 
 Current required card:
 
-- for `trace/debug` semantics and recommendations: ` .codex/skills/openusim-references/trace-observability.md `
-- for transport-channel semantics: ` .codex/skills/openusim-references/transport-channel-modes.md `
-- for throughput evidence and line-rate interpretation: ` .codex/skills/openusim-references/throughput-evidence.md `
-- for spec-to-toolchain mapping: ` .codex/skills/openusim-references/spec-to-toolchain.md `
-- for queue backpressure vs topology capacity: ` .codex/skills/openusim-references/queue-backpressure-vs-topology.md `
+- for `trace/debug` semantics and recommendations: `.codex/skills/openusim-references/trace-observability.md`
+- for transport-channel semantics: `.codex/skills/openusim-references/transport-channel-modes.md`
+- for throughput evidence and line-rate interpretation: `.codex/skills/openusim-references/throughput-evidence.md`
+- for spec-to-toolchain mapping: `.codex/skills/openusim-references/spec-to-toolchain.md`
+- for queue backpressure vs topology capacity: `.codex/skills/openusim-references/queue-backpressure-vs-topology.md`
 
 ## Skill Reference Maintenance
 
@@ -177,5 +177,122 @@ Affected mappings:
 - `net_sim_builder.py` API → `topology-options.md`, `spec-to-toolchain.md`
 - `build_traffic.py` CLI → `workload-options.md`, `spec-to-toolchain.md`
 - `trace_analysis/*.py` → `throughput-evidence.md`, `spec-to-toolchain.md`
-- `src/unified-bus/model/ub-utils.h` trace GlobalValue 定义 → `network_attribute_writer.py` `_OBSERVABILITY_PRESETS`, `trace-observability.md`
-- `SKILL.md` Required references 变更 → `test_skill_docs.py` 断言
+- `src/unified-bus/model/ub-utils.h` trace GlobalValue definition → `network_attribute_writer.py` `_OBSERVABILITY_PRESETS`, `trace-observability.md`
+- `SKILL.md` Required references changes → `test_skill_docs.py` assertions
+
+---
+
+# 项目结构与模块组织
+
+```
+ns-3-ub/
+├── src/unified-bus/          # UB 协议栈实现（核心开发区）
+│   ├── model/                # 所有 C++ 模型代码
+│   │   └── protocol/         # 协议层（function/transaction/transport/routing/flow-control/caqm/header）
+│   ├── test/ub-test.cc       # 单测文件
+│   ├── examples/             # ub-quick-example 用户后端与相关示例
+│   └── doc/                  # switch-buffer-architecture.md
+├── scratch/                  # 仿真场景入口与 CSV case 数据（15 个 case 目录）
+│   ├── ub-quick-example.cc   # 对 example/ub-quick-example 的薄封装
+│   └── <case>/               # 各场景: *_single-tp, clos_*, 2dfm4x4_*, ...（含 CSV 配置）
+├── dev-knowledge/            # 知识基线（规范文档、经验沉淀）
+│   └── specification/        # UB Base Specification 2.0 PDF + key-index
+├── src/mtp/                  # Unison 多线程仿真模块（非标准 ns-3）
+├── utils/                    # 辅助脚本（run-examples, create-module.py 等）
+├── scratch/ns-3-ub-tools/    # 子模块: 拓扑/流量生成 + trace 解析
+└── build/                    # 构建产物（忽略）
+```
+
+## 代码风格与命名约定
+
+遵循 `.editorconfig` 与 `.clang-format` (BasedOnStyle=Microsoft, C++20, ColumnLimit=100)。
+- 缩进: `*.cc`/`*.h`/`*.py` 使用 4 空格；CMake/YAML/Markdown 使用 2 空格；`Makefile` 使用 tab。
+- UB 文件命名: `ub-*.cc/.h`；协议层代码置于 `model/protocol/`。
+- 类命名: PascalCase + Ub 前缀（`UbPort`, `UbTransaction`）。
+- 场景命名: 延续 `2nodes_*`、`clos_*`、`2dfm4x4_*`。
+- 指针对齐: `Type* ptr`（PointerAlignment=Left）。
+
+## 构建与验证
+
+### 首次配置
+```bash
+./ns3 configure --enable-asserts --enable-examples --enable-tests --disable-werror -d release -G Ninja
+```
+
+### 快速验证（推荐）
+开发时只需运行场景验证，`./ns3 run` 会自动按需构建所需模块：
+```bash
+# 运行场景（自动构建依赖）
+./ns3 run 'scratch/ub-quick-example --case-path=scratch/2nodes_single-tp'
+
+# 后续运行（复用已构建产物）
+./ns3 run --no-build 'scratch/ub-quick-example --case-path=scratch/2nodes_single-tp'
+```
+
+### 模块级构建（可选）
+如需单独构建模块而不运行场景：
+```bash
+ninja -C cmake-cache unified-bus unified-bus-test
+```
+
+### 单元测试
+```bash
+# 构建 test-runner（首次或测试代码修改后）
+ninja -C cmake-cache test-runner
+
+# 运行指定模块的测试（test-name 为运行时过滤）
+./build/utils/ns3.44-test-runner-default --test-name=unified-bus
+```
+
+### 全量构建与测试（必要时）
+
+**构建说明**：
+- `./ns3 build`（无参数）= 构建所有模块
+- `./ns3 run '<program>'` = 按需构建所需目标及其依赖，然后执行
+- `./ns3 run --no-build` = 不触发构建，直接运行已编译的程序
+
+**仅以下情况需要全量构建**：
+- 修改了 `src/core/` 等基础模块
+- 修改了 CMake 配置或头文件接口
+- 准备提交前最终验证
+- CI/CD 流水线
+
+```bash
+# 全量构建所有模块
+./ns3 build
+
+# 全量测试
+./test.py
+```
+
+## 提交与 PR 规范
+
+### 提交格式
+Conventional Commit: `type(scope): subject`
+- `feat(scope): ...` - 新功能
+- `fix(scope): ...` - 修复
+- `docs(scope): ...` - 文档
+- `refactor(scope): ...` - 重构
+- `test(scope): ...` - 测试
+- `chore: ...` - 杂项
+
+标题要求：祈使句、现在时、≤72 字符。
+
+### PR 内容清单
+- [ ] 问题背景与改动范围
+- [ ] 关键设计或行为变化
+- [ ] 实际执行过的验证命令
+- [ ] `Knowledge Sources` 小节（引用 dev-knowledge 路径 + 采用原因）
+- [ ] 涉及流程或输出变化时附日志/截图
+
+## ANTI-PATTERNS
+
+- ❌ 开发时进行不必要的全量构建/测试（浪费资源，用模块级代替）
+- ❌ <IMPORTANT>电脑性能有限，永远不要并行build！build任务和测试任务分离，build必须串行！</IMPORTANT>
+
+# Repository Notes
+
+- 对 `UbLink` / `UbRemoteLink` 的测试，默认把它们视为"搬移序列化后的 `Packet` bytes"的承载层；不要在 link 测试里引入高层协议语义假设。
+- `UB_CONTROL_FRAME`、`VL`、`TP opcode`、credit 恢复等语义，应以 `UbSwitch`、flow-control、transport 等模块的实际解析与处理路径为准；优先基于这些模块已有逻辑或更高层 trace 做验证。
+- 如果测试必须解析 `Packet`，应尽量复用 unified-bus 模块现有的报文解析逻辑与类型边界，避免测试 oracle 自行发明额外语义。
+- 当测试 oracle 与模块真实语义冲突时，优先删除或重做该 oracle，不要为了保住测试去扭曲实现。
