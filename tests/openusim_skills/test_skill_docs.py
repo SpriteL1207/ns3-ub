@@ -63,7 +63,7 @@ class OpenUSimStageSkillDocsTest(unittest.TestCase):
             "`python3 -m pip install --user -r scratch/ns-3-ub-tools/requirements.txt`",
             "`./ns3 configure`",
             "`./ns3 build`",
-            "`./ns3 run 'scratch/ub-quick-example scratch/2nodes_single-tp'`",
+            "`./ns3 run 'scratch/ub-quick-example --case-path=scratch/2nodes_single-tp'`",
         ):
             self.assertIn(marker, welcome_text)
 

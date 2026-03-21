@@ -61,7 +61,7 @@ Available startup commands (only list the ones actually needed):
 - `python3 -m pip install --user -r scratch/ns-3-ub-tools/requirements.txt` — installs Python packages
 - `./ns3 configure` — configures the build system
 - `./ns3 build` — compiles the simulator, may take several minutes
-- `./ns3 run 'scratch/ub-quick-example scratch/2nodes_single-tp'` — runs the smoke test case
+- `./ns3 run 'scratch/ub-quick-example --case-path=scratch/2nodes_single-tp'` — runs the smoke test case
 
 **Do NOT:**
 - Check files or read docs during Phase 1
