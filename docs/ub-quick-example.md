@@ -56,8 +56,10 @@
 单进程 MTP 多线程：
 
 ```bash
-./ns3 run 'scratch/ub-quick-example --case-path=scratch/2nodes_single-tp --mtp-threads=2'
+./ns3 run 'scratch/ub-quick-example --case-path=scratch/clos_32hosts-4leafs-8spines_pod2pod --mtp-threads=2'
 ```
+
+> **注意**：建议使用 `clos_32hosts-4leafs-8spines_pod2pod` 等多任务 case 测试 MTP。该 case 包含 8 个并发任务，能够体现多线程并行效果。`2nodes_single-tp` 等单任务 case 无法有效测试多线程调度。
 
 测试模式：
 
