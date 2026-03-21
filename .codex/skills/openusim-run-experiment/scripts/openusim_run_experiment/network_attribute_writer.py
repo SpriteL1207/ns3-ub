@@ -93,7 +93,11 @@ def _runtime_attribute_entries() -> list[dict]:
 
 
 def _runtime_global_entries() -> list[dict]:
-    output = _run_query("--PrintUbGlobals")
+    try:
+        output = _run_query("--PrintUbGlobals")
+    except RuntimeError:
+        # --PrintUbGlobals not supported in this build; globals will be applied via overrides
+        return []
     entries = []
     for match in GLOBAL_ENTRY_PATTERN.finditer(output):
         entries.append(

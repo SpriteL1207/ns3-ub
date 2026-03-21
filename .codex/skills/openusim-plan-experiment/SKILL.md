@@ -20,6 +20,8 @@ Do not use this skill to verify repo startup or to interpret completed run resul
 
 ## The Process
 
+Output one line (using user's language) telling the user about the planning process, then bind the user-provided facts and ask for the next input. Follow the steps below:
+
 1. Bind the user-provided facts before asking for more input.
 2. Classify the first meaningful request as `broad`, `semi-specified`, or `reference-based`.
 3. Resolve the first unstable planning slot in this order:
@@ -32,9 +34,11 @@ Do not use this skill to verify repo startup or to interpret completed run resul
 4. Ask only one smallest blocking question per turn.
 5. Use bounded `1/2/3/4` choices only when they help the user decide.
 6. **When all slots are resolved and user approves generation/execution:**
-   a. **Use Write tool to create `experiment-spec.md`** (template: `../openusim-references/spec-rules.md`)
-   b. **Verify spec completeness** (use Read tool, check all required sections exist)
-   c. **Announce handoff readiness** ("Spec written at `experiment-spec.md`, ready to hand off to run stage")
+   a. **Determine case directory:** Propose semantic case name with timestamp: `YYYYMMDD-<semantic-name>` (e.g., `20260322-clos-32hosts-bw-test`), form path as `scratch/{case_name}/`
+   b. **Create case directory if not exists**
+   c. **Use Write tool to create `{case_dir}/experiment-spec.md`** (template: `../openusim-references/spec-rules.md`)
+   d. **Verify spec completeness** (use Read tool, check all required sections exist)
+   e. **Announce handoff readiness** ("Spec written at `{case_dir}/experiment-spec.md`, ready to hand off to run stage")
 
 ## Stop And Ask
 
@@ -42,6 +46,25 @@ Do not use this skill to verify repo startup or to interpret completed run resul
 - The user asks to generate or run before the planning gate is satisfied.
 - Startup facts are missing and block execution decisions.
 - Repo startup facts have not been verified for this session and the user is approaching generation approval.
+
+## Case Directory Naming
+
+All experiment cases are created under `scratch/` with the following naming convention:
+
+```
+scratch/YYYYMMDD-<semantic-name>/
+```
+
+- `YYYYMMDD`: Date stamp (e.g., `20260322`)
+- `<semantic-name>`: Short semantic description (e.g., `clos-32hosts-bw-test`, `ring-8nodes-a2a`)
+
+**Examples:**
+- `scratch/20260322-clos-32hosts-bw-test/`
+- `scratch/20260322-ring-8nodes-a2a/`
+
+The `experiment-spec.md` is written inside this directory: `scratch/YYYYMMDD-<name>/experiment-spec.md`
+
+This `{case_dir}` is passed to `openusim-run-experiment` for generation and execution.
 
 ## Handover
 
@@ -53,12 +76,13 @@ Stay in this skill when:
 
 Hand off to `openusim-run-experiment` when:
 
-- Step 6 of The Process is complete (spec written and verified)
+- Step 6 of The Process is complete (spec written and verified, `{case_dir}` determined)
 - The experiment goal is stable
 - Topology, workload, network parameters, and observability are concrete enough to run
 - The user explicitly approved generation or execution
+- **Handoff data:** `{case_dir}` (full path to case directory under `scratch/`)
 
-Before handoff, ensure `experiment-spec.md` exists on disk with all required sections from `../openusim-references/spec-rules.md`. The file must contain:
+Before handoff, ensure `{case_dir}/experiment-spec.md` exists on disk with all required sections from `../openusim-references/spec-rules.md`. The file must contain:
 
 - the confirmed experiment goal
 - the chosen topology path

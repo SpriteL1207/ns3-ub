@@ -18,25 +18,28 @@ Keep custom Python limited to `network_attribute.txt` writing and a light case-f
 
 Do not use this skill to define experiment intent or to perform final result interpretation.
 
+## Input from Plan Stage
+
+- `{case_dir}`: Full path to case directory under `scratch/` (e.g., `scratch/20260322-clos-32hosts-bw-test/`)
+- This directory contains `experiment-spec.md` created by `openusim-plan-experiment`
+
+All generation and execution happen within `{case_dir}/`.
+
 ## The Process
 
 1. **Verify prerequisites:**
-   a. **Read `experiment-spec.md`** (must exist, use Read tool)
-   b. **Check spec completeness:** verify all required sections exist (Goal, Topology, Workload, Network Overrides, Observability)
-   c. **Check repo startup readiness:**
-      - `./ns3` launcher exists
-      - `build/` directory exists
-      - `scratch/ns-3-ub-tools/` exists
-      - `scratch/ns-3-ub-tools/net_sim_builder.py` exists
-   d. **If any check fails:** stop and return to the appropriate stage (welcome for startup, plan for spec)
+   a. **Accept `{case_dir}` from plan stage** (path to case directory under `scratch/`)
+   b. **Read `{case_dir}/experiment-spec.md`** (must exist, use Read tool)
+   c. **Check spec completeness:** verify all required sections exist (Goal, Topology, Workload, Network Overrides, Observability)
+   d. **If spec is incomplete:** return to `openusim-plan-experiment`
 
 2. Parse spec and extract execution parameters.
-3. **Generate topology script in case directory:**
+3. **Generate topology script in `{case_dir}/`:**
    a. Read topology family and parameters from spec
    b. Select code template from `../openusim-references/topology-options.md` Generation Patterns
    c. Generate `{case_dir}/generate_topology.py` by substituting parameters
    d. Run: `python3 {case_dir}/generate_topology.py`
-   e. Verify outputs: `node.csv`, `topology.csv`, `routing_table.csv`, `transport_channel.csv`
+   e. Verify outputs: `{case_dir}/node.csv`, `{case_dir}/topology.csv`, `{case_dir}/routing_table.csv`, `{case_dir}/transport_channel.csv`
 4. Generate `traffic.csv` through `scratch/ns-3-ub-tools/traffic_maker/build_traffic.py` when the workload is not a reference file.
 5. Write a full `network_attribute.txt` snapshot through the thin query-based writer.
 6. Run the light case-file gate before execution.

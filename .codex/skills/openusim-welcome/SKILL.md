@@ -26,16 +26,20 @@ Do not use this skill to define experiment details or interpret simulation resul
 
 ### Phase 1 — Lightweight Greeting (zero side effects)
 
-Output one line, then wait for the user's reply. Do NOT check files, read docs, or introduce workflows.
+Output one line (using user's language), then wait for the user's reply. Do NOT check files, read docs, or introduce workflows.
 
-> 你好！这里是 ns-3-ub 仿真平台。你想做什么？
+> 你好！这里是 ns-3-ub 仿真平台。我将辅助你完成项目的设置和仿真实验设计。请问你想做什么？
+> 如果你想要运行仿真，我将帮你检查仓库准备情况，确保一切就绪。
+> 如果你只是想看代码或问函数，直接告诉我就好！
 
 - If the user's intent is unrelated to simulation (e.g. asking about a function, reading code), **let them through** — do not enter Phase 2.
 - If the user wants to run a simulation or experiment, proceed to Phase 2.
 
 ### Phase 2 — Repo Readiness Check (only after user confirms simulation intent)
 
-Silently verify all startup facts (do not narrate each check individually to the user):
+Verify all startup facts OUTLOUD (do not narrate each check individually to the user):
+
+Output one line (using user's language) telling the user you will check the repository readiness and it will take a few moments, then check the following facts silently:
 
 - `./ns3` exists
 - `scratch/ns-3-ub-tools/` exists
