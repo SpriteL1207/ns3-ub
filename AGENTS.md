@@ -145,11 +145,11 @@ When the user clearly wants to start or run the project, help execute the bounde
 - `python3 -m pip install --user -r scratch/ns-3-ub-tools/requirements.txt`
 - `./ns3 configure`
 - `./ns3 build`
-- `./ns3 run 'scratch/ub-quick-example scratch/2nodes_single-tp'`
+- `./ns3 run 'scratch/ub-quick-example --case-path=scratch/2nodes_single-tp'`
 
 When the user needs current Unified Bus parameter/default guidance, initialize a runtime parameter catalog and reuse it instead of reciting a fixed table:
 
-- this runtime catalog is backed by `./ns3 run 'scratch/ub-quick-example scratch/2nodes_single-tp --PrintTypeIds'`
+- this runtime catalog is backed by `./ns3 run 'scratch/ub-quick-example --case-path=scratch/2nodes_single-tp --PrintTypeIds'`
 - it queries per-component attributes via `--ClassName=...`
 - it queries Unified Bus globals via `--PrintUbGlobals`
 - treat the generated project parameter catalog as the current baseline until it is refreshed

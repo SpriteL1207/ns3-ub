@@ -434,7 +434,7 @@ Examples:
 ./ns3 run 'scratch/ub-quick-example --PrintGlobals'
 
 # Print Unified Bus globals with type metadata
-./ns3 run 'scratch/ub-quick-example scratch/2nodes_single-tp --PrintUbGlobals'
+./ns3 run 'scratch/ub-quick-example --case-path=scratch/2nodes_single-tp --PrintUbGlobals'
 
 # General help for supported flags
 ./ns3 run 'scratch/ub-quick-example --PrintHelp'

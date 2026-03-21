@@ -164,7 +164,7 @@ Refer to `trace-observability.md` for tier semantics and safe wording constraint
 ## Execution
 
 ```bash
-./ns3 run 'scratch/ub-quick-example {case_dir}'
+./ns3 run 'scratch/ub-quick-example --case-path={case_dir}'
 ```
 
 Optional runtime switches (not part of experiment definition):
