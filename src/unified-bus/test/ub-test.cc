@@ -767,7 +767,7 @@ class UbUrmaReadMultiSliceRequestPacketSemanticsTest : public TestCase
         (void)utils::UbUtils::Get();
         GlobalValue::Bind("UB_RECORD_PKT_TRACE", BooleanValue(true));
 
-        LocalTpTopology topo = BuildLocalTpTopology(false);
+        LocalTpTopology topo = BuildLocalTpTopology();
         InstallStaticTpPair(topo);
         m_expectedSrc = topo.sender->GetId();
         m_expectedDst = topo.receiver->GetId();
@@ -785,6 +785,10 @@ class UbUrmaReadMultiSliceRequestPacketSemanticsTest : public TestCase
                                                            false,
                                                            tpns);
         NS_TEST_ASSERT_MSG_EQ(bindOk, true, "Sender Jetty should bind to static TP pair");
+        Ptr<UbJetty> senderJetty = senderFunction->GetJetty(kUrmaReadRegressionJettyNum);
+        NS_TEST_ASSERT_MSG_NE(senderJetty, nullptr, "Sender Jetty should exist");
+        senderJetty->SetClientCallback(
+            MakeCallback(&UbUrmaReadMultiSliceRequestPacketSemanticsTest::OnTaskCompleted, this));
 
         Ptr<UbController> receiverCtrl = topo.receiver->GetObject<UbController>();
         Ptr<UbTransportChannel> receiverTp = receiverCtrl->GetTpByTpn(kUrmaWriteRegressionReceiverTpn);
@@ -793,6 +797,18 @@ class UbUrmaReadMultiSliceRequestPacketSemanticsTest : public TestCase
             "TpRecvNotify",
             MakeCallback(
                 &UbUrmaReadMultiSliceRequestPacketSemanticsTest::ObserveTargetPacketReceive,
+                this));
+        receiverTp->TraceConnectWithoutContext(
+            "WqeSegmentCompletesNotify",
+            MakeCallback(
+                &UbUrmaReadMultiSliceRequestPacketSemanticsTest::ObserveTargetReadRequestSlice,
+                this));
+        Ptr<UbTransportChannel> senderTp = senderCtrl->GetTpByTpn(kUrmaWriteRegressionSenderTpn);
+        NS_TEST_ASSERT_MSG_NE(senderTp, nullptr, "Sender TP should exist");
+        senderTp->TraceConnectWithoutContext(
+            "LastPacketReceivesNotify",
+            MakeCallback(
+                &UbUrmaReadMultiSliceRequestPacketSemanticsTest::ObserveSenderReadResponse,
                 this));
 
         Ptr<UbWqe> wqe = senderFunction->CreateWqe(topo.sender->GetId(),
@@ -814,6 +830,15 @@ class UbUrmaReadMultiSliceRequestPacketSemanticsTest : public TestCase
         NS_TEST_ASSERT_MSG_EQ(m_zeroPayloadReadRequestCount,
                               2u,
                               "Each read request packet should carry zero payload");
+        NS_TEST_ASSERT_MSG_EQ(m_targetReadRequestSliceCount,
+                              2u,
+                              "128KiB read should complete 2 request slices at TA");
+        NS_TEST_ASSERT_MSG_EQ(m_readResponseCount,
+                              2u,
+                              "128KiB read should generate 2 read responses");
+        NS_TEST_ASSERT_MSG_EQ(m_taskCompleteCount,
+                              1u,
+                              "Multi-slice read should still complete the WQE exactly once");
 
         Simulator::Destroy();
         GlobalValue::Bind("UB_RECORD_PKT_TRACE", BooleanValue(false));
@@ -851,8 +876,44 @@ class UbUrmaReadMultiSliceRequestPacketSemanticsTest : public TestCase
         }
     }
 
+    void ObserveTargetReadRequestSlice(uint32_t,
+                                       uint32_t taskId,
+                                       uint32_t)
+    {
+        if (taskId == kUrmaReadMultiPacketTaskId)
+        {
+            ++m_targetReadRequestSliceCount;
+        }
+    }
+
+    void ObserveSenderReadResponse(uint32_t,
+                                   uint32_t srcTpn,
+                                   uint32_t dstTpn,
+                                   uint32_t,
+                                   uint32_t,
+                                   uint32_t)
+    {
+        if (srcTpn != kUrmaWriteRegressionReceiverTpn || dstTpn != kUrmaWriteRegressionSenderTpn)
+        {
+            return;
+        }
+
+        ++m_readResponseCount;
+    }
+
+    void OnTaskCompleted(uint32_t taskId, uint32_t)
+    {
+        if (taskId == kUrmaReadMultiPacketTaskId)
+        {
+            ++m_taskCompleteCount;
+        }
+    }
+
     uint32_t m_readRequestPacketCount{0};
     uint32_t m_zeroPayloadReadRequestCount{0};
+    uint32_t m_targetReadRequestSliceCount{0};
+    uint32_t m_readResponseCount{0};
+    uint32_t m_taskCompleteCount{0};
     uint32_t m_expectedSrc{UINT32_MAX};
     uint32_t m_expectedDst{UINT32_MAX};
 };

@@ -366,6 +366,7 @@ Ptr<Packet> UbTransportChannel::GenDataPacket(Ptr<UbWqeSegment> wqeSegment,
 
 Ptr<UbWqeSegment> UbTransportChannel::TrackInboundTaPacket(const UbTransportHeader& tpHeader,
                                                            const UbTransactionHeader& taHeader,
+                                                           uint32_t logicalBytes,
                                                            uint32_t payloadBytes,
                                                            uint32_t taskId)
 {
@@ -391,18 +392,20 @@ Ptr<UbWqeSegment> UbTransportChannel::TrackInboundTaPacket(const UbTransportHead
     }
 
     const auto taOpcode = static_cast<TaOpcode>(taHeader.GetTaOpcode());
+    const bool isReadRequest = taOpcode == TaOpcode::TA_OPCODE_READ;
+    const bool isReadResponse = taOpcode == TaOpcode::TA_OPCODE_READ_RESPONSE;
+    const bool isTransactionAck = taOpcode == TaOpcode::TA_OPCODE_TRANSACTION_ACK;
     state.segment->SetType(taOpcode);
     state.segment->SetOrderType(static_cast<OrderType>(taHeader.GetOrder()));
     state.segment->SetSegmentKind(
-        taOpcode == TaOpcode::TA_OPCODE_TRANSACTION_ACK ||
-                taOpcode == TaOpcode::TA_OPCODE_READ_RESPONSE
+        isTransactionAck || isReadResponse
             ? UbTransactionSegmentKind::RESPONSE
             : UbTransactionSegmentKind::REQUEST);
-    if (taOpcode == TaOpcode::TA_OPCODE_TRANSACTION_ACK)
+    if (isTransactionAck)
     {
         state.segment->SetRequestOpcode(TaOpcode::TA_OPCODE_WRITE);
     }
-    else if (taOpcode == TaOpcode::TA_OPCODE_READ_RESPONSE)
+    else if (isReadResponse)
     {
         state.segment->SetRequestOpcode(TaOpcode::TA_OPCODE_READ);
     }
@@ -410,13 +413,27 @@ Ptr<UbWqeSegment> UbTransportChannel::TrackInboundTaPacket(const UbTransportHead
     {
         state.segment->SetRequestOpcode(taOpcode);
     }
-    state.segment->SetResponseBytes(taOpcode == TaOpcode::TA_OPCODE_READ_RESPONSE ? payloadBytes : 0);
+    state.segment->SetResponseBytes(isReadRequest ? logicalBytes : (isReadResponse ? payloadBytes : 0));
     state.segment->SetNeedsTransactionResponse(
-        taOpcode == TaOpcode::TA_OPCODE_WRITE || taOpcode == TaOpcode::TA_OPCODE_READ);
+        taOpcode == TaOpcode::TA_OPCODE_WRITE || isReadRequest);
 
     state.bytesReceived += payloadBytes;
-    state.segment->SetSize(state.bytesReceived);
-    state.segment->SetWqeSize(state.bytesReceived);
+    if (isReadRequest)
+    {
+        state.segment->SetSize(logicalBytes);
+        state.segment->SetWqeSize(logicalBytes);
+        state.segment->SetLogicalBytes(logicalBytes);
+        state.segment->SetPayloadBytes(0);
+        state.segment->SetCarrierBytes(1);
+    }
+    else
+    {
+        state.segment->SetSize(state.bytesReceived);
+        state.segment->SetWqeSize(state.bytesReceived);
+        state.segment->SetLogicalBytes(state.bytesReceived);
+        state.segment->SetPayloadBytes(state.bytesReceived);
+        state.segment->SetCarrierBytes(state.bytesReceived);
+    }
 
     if (!tpHeader.GetLastPacket())
     {
@@ -601,6 +618,8 @@ void UbTransportChannel::RecvDataPacket(Ptr<Packet> p)
     p->RemoveHeader(TpHeader);
     p->RemoveHeader(TaHeader); // 处理接收包信息
     p->RemoveHeader(MAExtTaHeader);
+    const uint32_t payloadBytes = p->GetSize();
+    const uint32_t logicalBytes = MAExtTaHeader.GetLength();
     uint64_t psn = TpHeader.GetPsn();
     uint32_t responsePayload = 0;
     if (TaHeader.GetTaOpcode() == static_cast<uint8_t>(TaOpcode::TA_OPCODE_READ)) {
@@ -677,14 +696,14 @@ void UbTransportChannel::RecvDataPacket(Ptr<Packet> p)
             return;
         }
         // 记录包号和size
-        m_congestionCtrl->RecverRecordPacketData(psn, MAExtTaHeader.GetLength(), NetworkHeader);
+        m_congestionCtrl->RecverRecordPacketData(psn, payloadBytes, NetworkHeader);
         if (psn > m_psnRecvNxt) {
             NS_LOG_DEBUG("Out-of-Order Packet,tpn:{" << m_tpn << "} psn:{" << psn
                         << "} expectedPsn:{" << m_psnRecvNxt << "}");
             return; // 未开启sack的情况下乱序包不用回复ack，只用记录了bitmap
         }
         completedTaUnit =
-            TrackInboundTaPacket(TpHeader, TaHeader, MAExtTaHeader.GetLength(), flowTag.GetFlowId());
+            TrackInboundTaPacket(TpHeader, TaHeader, logicalBytes, payloadBytes, flowTag.GetFlowId());
         uint32_t oldRecvNxt = m_psnRecvNxt;
         while (m_psnRecvNxt < oldRecvNxt + m_psnOooThreshold) {
             uint32_t currentBitIndex = m_psnRecvNxt - oldRecvNxt;
@@ -739,6 +758,7 @@ void UbTransportChannel::RecvDataPacket(Ptr<Packet> p)
     if (completedTaUnit != nullptr)
     {
         GetTransaction()->HandleInboundTaUnit(m_tpn, completedTaUnit);
+        WqeSegmentCompletesNotify(m_nodeId, completedTaUnit->GetTaskId(), completedTaUnit->GetTaSsn());
     }
 }
 

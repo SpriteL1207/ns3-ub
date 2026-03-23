@@ -255,6 +255,7 @@ private:
     Ptr<UbTransaction> GetTransaction();
     Ptr<UbWqeSegment> TrackInboundTaPacket(const UbTransportHeader& tpHeader,
                                            const UbTransactionHeader& taHeader,
+                                           uint32_t logicalBytes,
                                            uint32_t payloadBytes,
                                            uint32_t taskId);
     bool ShouldCompleteOnTpAck(const Ptr<UbWqeSegment>& segment) const;
