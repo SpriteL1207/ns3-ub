@@ -8,6 +8,17 @@ Align the `unified-bus` URMA path with the UB specification for asynchronous Jet
 - introducing spec-aligned `URMA_READ` as `Read Request + Read Response` over the existing `Jetty -> TA -> TP` path;
 - reusing the existing transaction-layer remote-response scheduling hook instead of creating a second send path.
 
+## Finalized Slice Semantics
+
+The implemented `URMA_READ` behavior is:
+
+- TA still slices a large read WQE into request slices.
+- Each read request slice sends exactly one TP request packet with zero wire payload.
+- `MAETAH.Length` on that request packet carries the logical read size of the slice, not the wire payload size.
+- When TP receives a complete read request slice, it hands that slice to `UbTransaction`, which enqueues exactly one `READ_RESPONSE` through `m_tpRelatedRemoteRequests`.
+- The `READ_RESPONSE` may span multiple TP packets, but it is not split into multiple TA responses for the same request slice.
+- The initiator completes the WQE only after all request-slice responses arrive.
+
 ## Current-State Findings
 
 ### Current `URMA_WRITE` path
@@ -189,14 +200,14 @@ This keeps the transaction format coherent without expanding scenario inputs yet
 
 1. Initiator submits `URMA_READ` through Jetty.
 2. TA splits the read request if needed.
-3. TP packetizes and transports the request.
-4. Target TP reassembles the request into a complete transaction unit.
+3. Each read request slice is sent as one TP request packet with zero wire payload, while `MAETAH.Length` carries the logical slice size.
+4. Target TP reassembles the request into a complete transaction unit and notifies `UbTransaction`.
 5. Target `UbTransaction` executes an abstract read from target-side abstract memory.
-6. Target `UbTransaction` generates a `READ_RESPONSE` segment carrying the requested bytes.
+6. Target `UbTransaction` generates one `READ_RESPONSE` segment for that request slice.
 7. The response segment is inserted into `m_tpRelatedRemoteRequests`.
-8. Target TP schedules and sends the response.
+8. Target TP schedules and sends the response. That response may span multiple TP packets.
 9. Initiator TP reassembles the response and delivers it to `UbTransaction`.
-10. Initiator `UbTransaction` completes the original read WQE.
+10. Initiator `UbTransaction` completes the original read WQE only after all request-slice responses are complete.
 
 ### Remote-response scheduling
 
@@ -236,6 +247,7 @@ Completion rules:
 
 - `URMA_WRITE` completes only when `TAACK` is received.
 - `URMA_READ` completes only when `READ_RESPONSE` is received.
+- For a multi-slice `URMA_READ`, each request slice completes on its matching `READ_RESPONSE`, and the WQE callback still fires once after the last slice completes.
 - TP ACK for a target-generated response only releases target-side transport resources; it must not complete the original initiator request.
 
 ## Transport-Layer Changes

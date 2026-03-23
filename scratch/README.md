@@ -278,6 +278,9 @@ Current URMA read/write constraints in `traffic.csv`:
 - `URMA_WRITE` and `URMA_READ` do not require extra CSV columns for remote address, token, local address, or read offset in this iteration.
 - `URMA_WRITE` and `URMA_READ` complete on transaction responses (`TAACK` / `READ_RESPONSE`), not when the request's TP ACK arrives.
 - Only the ROI success path is modeled for URMA read/write at the transaction layer right now; other service modes are rejected explicitly.
+- `URMA_READ` is sliced at the TA layer. Each read request slice sends exactly one TP request packet with zero wire payload; the logical slice length is carried in `MAETAH.Length`.
+- Each `URMA_READ` request slice generates exactly one `READ_RESPONSE`. The response is queued through `m_tpRelatedRemoteRequests` and may be split into multiple TP packets, but it is not transaction-sliced again.
+- A multi-slice `URMA_READ` WQE still completes only once, after all slice responses arrive back at the initiator.
 
 UB’s runner (`UbTrafficGen`) uses these to enqueue WQEs, connect to the proper `TpConnectionManager`, and drive sending/ACK tracking. The post-processing script `trace_analysis/task_statistics.py` merges Task and Packet traces back into this CSV, adding columns:
 - `taskStartTime(us)`, `taskCompletesTime(us)` — task timeline

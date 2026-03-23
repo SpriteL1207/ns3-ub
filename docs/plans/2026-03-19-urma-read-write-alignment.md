@@ -8,6 +8,16 @@
 
 **Tech Stack:** C++20, ns-3 object model, unified-bus protocol stack, `ninja`, `ns3.44-test-runner`, quick-example system tests
 
+## Finalized Read Slice Semantics
+
+The implemented `URMA_READ` path now follows these rules:
+
+- TA request slicing still happens at the WQE-segment layer.
+- A read request slice sends one TP request packet with zero wire payload; `MAETAH.Length` carries the slice's logical byte count.
+- TP hands a completed read request slice to `UbTransaction`, and `UbTransaction` inserts one matching `READ_RESPONSE` into `m_tpRelatedRemoteRequests`.
+- A `READ_RESPONSE` may be split by TP into multiple packets, but one read request slice still maps to one transaction-layer response.
+- A multi-slice read completes its WQE once, after all slice responses have been matched back to the initiator.
+
 ---
 
 Use `@superpowers:test-driven-development` inside each task and `@superpowers:verification-before-completion` before declaring the work finished.
