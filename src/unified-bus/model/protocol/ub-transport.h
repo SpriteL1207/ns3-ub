@@ -84,7 +84,10 @@ public:
     bool IsEmpty() override;
     bool IsLimited() override;
 
-    Ptr<Packet> GenDataPacket(Ptr<UbWqeSegment> wqeSegment, uint32_t payload_size);
+    Ptr<Packet> GenDataPacket(Ptr<UbWqeSegment> wqeSegment,
+                              uint32_t payloadSize,
+                              uint32_t wireLengthBytes,
+                              uint32_t progressBytes);
 
     /**
      * @brief Process Transport Acknowledgment message

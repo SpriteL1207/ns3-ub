@@ -18,6 +18,42 @@ NS_LOG_COMPONENT_DEFINE("UbTransportChannel");
 
 NS_OBJECT_ENSURE_REGISTERED(UbTransportChannel);
 
+namespace
+{
+
+bool
+IsZeroPayloadReadRequest(const Ptr<UbWqeSegment>& segment)
+{
+    return segment != nullptr && segment->GetType() == TaOpcode::TA_OPCODE_READ &&
+           segment->GetSegmentKind() == UbTransactionSegmentKind::REQUEST;
+}
+
+uint32_t
+GetProgressBytesThisPacket(const Ptr<UbWqeSegment>& segment)
+{
+    return std::min<uint64_t>(segment->GetBytesLeft(), UB_MTU_BYTE);
+}
+
+uint32_t
+GetPayloadBytesThisPacket(const Ptr<UbWqeSegment>& segment, uint32_t progressBytes)
+{
+    return IsZeroPayloadReadRequest(segment) ? 0 : progressBytes;
+}
+
+uint32_t
+GetWireLengthBytes(const Ptr<UbWqeSegment>& segment, uint32_t payloadBytes)
+{
+    return IsZeroPayloadReadRequest(segment) ? segment->GetLogicalBytes() : payloadBytes;
+}
+
+uint32_t
+GetTotalProgressBytes(const Ptr<UbWqeSegment>& segment)
+{
+    return segment->GetCarrierBytes() == 0 ? segment->GetSize() : segment->GetCarrierBytes();
+}
+
+} // namespace
+
 TypeId UbTransportChannel::GetTypeId(void)
 {
     static TypeId tid = TypeId("ns3::UbTransportChannel")
@@ -164,33 +200,32 @@ Ptr<Packet> UbTransportChannel::GetNextPacket()
         if (currentSegment == nullptr || currentSegment->IsSentCompleted()) {
             continue;
         }
-        // 组数据包进行发送
-        uint64_t payload_size = currentSegment->GetBytesLeft();
-        if (payload_size > UB_MTU_BYTE) {
-            payload_size = UB_MTU_BYTE;
-        }
+        const uint32_t progressBytes = GetProgressBytesThisPacket(currentSegment);
+        const uint32_t payloadSize = GetPayloadBytesThisPacket(currentSegment, progressBytes);
+        const uint32_t wireLengthBytes = GetWireLengthBytes(currentSegment, payloadSize);
+        const uint32_t totalProgressBytes = GetTotalProgressBytes(currentSegment);
 
         // 计算剩余发送窗口，若不足以发送则返回nullptr。
         // caqm 算法使能时返回实际剩余窗口，未开启返回uint32MAX
         // 其余算法待拓展
         if (m_congestionCtrl->GetCongestionAlgo() == CAQM) {
             uint32_t rest = m_congestionCtrl->GetRestCwnd();
-            if (rest < payload_size) {
+            if (rest < progressBytes) {
                 return nullptr;
             }
             NS_LOG_DEBUG("[Caqm send][restCwnd] Rest cwnd:" << rest);
         }
 
-        Ptr<Packet> p = GenDataPacket(currentSegment, payload_size);
+        Ptr<Packet> p = GenDataPacket(currentSegment, payloadSize, wireLengthBytes, progressBytes);
 
-        m_congestionCtrl->SenderUpdateCongestionCtrlData(m_psnSndNxt, payload_size);
+        m_congestionCtrl->SenderUpdateCongestionCtrlData(m_psnSndNxt, progressBytes);
 
-        if (currentSegment->GetBytesLeft() == currentSegment->GetSize()) {
+        if (currentSegment->GetBytesLeft() == totalProgressBytes) {
             // wqe segment first packet
             FirstPacketSendsNotify(m_nodeId, currentSegment->GetTaskId(), m_tpn, m_dstTpn,
                 currentSegment->GetTpMsn(), m_psnSndNxt, m_sport);
         }
-        if (currentSegment->GetBytesLeft() == payload_size) {
+        if (currentSegment->GetBytesLeft() == progressBytes) {
             // wqe segment last packet
             LastPacketSendsNotify(m_nodeId, currentSegment->GetTaskId(), m_tpn, m_dstTpn,
                 currentSegment->GetTpMsn(), m_psnSndNxt, m_sport);
@@ -206,7 +241,7 @@ Ptr<Packet> UbTransportChannel::GetNextPacket()
                   << " Dst: " << m_dest
                   << " PacketSize: " << p->GetSize()
                   << " TaskId: " << currentSegment->GetTaskId());
-        currentSegment->UpdateSentBytes(payload_size);
+        currentSegment->UpdateSentBytes(progressBytes);
         m_psnSndNxt++;
         // 发送时，更新定时器时间
         if (m_isRetransEnable) {
@@ -259,27 +294,24 @@ uint32_t UbTransportChannel::GetNextPacketSize()
         if (currentSegment == nullptr || currentSegment->IsSentCompleted()) {
             continue;
         }
-        uint64_t payload_size = currentSegment->GetBytesLeft();
-        if (payload_size > UB_MTU_BYTE) {
-            payload_size = UB_MTU_BYTE;
-        }
-        pktSize = payload_size + headerSize;
+        const uint32_t progressBytes = GetProgressBytesThisPacket(currentSegment);
+        const uint32_t payloadSize = GetPayloadBytesThisPacket(currentSegment, progressBytes);
+        pktSize = payloadSize + headerSize;
         return pktSize;
     }
     return pktSize;
 }
-Ptr<Packet> UbTransportChannel::GenDataPacket(Ptr<UbWqeSegment> wqeSegment, uint32_t payload_size)
+Ptr<Packet> UbTransportChannel::GenDataPacket(Ptr<UbWqeSegment> wqeSegment,
+                                              uint32_t payloadSize,
+                                              uint32_t wireLengthBytes,
+                                              uint32_t progressBytes)
 {
-    uint32_t reqPayload = payload_size;
-    if (wqeSegment->GetType() == TaOpcode::TA_OPCODE_READ) {
-        reqPayload = 0;
-    }
-    Ptr<Packet> p = Create<Packet>(reqPayload);
+    Ptr<Packet> p = Create<Packet>(payloadSize);
     UbFlowTag flowTag(wqeSegment->GetTaskId(), wqeSegment->GetWqeSize());
     p->AddPacketTag(flowTag);
     // add UbMAExtTah
     UbMAExtTah MAExtTaHeader;
-    MAExtTaHeader.SetLength(payload_size);
+    MAExtTaHeader.SetLength(wireLengthBytes);
     p->AddHeader(MAExtTaHeader);
     // add TaHeader
     UbTransactionHeader TaHeader;
@@ -295,7 +327,7 @@ Ptr<Packet> UbTransportChannel::GenDataPacket(Ptr<UbWqeSegment> wqeSegment, uint
     p->AddHeader(TaHeader);
     // add TpHeader
     UbTransportHeader TpHeader;
-    if (wqeSegment->GetBytesLeft() == payload_size) {
+    if (wqeSegment->GetBytesLeft() == progressBytes) {
         TpHeader.SetLastPacket(true); // last packet
     } else {
         TpHeader.SetLastPacket(false); // not last packet

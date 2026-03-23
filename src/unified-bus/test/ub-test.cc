@@ -23,6 +23,7 @@
 #include "ns3/ub-port.h"
 #include "ns3/ub-routing-process.h"
 #include "ns3/ub-switch.h"
+#include "ns3/ub-tag.h"
 #include "ns3/ub-transaction.h"
 
 #include <chrono>
@@ -105,7 +106,7 @@ AddShortestRoute(Ptr<Node> node, uint32_t destNodeId, uint32_t destPortId, uint1
 }
 
 LocalTpTopology
-BuildLocalTpTopology()
+BuildLocalTpTopology(bool addReverseRoutes = true)
 {
     LocalTpTopology topo;
     topo.sender = CreateObject<Node>(0);
@@ -150,18 +151,21 @@ BuildLocalTpTopology()
                      topo.receiverPort->GetIfIndex(),
                      topo.switch1DevicePort->GetIfIndex());
 
-    AddShortestRoute(topo.receiver,
-                     topo.sender->GetId(),
-                     topo.senderPort->GetIfIndex(),
-                     topo.receiverPort->GetIfIndex());
-    AddShortestRoute(topo.switch1,
-                     topo.sender->GetId(),
-                     topo.senderPort->GetIfIndex(),
-                     topo.switch1CorePort->GetIfIndex());
-    AddShortestRoute(topo.switch0,
-                     topo.sender->GetId(),
-                     topo.senderPort->GetIfIndex(),
-                     topo.switch0DevicePort->GetIfIndex());
+    if (addReverseRoutes)
+    {
+        AddShortestRoute(topo.receiver,
+                         topo.sender->GetId(),
+                         topo.senderPort->GetIfIndex(),
+                         topo.receiverPort->GetIfIndex());
+        AddShortestRoute(topo.switch1,
+                         topo.sender->GetId(),
+                         topo.senderPort->GetIfIndex(),
+                         topo.switch1CorePort->GetIfIndex());
+        AddShortestRoute(topo.switch0,
+                         topo.sender->GetId(),
+                         topo.senderPort->GetIfIndex(),
+                         topo.switch0DevicePort->GetIfIndex());
+    }
 
     return topo;
 }
@@ -314,6 +318,15 @@ class UbUrmaReadWqeMetadataPropagationTest : public TestCase
         NS_TEST_ASSERT_MSG_EQ(wqe->GetResponseBytes(),
                               payloadBytes,
                               "CreateWqe should initialize read response bytes");
+        NS_TEST_ASSERT_MSG_EQ(wqe->GetLogicalBytes(),
+                              payloadBytes,
+                              "READ WQE logicalBytes should equal request bytes");
+        NS_TEST_ASSERT_MSG_EQ(wqe->GetPayloadBytes(),
+                              0u,
+                              "READ WQE payloadBytes should be zero");
+        NS_TEST_ASSERT_MSG_EQ(wqe->GetCarrierBytes(),
+                              1u,
+                              "READ WQE carrierBytes should force one request packet");
         NS_TEST_ASSERT_MSG_EQ(wqe->NeedsTransactionResponse(),
                               true,
                               "URMA read must require transaction response");
@@ -348,6 +361,15 @@ class UbUrmaReadWqeMetadataPropagationTest : public TestCase
         NS_TEST_ASSERT_MSG_EQ(segment->GetResponseBytes(),
                               payloadBytes,
                               "Segment should carry read response byte count");
+        NS_TEST_ASSERT_MSG_EQ(segment->GetLogicalBytes(),
+                              payloadBytes,
+                              "READ request slice logicalBytes should preserve request bytes");
+        NS_TEST_ASSERT_MSG_EQ(segment->GetPayloadBytes(),
+                              0u,
+                              "READ request slice payloadBytes should be zero");
+        NS_TEST_ASSERT_MSG_EQ(segment->GetCarrierBytes(),
+                              1u,
+                              "READ request slice carrierBytes should be one");
         NS_TEST_ASSERT_MSG_EQ(segment->NeedsTransactionResponse(),
                               true,
                               "Segment should preserve response-required flag");
@@ -730,6 +752,111 @@ class UbUrmaReadMultiPacketResponseCountTest : public TestCase
     uint32_t m_taskCompleteCount{0};
 };
 
+class UbUrmaReadMultiSliceRequestPacketSemanticsTest : public TestCase
+{
+  public:
+    UbUrmaReadMultiSliceRequestPacketSemanticsTest()
+        : TestCase("UnifiedBus - multi-slice URMA_READ request packets carry zero payload")
+    {
+    }
+
+    void DoRun() override
+    {
+        (void)UbFlowTag::GetTypeId();
+        (void)UbPacketTraceTag::GetTypeId();
+        (void)utils::UbUtils::Get();
+        GlobalValue::Bind("UB_RECORD_PKT_TRACE", BooleanValue(true));
+
+        LocalTpTopology topo = BuildLocalTpTopology(false);
+        InstallStaticTpPair(topo);
+        m_expectedSrc = topo.sender->GetId();
+        m_expectedDst = topo.receiver->GetId();
+
+        Ptr<UbController> senderCtrl = topo.sender->GetObject<UbController>();
+        Ptr<UbFunction> senderFunction = senderCtrl->GetUbFunction();
+        Ptr<UbTransaction> senderTransaction = senderCtrl->GetUbTransaction();
+        senderFunction->CreateJetty(topo.sender->GetId(),
+                                    topo.receiver->GetId(),
+                                    kUrmaReadRegressionJettyNum);
+        const std::vector<uint32_t> tpns = {kUrmaWriteRegressionSenderTpn};
+        const bool bindOk = senderTransaction->JettyBindTp(topo.sender->GetId(),
+                                                           topo.receiver->GetId(),
+                                                           kUrmaReadRegressionJettyNum,
+                                                           false,
+                                                           tpns);
+        NS_TEST_ASSERT_MSG_EQ(bindOk, true, "Sender Jetty should bind to static TP pair");
+
+        Ptr<UbController> receiverCtrl = topo.receiver->GetObject<UbController>();
+        Ptr<UbTransportChannel> receiverTp = receiverCtrl->GetTpByTpn(kUrmaWriteRegressionReceiverTpn);
+        NS_TEST_ASSERT_MSG_NE(receiverTp, nullptr, "Receiver TP should exist");
+        receiverTp->TraceConnectWithoutContext(
+            "TpRecvNotify",
+            MakeCallback(
+                &UbUrmaReadMultiSliceRequestPacketSemanticsTest::ObserveTargetPacketReceive,
+                this));
+
+        Ptr<UbWqe> wqe = senderFunction->CreateWqe(topo.sender->GetId(),
+                                                   topo.receiver->GetId(),
+                                                   128 * 1024,
+                                                   kUrmaReadMultiPacketTaskId,
+                                                   TaOpcode::TA_OPCODE_READ);
+        Simulator::ScheduleNow(&UbFunction::PushWqeToJetty,
+                               senderFunction,
+                               wqe,
+                               kUrmaReadRegressionJettyNum);
+
+        Simulator::Stop(MilliSeconds(1));
+        Simulator::Run();
+
+        NS_TEST_ASSERT_MSG_EQ(m_readRequestPacketCount,
+                              2u,
+                              "128KiB read should produce 2 read request packets");
+        NS_TEST_ASSERT_MSG_EQ(m_zeroPayloadReadRequestCount,
+                              2u,
+                              "Each read request packet should carry zero payload");
+
+        Simulator::Destroy();
+        GlobalValue::Bind("UB_RECORD_PKT_TRACE", BooleanValue(false));
+    }
+
+  private:
+    void ObserveTargetPacketReceive(uint32_t,
+                                    uint32_t,
+                                    uint32_t src,
+                                    uint32_t dst,
+                                    uint32_t srcTpn,
+                                    uint32_t dstTpn,
+                                    PacketType type,
+                                    uint32_t payloadBytes,
+                                    uint32_t taskId,
+                                    UbPacketTraceTag)
+    {
+        if (type != PacketType::PACKET || taskId != kUrmaReadMultiPacketTaskId)
+        {
+            return;
+        }
+        if (src != m_expectedSrc || dst != m_expectedDst)
+        {
+            return;
+        }
+        if (srcTpn != kUrmaWriteRegressionSenderTpn || dstTpn != kUrmaWriteRegressionReceiverTpn)
+        {
+            return;
+        }
+
+        ++m_readRequestPacketCount;
+        if (payloadBytes == 0)
+        {
+            ++m_zeroPayloadReadRequestCount;
+        }
+    }
+
+    uint32_t m_readRequestPacketCount{0};
+    uint32_t m_zeroPayloadReadRequestCount{0};
+    uint32_t m_expectedSrc{UINT32_MAX};
+    uint32_t m_expectedDst{UINT32_MAX};
+};
+
 class UbCreateNodeSystemIdTest : public TestCase
 {
   public:
@@ -1106,6 +1233,7 @@ UbTestSuite::UbTestSuite()
     AddTestCase(new UbUrmaWriteCompletionNeedsTransactionResponseTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbUrmaReadCompletionNeedsReadResponseTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbUrmaReadMultiPacketResponseCountTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbUrmaReadMultiSliceRequestPacketSemanticsTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbTraceDirSetupTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbMpiRankExtractionHelperTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbSameMpiRankHelperTest(), TestCase::Duration::QUICK);

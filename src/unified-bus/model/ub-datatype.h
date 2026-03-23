@@ -604,7 +604,7 @@ public:
      */
     void Reset()
     {
-        m_bytesLeft = m_size;
+        m_bytesLeft = m_carrierBytes == 0 ? m_size : m_carrierBytes;
     }
 
     /**
@@ -730,6 +730,36 @@ public:
     {
         return m_needsTransactionResponse;
     }
+
+    void SetLogicalBytes(uint32_t logicalBytes)
+    {
+        m_logicalBytes = logicalBytes;
+    }
+
+    uint32_t GetLogicalBytes() const
+    {
+        return m_logicalBytes;
+    }
+
+    void SetPayloadBytes(uint32_t payloadBytes)
+    {
+        m_payloadBytes = payloadBytes;
+    }
+
+    uint32_t GetPayloadBytes() const
+    {
+        return m_payloadBytes;
+    }
+
+    void SetCarrierBytes(uint32_t carrierBytes)
+    {
+        m_carrierBytes = carrierBytes;
+    }
+
+    uint32_t GetCarrierBytes() const
+    {
+        return m_carrierBytes;
+    }
 private:
     // ========== 全局信息 ==========
     uint32_t m_wqeId;   // WQE标识符（Node范围内唯一）。仅用于数据收集。
@@ -760,6 +790,9 @@ private:
     uint32_t m_responseBytes = 0;
     uint64_t m_remoteAddress = 0;
     bool m_needsTransactionResponse = true;
+    uint32_t m_logicalBytes = 0;
+    uint32_t m_payloadBytes = 0;
+    uint32_t m_carrierBytes = 0;
 
     // ========== TA层动态信息 (追踪WQE segment的完成) ==========
     uint32_t m_bytesLeft = 0; // 剩余的字节数
@@ -1013,7 +1046,7 @@ public:
      */
     void ResetSentBytes()
     {
-        m_bytesLeft = m_size;
+        m_bytesLeft = m_carrierBytes == 0 ? m_size : m_carrierBytes;
     }
 
     /**
@@ -1023,7 +1056,8 @@ public:
      */
     void ResetSentBytes(uint32_t sentBytes)
     {
-        m_bytesLeft = m_size - sentBytes;
+        const uint32_t progressBytes = m_carrierBytes == 0 ? m_size : m_carrierBytes;
+        m_bytesLeft = sentBytes >= progressBytes ? 0 : progressBytes - sentBytes;
     }
 
     /**
@@ -1140,6 +1174,38 @@ public:
     {
         return m_needsTransactionResponse;
     }
+
+    void SetLogicalBytes(uint32_t logicalBytes)
+    {
+        m_logicalBytes = logicalBytes;
+    }
+
+    uint32_t GetLogicalBytes() const
+    {
+        return m_logicalBytes;
+    }
+
+    void SetPayloadBytes(uint32_t payloadBytes)
+    {
+        m_payloadBytes = payloadBytes;
+    }
+
+    uint32_t GetPayloadBytes() const
+    {
+        return m_payloadBytes;
+    }
+
+    void SetCarrierBytes(uint32_t carrierBytes)
+    {
+        m_carrierBytes = carrierBytes;
+        m_bytesLeft = carrierBytes;
+        m_psnSize = (carrierBytes + UB_MTU_BYTE - 1) / UB_MTU_BYTE;
+    }
+
+    uint32_t GetCarrierBytes() const
+    {
+        return m_carrierBytes;
+    }
 private:
     // ========== 任务描述信息 ==========
     uint32_t m_src{0};                              // 源节点标识符
@@ -1169,6 +1235,9 @@ private:
     uint32_t m_responseBytes{0};
     uint64_t m_remoteAddress{0};
     bool m_needsTransactionResponse{true};
+    uint32_t m_logicalBytes{0};
+    uint32_t m_payloadBytes{0};
+    uint32_t m_carrierBytes{0};
 
     // ========== TP层静态信息 (调度时设置，之后不变) ==========
     uint32_t m_tpMsn{0};    // TP层消息序号
