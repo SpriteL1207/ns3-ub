@@ -62,8 +62,6 @@ private:
     TracedCallback<uint32_t, uint32_t> m_traceMemTaskCompletesNotify;
     TracedCallback<uint32_t, uint32_t, uint32_t> m_traceWqeTaskStartsNotify;
     TracedCallback<uint32_t, uint32_t, uint32_t> m_traceWqeTaskCompletesNotify;
-    TracedCallback<uint32_t, uint32_t, uint32_t> m_traceWriteNotifyTaskStarts;
-    TracedCallback<uint32_t, uint32_t, uint32_t> m_traceWriteNotifyTaskCompletes;
 
     void MemTaskStartsNotify(uint32_t nodeId, uint32_t taskId);
     void MemTaskCompletesNotify(uint32_t nodeId, uint32_t taskId);
@@ -89,20 +87,6 @@ private:
 
     uint32_t m_jettyNum = 0;       // 当前节点维护的jettynum,不会重复
 
-    static constexpr uint32_t WRITE_NOTIFY_BYTE_SIZE = 8;
-    static constexpr uint32_t NOTIFY_TASK_MASK = 0x80000000;
-    bool IsNotifyTaskId(uint32_t taskId) const
-    {
-        return (taskId & NOTIFY_TASK_MASK) != 0;
-    }
-    uint32_t GetBaseTaskId(uint32_t taskId) const
-    {
-        return taskId & ~NOTIFY_TASK_MASK;
-    }
-    uint32_t MakeNotifyTaskId(uint32_t baseTaskId) const
-    {
-        return baseTaskId | NOTIFY_TASK_MASK;
-    }
     Ptr<UniformRandomVariable> m_random;
 
 };

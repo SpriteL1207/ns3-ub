@@ -137,12 +137,6 @@ void UbApp::SendTraffic(TrafficRecord record)
 void UbApp::OnTaskCompleted(uint32_t taskId, uint32_t jettyNum)
 {
     NS_LOG_FUNCTION(this << taskId);
-    if (IsNotifyTaskId(taskId)) {
-        uint32_t baseTaskId = GetBaseTaskId(taskId);
-        NS_LOG_INFO("Write Notify Completes, jettyNum: " << jettyNum << " baseTaskId: " << baseTaskId);
-        WriteNotifyTaskCompletes(GetNode()->GetId(), jettyNum, baseTaskId);
-        return;
-    }
     NS_LOG_INFO("WQE Completes, jettyNum: " << jettyNum << " taskId: " << taskId);
     WqeTaskCompletesNotify(GetNode()->GetId(), jettyNum, taskId);
     NS_LOG_INFO("[APPLICATION INFO] taskId: " << taskId << ",finish time:" << Simulator::Now().GetNanoSeconds() << "ns");
@@ -190,16 +184,6 @@ void UbApp::WqeTaskStartsNotify(uint32_t nodeId, uint32_t jettyNum, uint32_t tas
 void UbApp::WqeTaskCompletesNotify(uint32_t nodeId, uint32_t jettyNum, uint32_t taskId)
 {
     m_traceWqeTaskCompletesNotify(nodeId, jettyNum, taskId);
-}
-
-void UbApp::WriteNotifyTaskStarts(uint32_t nodeId, uint32_t jettyNum, uint32_t baseTaskId)
-{
-    m_traceWriteNotifyTaskStarts(nodeId, jettyNum, baseTaskId);
-}
-
-void UbApp::WriteNotifyTaskCompletes(uint32_t nodeId, uint32_t jettyNum, uint32_t baseTaskId)
-{
-    m_traceWriteNotifyTaskCompletes(nodeId, jettyNum, baseTaskId);
 }
 
 } // namespace ns3

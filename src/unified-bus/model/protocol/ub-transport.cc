@@ -611,6 +611,7 @@ void UbTransportChannel::RecvDataPacket(Ptr<Packet> p)
     UdpHeader udpHeader;
     Ipv4Header ipv4Header;
     UbMAExtTah MAExtTaHeader;
+    Ptr<Packet> ackp = Create<Packet>(0);
     p->RemoveHeader(pktHeader);
     p->RemoveHeader(NetworkHeader);
     p->RemoveHeader(ipv4Header);
@@ -621,11 +622,6 @@ void UbTransportChannel::RecvDataPacket(Ptr<Packet> p)
     const uint32_t payloadBytes = p->GetSize();
     const uint32_t logicalBytes = MAExtTaHeader.GetLength();
     uint64_t psn = TpHeader.GetPsn();
-    uint32_t responsePayload = 0;
-    if (TaHeader.GetTaOpcode() == static_cast<uint8_t>(TaOpcode::TA_OPCODE_READ)) {
-        responsePayload = MAExtTaHeader.GetLength();
-    }
-    Ptr<Packet> ackp = Create<Packet>(responsePayload);
     NS_LOG_DEBUG("[Transport channel] Recv packet."
                   << " PacketUid: "  << p->GetUid()
                   << " Tpn: " << m_tpn
