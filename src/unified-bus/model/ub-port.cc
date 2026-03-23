@@ -5,6 +5,9 @@
 #include "ns3/ub-network-address.h"
 #include "ns3/ub-caqm.h"
 #include "ns3/ub-tag.h"
+#ifdef NS3_MPI
+#include "ns3/mpi-receiver.h"
+#endif
 using namespace utils;
 
 namespace ns3 {
@@ -156,12 +159,12 @@ TypeId UbPort::GetTypeId(void)
             .AddAttribute("CbfcInitCreditCell",
                           "According to the configuration of the receive buffer at the connected node port, "
                           "the unit is cell",
-                          UintegerValue(1024),
+                          IntegerValue(1024),
                           MakeIntegerAccessor(&UbPort::m_cbfcPortTxfree),
                           MakeIntegerChecker<int32_t>())
             .AddAttribute("CbfcSharedInitCreditCell",
                           "Cbfc shared credit mode",
-                          UintegerValue(8192),
+                          IntegerValue(8192),
                           MakeIntegerAccessor(&UbPort::m_cbfcSharedInitCells),
                           MakeIntegerChecker<int32_t>())
             .AddAttribute("PfcUpThld",
@@ -199,6 +202,7 @@ UbPort::UbPort()
     m_ubEQ = CreateObject<UbEgressQueue>();
     m_sendState = SendState::READY;
     m_txBytes = 0;
+    m_mpiReceiveEnabled = false;
     BooleanValue val;
     if (GlobalValue::GetValueByNameFailSafe("UB_RECORD_PKT_TRACE", val)) {
         GlobalValue::GetValueByName("UB_RECORD_PKT_TRACE", val);
@@ -211,6 +215,35 @@ UbPort::UbPort()
 UbPort::~UbPort()
 {
     NS_LOG_FUNCTION(this);
+}
+
+void
+UbPort::EnableMpiReceive()
+{
+#ifdef NS3_MPI
+    if (m_mpiReceiveEnabled)
+    {
+        return;
+    }
+
+    Ptr<MpiReceiver> mpiReceiver = GetObject<MpiReceiver>();
+    if (mpiReceiver == nullptr)
+    {
+        mpiReceiver = CreateObject<MpiReceiver>();
+        AggregateObject(mpiReceiver);
+    }
+
+    mpiReceiver->SetReceiveCallback(MakeCallback(&UbPort::Receive, this));
+    m_mpiReceiveEnabled = true;
+#else
+    NS_LOG_WARN("EnableMpiReceive called without MPI support");
+#endif
+}
+
+bool
+UbPort::HasMpiReceive() const
+{
+    return m_mpiReceiveEnabled;
 }
 
 void UbPort::SetIfIndex(const uint32_t portId)
@@ -317,8 +350,10 @@ void UbPort::DequeuePacket(void)
     m_currentPriority = priority;
     if (m_ubEQ->IsEmpty()) {
         // Switch allocation when port sendding packet.
-        auto allocator = GetNode()->GetObject<UbSwitch>()->GetAllocator();
-        Simulator::ScheduleNow(&UbSwitchAllocator::TriggerAllocator, allocator, this);
+        Ptr<UbSwitch> ubSwitch = GetNode()->GetObject<UbSwitch>();
+        if (ubSwitch != nullptr && ubSwitch->GetAllocator() != nullptr) {
+            Simulator::ScheduleNow(&UbSwitchAllocator::TriggerAllocator, ubSwitch->GetAllocator(), this);
+        }
     }
 
     if (!m_faultCallBack.IsNull()) {
@@ -386,6 +421,7 @@ void UbPort::Receive(Ptr<Packet> packet)
         packet->AddPacketTag(tag);
     }
     PortRxNotify(GetNode()->GetId(), m_portId, packet->GetSize());
+    PktRcvNotify(packet);
     GetNode()->GetObject<UbSwitch>()->SwitchHandlePacket(this, packet);
 
     return;
@@ -482,8 +518,10 @@ void UbPort::TriggerTransmit()
     }
     if (m_ubEQ->IsEmpty()) {
         NS_LOG_DEBUG("[UbPort TriggerTransmit] trigger Allocator");
-        auto allocator = GetNode()->GetObject<UbSwitch>()->GetAllocator();
-        Simulator::ScheduleNow(&UbSwitchAllocator::TriggerAllocator, allocator, this);
+        Ptr<UbSwitch> ubSwitch = GetNode()->GetObject<UbSwitch>();
+        if (ubSwitch != nullptr && ubSwitch->GetAllocator() != nullptr) {
+            Simulator::ScheduleNow(&UbSwitchAllocator::TriggerAllocator, ubSwitch->GetAllocator(), this);
+        }
         return;
     }
     DequeuePacket();
@@ -631,6 +669,7 @@ void UbPort::DoDispose()
     m_currentPkt = nullptr;
     m_datalink = nullptr;
     m_flowControl = nullptr;
+    m_mpiReceiveEnabled = false;
     m_revQueueSize.clear();
     NetDevice::DoDispose();
 }

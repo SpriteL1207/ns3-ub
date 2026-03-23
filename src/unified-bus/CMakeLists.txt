@@ -4,14 +4,14 @@ set(mpi_libraries)
 
 if(${ENABLE_MPI})
   set(mpi_sources
-      # model/point-to-point-remote-channel.cc
+      model/ub-remote-link.cc
   )
   set(mpi_headers
-      # model/point-to-point-remote-channel.h
+      model/ub-remote-link.h
   )
   set(mpi_libraries
-      # ${libmpi}
-      # ${MPI_CXX_LIBRARIES}
+      ${libmpi}
+      MPI::MPI_CXX
   )
 endif()
 
@@ -27,6 +27,7 @@ build_lib(
 	model/protocol/ub-header.cc
 	model/ub-link.cc
 	model/ub-port.cc
+	model/ub-tag.cc
 	model/ub-switch.cc
 	model/protocol/ub-transaction.cc
 	model/protocol/ub-function.cc
@@ -43,6 +44,7 @@ build_lib(
 	model/ub-queue-manager.cc
 	model/ub-fault.cc
 	model/ub-tp-connection-manager.cc
+	model/ub-tag.cc
   HEADER_FILES
     ${mpi_headers}
 	model/ub-traffic-gen.h

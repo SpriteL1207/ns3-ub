@@ -60,6 +60,8 @@ testpy-output/
 # Simulation outputs
 **/runlog/
 **/output/
+.openusim/
+scratch/openusim-generated/
 
 # Temporary and backup files
 *.tmp
@@ -74,3 +76,6 @@ Thumbs.db
 # IDE files
 .vscode/
 *.sublime-*
+
+# Project-local git worktrees
+.worktrees/

@@ -6,6 +6,8 @@
 
 **快速开始**: [QUICK_START.md](QUICK_START.md)
 
+**UB 配置驱动入口**: 参见 [docs/ub-quick-example.md](docs/ub-quick-example.md)
+
 > 本项目基于 ns-3.44 构建。详细的平台支持、安装步骤、系统要求及编译选项，请参阅 [ns-3.44 文档](https://www.nsnam.org/releases/ns-3-44/documentation/)、[安装指南](https://www.nsnam.org/docs/release/3.44/installation/singlehtml/) 及 [ns-3.44 源码](https://gitlab.com/nsnam/ns-3-dev/-/tree/ns-3.44?ref_type=tags)。
 >
 > 本项目已集成 Unison for ns-3 多线程并行仿真能力（[EuroSys '24 paper](https://dl.acm.org/doi/10.1145/3627703.3629574)），更多信息与使用方法参阅 [UNISON_README.md](UNISON_README.md) 和 [QUICK_START.md](QUICK_START.md)。
@@ -226,6 +228,19 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 - **格式化结果输出**：自动生成流完成时间、带宽等基础结果信息表格，可选生成报文粒度网内逐跳信息。
 
 
+
+### 4. Repo-local OpenUSim Skills
+
+本仓库随代码库一起维护一组 repo-local OpenUSim skills，目录位于 ` .codex/skills/ `。
+
+这些 skills 不是独立工具包，而是面向当前 `ns-3-ub` 工作树的 Agent 辅助入口，用来分阶段协助完成实验工作流：
+
+- `openusim-welcome`：依据 [README.md](README.md) 与 [QUICK_START.md](QUICK_START.md) 检查仓库启动状态，并帮助完成有界的 Quick Start 烟雾验证
+- `openusim-plan-experiment`：根据自然语言目标逐步收口实验目的、拓扑、流量和关键参数，并整理到 `experiment-spec.md`
+- `openusim-run-experiment`：复用仓库现有 `./ns3`、`scratch/ub-quick-example` 和 `scratch/ns-3-ub-tools/` 生成 case、补全 `network_attribute.txt`、执行仿真并监视显式错误
+- `openusim-analyze-results`：结合输出结果、用例输入和代码语义，分析结果是否符合实验目的并给出下一轮调整方向
+
+这意味着它们需要与主仓代码和 `ns-3-ub-tools` 子模块保持同版本协作，不建议拆成单独 submodule 维护。
 
 ## 许可证
 

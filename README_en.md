@@ -6,6 +6,8 @@
 
 **Quick Start**: [QUICK_START_en.md](QUICK_START_en.md)
 
+**UB Config-Driven Entry**: See [docs/ub-quick-example.md](docs/ub-quick-example.md)
+
 ## Project Overview
 
 `ns-3-UB` is an ns-3 simulation module built based on the [UnifiedBus (UB) Base Specification](https://www.unifiedbus.com/zh). It implements the protocol frameworks and stack including the function layer, transaction layer, transport layer, network layer, and data link layer defined in the UB Base Specification. This project aims to provide a simulation platform for protocol innovation, network architecture exploration, and research on network algorithms such as congestion control, flow control, load balancing, and routing algorithms.
@@ -218,6 +220,19 @@ Provides the complete network simulation workflow to support:
 - **Traffic Pattern Generation**: Supports All-Reduce, All-to-All, All-to-All-V, and other communication patterns; supports multiple collective communication algorithms like RHD, NHR, and OneShot
 - **Performance Analysis Tools**: Throughput calculation, latency analysis, CDF plotting
 - **Formatted Result Output**: Automatically generates basic result information tables for flow completion time, bandwidth, etc., with optional generation of packet-level, hop-by-hop information within the network
+
+### 4. Repo-local OpenUSim Skills
+
+This repository also maintains a repo-local set of OpenUSim skills under ` .codex/skills/ `.
+
+These skills are not a standalone toolkit. They are an agent-facing entrypoint for the current `ns-3-ub` working tree and split the experiment workflow into bounded stages:
+
+- `openusim-welcome`: checks startup facts from [README_en.md](README_en.md) and [QUICK_START_en.md](QUICK_START_en.md), then helps with a bounded Quick Start smoke run
+- `openusim-plan-experiment`: converges a natural-language goal into one stable `experiment-spec.md`
+- `openusim-run-experiment`: reuses `./ns3`, `scratch/ub-quick-example`, and `scratch/ns-3-ub-tools/` to generate a case, write `network_attribute.txt`, run the simulation, and surface explicit execution errors
+- `openusim-analyze-results`: interprets outputs against the original experiment goal and helps identify likely causes for the next iteration
+
+Because of that, they are maintained together with the main repo and the `ns-3-ub-tools` submodule instead of as a separate submodule.
 
 ## License
 

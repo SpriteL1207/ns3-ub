@@ -17,7 +17,14 @@ TypeId UbFlowControl::GetTypeId(void)
 
 TypeId UbCbfc::GetTypeId(void)
 {
-    static TypeId tid = TypeId("ns3::UbCbfc").SetParent<UbFlowControl>().AddConstructor<UbCbfc>();
+    static TypeId tid =
+        TypeId("ns3::UbCbfc")
+            .SetParent<UbFlowControl>()
+            .AddConstructor<UbCbfc>()
+            .AddTraceSource("ControlCreditRestoreNotify",
+                            "Observed restored control credits at the real flow-control receive path.",
+                            MakeTraceSourceAccessor(&UbCbfc::m_traceControlCreditRestoreNotify),
+                            "ns3::UbCbfc::ControlCreditRestoreNotify");
     return tid;
 }
 
@@ -100,6 +107,14 @@ void UbCbfc::HandleReceivedControlPacket(Ptr<Packet> p)
     CbfcRestoreCrd(p);
 }
 
+void
+UbCbfc::ControlCreditRestoreNotify(uint32_t nodeId,
+                                   uint32_t portId,
+                                   const std::vector<uint8_t>& credits)
+{
+    m_traceControlCreditRestoreNotify(nodeId, portId, credits);
+}
+
 void UbCbfc::HandleReceivedPacket(Ptr<Packet> p)
 {
     Ptr<Node> node = NodeList::GetNode(m_nodeId);
@@ -177,8 +192,11 @@ bool UbCbfc::CbfcRestoreCrd(Ptr<Packet> p)
     g_ub_vl_num.GetValue(val);
     int ubVlNum = val.Get();
 
+    std::vector<uint8_t> restoredCredits;
+    restoredCredits.reserve(ubVlNum);
     for (int index = 0; index < ubVlNum; index++) {
         NS_LOG_DEBUG("port m_credits[ " << (uint32_t)index << " ]: " << (uint32_t)port->m_credits[index]);
+        restoredCredits.push_back(port->m_credits[index]);
     }
 
     for (int index = 0; index < ubVlNum; index++) {
@@ -189,6 +207,11 @@ bool UbCbfc::CbfcRestoreCrd(Ptr<Packet> p)
             NS_LOG_DEBUG("left m_crdTxfree[ " << (uint32_t)index << " ]: " << m_crdTxfree[index]);
             ret = true;
         }
+    }
+
+    if (ret)
+    {
+        ControlCreditRestoreNotify(m_nodeId, m_portId, restoredCredits);
     }
 
     Simulator::ScheduleNow(&UbPort::TriggerTransmit, port);
@@ -391,8 +414,11 @@ bool UbCbfcSharedCredit::CbfcSharedRestoreCrd(Ptr<Packet> p)
     g_ub_vl_num.GetValue(val);
     int ubVlNum = val.Get();
 
+    std::vector<uint8_t> restoredCredits;
+    restoredCredits.reserve(ubVlNum);
     for (int index = 0; index < ubVlNum; index++) {
         NS_LOG_DEBUG("port m_credits[ " << (uint32_t)index << " ]: " << (uint32_t)port->m_credits[index]);
+        restoredCredits.push_back(port->m_credits[index]);
     }
 
     int32_t totalReturned = 0;
@@ -424,6 +450,11 @@ bool UbCbfcSharedCredit::CbfcSharedRestoreCrd(Ptr<Packet> p)
         }
         NS_LOG_DEBUG("left Share: " << m_shareCrd);
         ret = true;
+    }
+
+    if (ret)
+    {
+        ControlCreditRestoreNotify(m_nodeId, m_portId, restoredCredits);
     }
 
     Simulator::ScheduleNow(&UbPort::TriggerTransmit, port);

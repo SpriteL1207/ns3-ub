@@ -4,7 +4,7 @@
 
 This document describes:
 - The case directory layout and configuration file semantics (schema, constraints, and legal values).
-- How the example runner `scratch/ub-quick-example.cc` consumes these files to build an ns-3 simulation and schedule traffic.
+- How `./ns3 run 'scratch/ub-quick-example --case-path=...'` consumes these files to build an ns-3 simulation and schedule traffic.
 - In most cases you **do not** need to write these configuration files from scratch; you can use the Python tools in `scratch/ns-3-ub-tools/` to generate them (see https://gitcode.com/open-usim/ns-3-ub-tools). Of course, you can also author the TXT/CSV files manually following the schemas below.
 
 ---
@@ -21,17 +21,17 @@ Each case directory under `scratch/` usually contains:
 - `traffic.csv` — Application-level tasks (ops, size, priority, dependency, timing).
 - `fault.csv` — Optional, only if faults are enabled (see `UB_FAULT_ENABLE`).
 
-During a run, the example runner also emits:
+During a run, the entry program also emits:
 - `runlog/` — Packet and task traces.
 - `output/` (or `test/`) — Post-processed CSVs, e.g. `throughput.csv`, `task_statistics.csv`.
 
-The example runner (`scratch/ub-quick-example.cc`) builds a scenario by reading these files in the following order:
+The entry program (`scratch/ub-quick-example`, or `src/unified-bus/examples/ub-quick-example` when examples are enabled) builds a scenario by reading these files in the following order:
 1) `network_attribute.txt` → `UbUtils::SetComponentsAttribute`
 2) `node.csv` → `UbUtils::CreateNode`
 3) `topology.csv` → `UbUtils::CreateTopo`
 4) `routing_table.csv` → `UbUtils::AddRoutingTable`
 5) `transport_channel.csv` → `UbUtils::CreateTp`
-6) `traffic.csv` → `UbUtils::ReadTrafficCSV` → schedule tasks
+6) `traffic.csv` → `UbUtils::LoadTrafficConfig` → schedule tasks
 
 ---
 
@@ -355,7 +355,7 @@ traffic.csv
   0,0,1,4000000,URMA_WRITE,7,10ns,0,
 ```
 
-In `scratch/ub-quick-example.cc`, `UbUtils::ParseTrace()` runs after the simulator. If `UB_PARSE_TRACE_ENABLE` is `true` and `UB_PYTHON_SCRIPT_PATH` points to `parse_trace.py`, the script processes `runlog/` and writes analysis CSVs (e.g., `task_statistics.csv`, `throughput.csv`) under the same case directory.
+In `ub-quick-example`, `UbUtils::ParseTrace()` runs after the simulator. If `UB_PARSE_TRACE_ENABLE` is `true` and `UB_PYTHON_SCRIPT_PATH` points to `parse_trace.py`, the script processes `runlog/` and writes analysis CSVs (e.g., `task_statistics.csv`, `throughput.csv`) under the same case directory.
 
 ---
 
@@ -421,23 +421,26 @@ Examples:
 
 ```bash
 # List all registered TypeIds (you can pipe through grep Ub)
-./ns3 run scratch/ub-quick-example -- --PrintTypeIds
+./ns3 run 'scratch/ub-quick-example --PrintTypeIds'
 
 # Show attributes for a specific component
-./ns3 run scratch/ub-quick-example -- --PrintAttributes=ns3::UbPort
-./ns3 run scratch/ub-quick-example -- --PrintAttributes=ns3::UbLink
-./ns3 run scratch/ub-quick-example -- --PrintAttributes=ns3::UbTransportChannel
-./ns3 run scratch/ub-quick-example -- --PrintAttributes=ns3::UbSwitchAllocator
-./ns3 run scratch/ub-quick-example -- --PrintAttributes=ns3::UbApp
+./ns3 run 'scratch/ub-quick-example --PrintAttributes=ns3::UbPort'
+./ns3 run 'scratch/ub-quick-example --PrintAttributes=ns3::UbLink'
+./ns3 run 'scratch/ub-quick-example --PrintAttributes=ns3::UbTransportChannel'
+./ns3 run 'scratch/ub-quick-example --PrintAttributes=ns3::UbSwitchAllocator'
+./ns3 run 'scratch/ub-quick-example --PrintAttributes=ns3::UbApp'
 
 # Print global default paths (useful when writing network_attribute.txt)
-./ns3 run scratch/ub-quick-example -- --PrintGlobals
+./ns3 run 'scratch/ub-quick-example --PrintGlobals'
+
+# Print Unified Bus globals with type metadata
+./ns3 run 'scratch/ub-quick-example --case-path=scratch/2nodes_single-tp --PrintUbGlobals'
 
 # General help for supported flags
-./ns3 run scratch/ub-quick-example -- --PrintHelp
+./ns3 run 'scratch/ub-quick-example --PrintHelp'
 ```
 
-Note: You can run the same flags against any other scratch program name. This avoids relying on doxygen and guarantees you see exactly what your build exposes.
+Note: You can run the same inspection flags against other runnable ns-3 programs/examples. This avoids relying on doxygen and guarantees you see exactly what your build exposes.
 
 ---
 

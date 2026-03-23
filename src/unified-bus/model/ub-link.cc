@@ -103,6 +103,11 @@ Ptr<UbPort> UbLink::GetDestination(Ptr<UbPort> src) const
     return m_link[wire].m_dst;
 }
 
+bool UbLink::IsRemote(void) const
+{
+    return false;
+}
+
 bool UbLink::IsInitialized(void) const
 {
     NS_ASSERT(m_link[0].m_state != WireState::INITIALIZING);

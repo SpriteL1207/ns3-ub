@@ -1,23 +1,131 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "ub-utils.h"
+#include <algorithm>
 #include <filesystem>
+#include <iomanip>
+#include <iostream>
+#ifdef NS3_MPI
+#include "ub-remote-link.h"
+#include "ns3/mpi-interface.h"
+#endif
 
 using namespace std;
 using namespace ns3;
+
+namespace
+{
+
+std::string
+DisplayFilename(const std::string& filename)
+{
+    return std::filesystem::path(filename).filename().string();
+}
+
+bool
+IsNodeOwnedByCurrentRank(Ptr<Node> node)
+{
+#ifdef NS3_MPI
+    if (!MpiInterface::IsEnabled() || MpiInterface::GetSize() <= 1)
+    {
+        return true;
+    }
+    return utils::UbUtils::IsSystemOwnedByRank(node->GetSystemId(), MpiInterface::GetSystemId());
+#else
+    return true;
+#endif
+}
+
+void
+PreloadLocalTpIfOwned(Ptr<Node> node,
+                      uint32_t src,
+                      uint32_t dest,
+                      uint8_t sport,
+                      uint8_t dport,
+                      UbPriority priority,
+                      uint32_t srcTpn,
+                      uint32_t dstTpn)
+{
+    if (!IsNodeOwnedByCurrentRank(node))
+    {
+        return;
+    }
+
+    Ptr<UbController> ctrl = node->GetObject<UbController>();
+    NS_ASSERT_MSG(ctrl != nullptr, "Preloaded TP endpoint must have UbController");
+    if (ctrl->IsTPExists(srcTpn))
+    {
+        return;
+    }
+
+    auto congestionCtrl = UbCongestionControl::Create(UB_DEVICE);
+    ctrl->CreateTp(src, dest, sport, dport, priority, srcTpn, dstTpn, congestionCtrl);
+}
+
+Ptr<UbLink>
+CreateUbChannelBetween(Ptr<UbPort> p1, Ptr<UbPort> p2, const string& delay)
+{
+    Ptr<UbLink> channel;
+#ifdef NS3_MPI
+    if (!utils::UbUtils::IsSameMpiRank(p1->GetNode()->GetSystemId(),
+                                       p2->GetNode()->GetSystemId()))
+    {
+        channel = CreateObject<UbRemoteLink>();
+        p1->EnableMpiReceive();
+        p2->EnableMpiReceive();
+    }
+    else
+#endif
+    {
+        channel = CreateObject<UbLink>();
+    }
+
+    channel->SetAttribute("Delay", StringValue(delay));
+    p1->Attach(channel);
+    p2->Attach(channel);
+    return channel;
+}
+
+} // namespace
+
 namespace utils {
+
+uint32_t
+UbUtils::ExtractMpiRank(uint32_t systemId)
+{
+#ifdef NS3_MTP
+    return systemId & 0xFFFF;
+#else
+    return systemId;
+#endif
+}
+
+bool
+UbUtils::IsSameMpiRank(uint32_t lhsSystemId, uint32_t rhsSystemId)
+{
+    return ExtractMpiRank(lhsSystemId) == ExtractMpiRank(rhsSystemId);
+}
+
+bool
+UbUtils::IsSystemOwnedByRank(uint32_t systemId, uint32_t currentRank)
+{
+    return ExtractMpiRank(systemId) == currentRank;
+}
+
+bool
+UbUtils::IsFaultEnabled() const
+{
+    BooleanValue faultEnabled;
+    g_fault_enable.GetValue(faultEnabled);
+    return faultEnabled.Get();
+}
 
 void UbUtils::PrintTimestamp(const std::string &message)
 {
-    // 获取当前系统时间点
     auto now = std::chrono::system_clock::now();
-
-    // 转换为time_t类型以便格式化
     std::time_t nowTime = std::chrono::system_clock::to_time_t(now);
-
-    // 转换为本地时间结构
     std::tm localTime = *std::localtime(&nowTime);
 
-    NS_LOG_UNCOND("[" << std::put_time(&localTime, "%H:%M:%S") << "] " << message);
+    std::cout << "[" << std::put_time(&localTime, "%H:%M:%S") << "] " << message << std::endl;
 }
 
 void UbUtils::ParseTrace(bool isTest)
@@ -26,7 +134,7 @@ void UbUtils::ParseTrace(bool isTest)
     g_parse_enable.GetValue(val);
     bool ParseEnable = val.Get();
     if (ParseEnable) {
-        PrintTimestamp("Start Parse Trace File.");
+        PrintTimestamp("[trace] Parse runlog into output artifacts.");
 
         // 从GlobalValue获取路径
         StringValue scriptPathValue;
@@ -57,23 +165,44 @@ void UbUtils::Destroy()
     files.clear();
 }
 
-void UbUtils::CreateTraceDir()
+std::string UbUtils::PrepareTraceDir(const std::string &configPath)
 {
-    size_t last_slash_pos = g_config_path.find_last_of('/');
-    string dir_path;
-    if (last_slash_pos != std::string::npos)
-        dir_path = g_config_path.substr(0, last_slash_pos + 1);
-    else
-        NS_ASSERT_MSG(0, "Not find testcase dir");
-    trace_path = std::string(dir_path);
     namespace fs = std::filesystem;
-    fs::path runlog = fs::path(dir_path) / "runlog";
+
+    fs::path caseDir = fs::path(configPath).parent_path();
+    if (caseDir.empty()) {
+        caseDir = fs::current_path();
+    }
+
+    std::string dirPath = caseDir.string();
+    if (dirPath.empty()) {
+        NS_ASSERT_MSG(0, "Not find testcase dir");
+    }
+    if (dirPath.back() != fs::path::preferred_separator) {
+        dirPath.push_back(fs::path::preferred_separator);
+    }
+
+    fs::path runlog = caseDir / "runlog";
     std::error_code ec;
-    fs::remove_all(runlog, ec);
-    NS_ASSERT_MSG(!ec, "Failed to remove runlog dir: " << ec.message());
-    ec.clear();
+    if (fs::exists(runlog, ec)) {
+        NS_ASSERT_MSG(!ec, "Failed to query runlog dir: " << ec.message());
+        ec.clear();
+        fs::remove_all(runlog, ec);
+        NS_ASSERT_MSG(!ec, "Failed to remove runlog dir: " << ec.message());
+        ec.clear();
+    } else {
+        NS_ASSERT_MSG(!ec, "Failed to query runlog dir: " << ec.message());
+    }
+
     fs::create_directories(runlog, ec);
     NS_ASSERT_MSG(!ec, "Failed to recreate runlog dir: " << ec.message());
+    return dirPath;
+}
+
+void UbUtils::CreateTraceDir()
+{
+    trace_path = PrepareTraceDir(g_config_path);
+    PrintTimestamp("[setup] Prepare runlog directory: " + trace_path + "runlog");
 }
 
 inline void UbUtils::PrintTraceInfo(string fileName, string info)
@@ -396,6 +525,7 @@ inline void UbUtils::SwitchLastPacketTraversesNotify(uint32_t nodeId, UbTranspor
 // 读取拓扑文件
 void UbUtils::CreateTopo(const string &filename)
 {
+    PrintTimestamp("[setup] Load " + DisplayFilename(filename));
     ifstream file(filename);
     if (!file.is_open())
         NS_ASSERT_MSG(0, "Can not open File: " << filename);
@@ -435,10 +565,7 @@ void UbUtils::CreateTopo(const string &filename)
         Ptr<UbPort> p2 = DynamicCast<UbPort>(n2->GetDevice(port2));
         p1->SetDataRate(DataRate(bandwidth));
         p2->SetDataRate(DataRate(bandwidth));
-        Ptr<UbLink> channel = CreateObject<UbLink>();
-        channel->SetAttribute("Delay", StringValue(delay));
-        p1->Attach(channel);
-        p2->Attach(channel);
+        CreateUbChannelBetween(p1, p2, delay);
     }
 
     for (auto it = NodeList::Begin(); it != NodeList::End(); ++it) {
@@ -472,7 +599,8 @@ inline void UbUtils::ParseNodeRange(const string &rangeStr, NodeEle nodeEle)
 // 创建node
 void UbUtils::CreateNode(const string &filename)
 {
-    PrintTimestamp("Create node.");
+    PrintTimestamp("[setup] Load " + DisplayFilename(filename));
+    nodeEle_map.clear();
     ifstream file(filename);
     if (!file.is_open()) {
         NS_ASSERT_MSG(0, "Can not open File: " << filename);
@@ -490,17 +618,20 @@ void UbUtils::CreateNode(const string &filename)
         string nodeTypeStr;
         string portNumStr;
         string forwardDelay;
+        string systemIdStr;
         // 解析CSV行
         getline(ss, nodeIdStr, ',');
         getline(ss, nodeTypeStr, ',');
         getline(ss, portNumStr, ',');
-        getline(ss, forwardDelay);
+        getline(ss, forwardDelay, ',');
+        getline(ss, systemIdStr);
 
         NodeEle nodeEle = {};
         nodeEle.nodeIdStr = nodeIdStr;
         nodeEle.nodeTypeStr = nodeTypeStr;
         nodeEle.portNumStr = portNumStr;
         nodeEle.forwardDelay = forwardDelay;
+        nodeEle.systemIdStr = systemIdStr;
 
         // 解析节点ID（范围 or 单个节点）
         ParseNodeRange(nodeIdStr, nodeEle);
@@ -512,8 +643,10 @@ void UbUtils::CreateNode(const string &filename)
         string nodeTypeStr = it.second.nodeTypeStr;
         string portNumStr = it.second.portNumStr;
         string forwardDelay = it.second.forwardDelay;
+        string systemIdStr = it.second.systemIdStr;
         int portNum = stoi(portNumStr);
-        Ptr<Node> node = CreateObject<Node>();
+        uint32_t systemId = systemIdStr.empty() ? 0 : static_cast<uint32_t>(stoul(systemIdStr));
+        Ptr<Node> node = CreateObject<Node>(systemId);
         Ptr<UbSwitch> sw = CreateObject<UbSwitch>();
         node->AggregateObject(sw);
         Ptr<ns3::UbLdstInstance> ldst = CreateObject<UbLdstInstance>();
@@ -548,6 +681,7 @@ void UbUtils::CreateNode(const string &filename)
 // 读取路由
 void UbUtils::AddRoutingTable(const string &filename)
 {
+    PrintTimestamp("[setup] Load " + DisplayFilename(filename));
     // node_id,dest,outport,metric
     std::ifstream file(filename);
     if (!file.is_open()) {
@@ -670,10 +804,11 @@ void UbUtils::CreateTp(const string &filename)
     // key1:node1 key2:node2 value:Connection
     ifstream file(filename);
     if (!file.is_open()) { // 没有TP文件则使用实时创建TP模式
-        PrintTimestamp("File transport_channel.csv not found."
-                       " Unable to preload TP channels. TP channels will be created on demand.");
+        PrintTimestamp("[setup] Skip " + DisplayFilename(filename) +
+                       " (not found; TP channels will be created on demand).");
         return ;
     }
+    PrintTimestamp("[setup] Load " + DisplayFilename(filename));
     string line;
     // 跳过标题行
     getline(file, line);
@@ -685,10 +820,29 @@ void UbUtils::CreateTp(const string &filename)
         }
         Connection conn;
         ParseLine(line, conn);
-        auto sendCtrl = NodeList::GetNode(conn.node1)->GetObject<UbController>();
-        auto recvCtrl = NodeList::GetNode(conn.node2)->GetObject<UbController>();
+        Ptr<Node> sendNode = NodeList::GetNode(conn.node1);
+        Ptr<Node> recvNode = NodeList::GetNode(conn.node2);
+        auto sendCtrl = sendNode->GetObject<UbController>();
+        auto recvCtrl = recvNode->GetObject<UbController>();
         sendCtrl->GetTpConnManager()->AddUnilateralConnection(conn, conn.node1);
         recvCtrl->GetTpConnManager()->AddUnilateralConnection(conn, conn.node2);
+
+        PreloadLocalTpIfOwned(sendNode,
+                              conn.node1,
+                              conn.node2,
+                              conn.port1,
+                              conn.port2,
+                              conn.priority,
+                              conn.tpn1,
+                              conn.tpn2);
+        PreloadLocalTpIfOwned(recvNode,
+                              conn.node2,
+                              conn.node1,
+                              conn.port2,
+                              conn.port1,
+                              conn.priority,
+                              conn.tpn2,
+                              conn.tpn1);
     }
     file.close();
     return ;
@@ -734,9 +888,10 @@ void UbUtils::SetRecord(int fieldCount, string field, TrafficRecord &record)
     }
 }
 
-vector<TrafficRecord> UbUtils::ReadTrafficCSV(const string &filename)
+vector<TrafficRecord> UbUtils::LoadTrafficConfig(const string &filename)
 {
     vector<TrafficRecord> records;
+    PrintTimestamp("[traffic] Load " + DisplayFilename(filename));
     ifstream file(filename);
     if (!file.is_open()) {
         NS_ASSERT_MSG(0, "Can not open File: " << filename);
@@ -769,7 +924,7 @@ vector<TrafficRecord> UbUtils::ReadTrafficCSV(const string &filename)
 // 从TXT文件加载配置
 void UbUtils::SetComponentsAttribute(const string &filename)
 {
-    PrintTimestamp("Set component attributes");
+    PrintTimestamp("[setup] Load " + DisplayFilename(filename));
     g_config_path = std::string(filename);
     std::ifstream file(filename.c_str());
     if (!file.good()) {
@@ -930,11 +1085,58 @@ bool UbUtils::QueryAttributeInfo(int argc, char *argv[])
 {
     std::string className;
     std::string attrName;
+    std::string globalName;
+    bool printUbGlobals = false;
 
     CommandLine cmd;
     cmd.AddValue("ClassName", "Target class name", className);
     cmd.AddValue("AttributeName", "Target attribute name (optional)", attrName);
+    cmd.AddValue("GlobalName", "Target Unified Bus global value name (optional)", globalName);
+    cmd.AddValue("PrintUbGlobals", "Print Unified Bus global values with type metadata", printUbGlobals);
     cmd.Parse(argc, argv);
+
+    auto isUbGlobal = [](const std::string& name) {
+        return name.rfind("UB_", 0) == 0;
+    };
+    auto renderGlobalInfo = [](const GlobalValue& globalValue) {
+        StringValue value;
+        globalValue.GetValue(value);
+        NS_LOG_UNCOND("Global: " << globalValue.GetName() << "\n"
+                                 << "Description: " << globalValue.GetHelp() << "\n"
+                                 << "DataType: " << globalValue.GetChecker()->GetValueTypeName() << "\n"
+                                 << "Default: " << value.Get());
+    };
+
+    if (!globalName.empty()) {
+        for (auto gvit = GlobalValue::Begin(); gvit != GlobalValue::End(); ++gvit) {
+            if ((*gvit)->GetName() == globalName && isUbGlobal(globalName)) {
+                renderGlobalInfo(*(*gvit));
+                return true;
+            }
+        }
+        NS_LOG_UNCOND("Global not found!");
+        return true;
+    }
+
+    if (printUbGlobals) {
+        std::vector<GlobalValue*> ubGlobals;
+        for (auto gvit = GlobalValue::Begin(); gvit != GlobalValue::End(); ++gvit) {
+            if (isUbGlobal((*gvit)->GetName())) {
+                ubGlobals.push_back(*gvit);
+            }
+        }
+        std::sort(
+            ubGlobals.begin(),
+            ubGlobals.end(),
+            [](const GlobalValue* lhs, const GlobalValue* rhs) {
+                return lhs->GetName() < rhs->GetName();
+            }
+        );
+        for (const auto* globalValue : ubGlobals) {
+            renderGlobalInfo(*globalValue);
+        }
+        return true;
+    }
 
     if (className == "" || className.empty()) {
         return false;
