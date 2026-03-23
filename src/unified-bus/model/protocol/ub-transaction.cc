@@ -252,6 +252,7 @@ void UbTransaction::ScheduleWqeSegment(Ptr<UbTransportChannel> tp)
     if (tp->GetWqeSegmentVecSize() > 1) {
         NS_LOG_DEBUG("tp wqe segment vector size > 1");
         m_tpSchedulingStatus[tpn] = false;
+        return;
     }
     // m_tpRRIndex每次更新时都会进行取余操作，不会大于rrCount
     // 只有某个jetty完成后删除，导致rrCount变小时才会出现这种情况。此时重置轮询位置
