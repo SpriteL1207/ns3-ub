@@ -6,6 +6,7 @@ Use this reference when discussing `transport_channel.csv`, especially explicit 
 
 - `scratch/ns-3-ub-tools/net_sim_builder.py` writes `transport_channel.csv` when its normal generation flow is used.
 - The simulator can still run without a populated `transport_channel.csv`; `UbApp` can generate TP configurations on demand.
+- The user-facing default should be `on-demand`; only switch to explicit pre-instantiated transport channels when the user clearly asks to pin TP mappings ahead of time.
 - A light case-file gate should require `transport_channel.csv` only when the chosen execution path expects an explicit pre-instantiated transport-channel file.
 
 ## Non-Implications
@@ -18,6 +19,7 @@ Use this reference when discussing `transport_channel.csv`, especially explicit 
 
 - A pre-instantiated path means the case includes an explicit `transport_channel.csv`.
 - An on-demand path may omit `transport_channel.csv`, and that can still be valid.
+- The planning default is `on-demand`; do not make users fill in TP details unless they explicitly want to.
 - If we switch from pre-instantiated transport channels to on-demand TP generation, the case-file expectation for `transport_channel.csv` changes with it.
 
 ## Unsafe Wording

@@ -7,8 +7,8 @@ This directory contains repo-local Claude Code skills for the ns-3-ub project.
 | Skill | Purpose | Entry Point |
 |-------|---------|-------------|
 | `openusim-welcome` | Mandatory first gate for repo initialization and readiness check | Always invoke first |
-| `openusim-plan-experiment` | Experiment definition and clarification | After welcome |
-| `openusim-run-experiment` | Case generation, execution, and explicit run errors | After plan |
+| `openusim-plan-experiment` | Experiment definition, custom topology clarification, and routing-intent capture | After welcome |
+| `openusim-run-experiment` | Case generation, validation, execution, and explicit run errors | After plan |
 | `openusim-analyze-results` | Result interpretation and likely-cause analysis | After run |
 
 ## Usage Flow
@@ -31,7 +31,7 @@ Shared knowledge cards in `openusim-references/`:
 - `transport-channel-modes.md` - Transport channel semantics
 - `throughput-evidence.md` - Throughput and line-rate interpretation
 - `spec-to-toolchain.md` - Spec-to-toolchain mapping
-- `topology-options.md` - Supported topology families
+- `topology-options.md` - Supported topology families and bounded `custom-graph` flow
 - `workload-options.md` - Workload modes
 - `spec-rules.md` - Experiment spec format rules
 - `queue-backpressure-vs-topology.md` - Queue backpressure concepts

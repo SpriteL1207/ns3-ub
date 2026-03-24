@@ -24,6 +24,8 @@ class OpenUSimStageSkillDocsTest(unittest.TestCase):
         plan_text = self.read_text(".codex/skills/openusim-plan-experiment/SKILL.md")
         run_text = self.read_text(".codex/skills/openusim-run-experiment/SKILL.md")
         analyze_text = self.read_text(".codex/skills/openusim-analyze-results/SKILL.md")
+        topology_text = self.read_text(".codex/skills/openusim-references/topology-options.md")
+        spec_rules_text = self.read_text(".codex/skills/openusim-references/spec-rules.md")
 
         for text in (welcome_text, plan_text, run_text, analyze_text):
             self.assertIn("## Overview", text)
@@ -40,12 +42,22 @@ class OpenUSimStageSkillDocsTest(unittest.TestCase):
         self.assertIn("scratch/ns-3-ub-tools/traffic_maker/build_traffic.py", run_text)
         self.assertIn("Hand off to `openusim-analyze-results` when:", run_text)
         self.assertIn("Return to `openusim-plan-experiment` when:", run_text)
+        self.assertIn("routing_intent", plan_text)
+        self.assertIn("transport_channel_mode", plan_text)
+        self.assertIn("default `on-demand`", plan_text)
+        self.assertIn("custom-graph", plan_text)
+        self.assertIn("graph.output_dir", run_text)
+        self.assertIn("validate", run_text)
+        self.assertIn("transport_channel_mode", run_text)
         self.assertIn("../openusim-references/trace-observability.md", analyze_text)
         self.assertIn("../openusim-references/throughput-evidence.md", analyze_text)
         self.assertIn("../openusim-references/transport-channel-modes.md", analyze_text)
         self.assertIn("../openusim-references/queue-backpressure-vs-topology.md", analyze_text)
         self.assertIn("## Failure Interpretation Checklist", analyze_text)
         self.assertIn("Hand off to `openusim-plan-experiment` when:", analyze_text)
+        self.assertIn("### `custom-graph`", topology_text)
+        self.assertIn("## Routing Intent", spec_rules_text)
+        self.assertIn("## Transport Channel Mode", spec_rules_text)
 
     def test_welcome_skill_spells_out_startup_gate(self):
         welcome_text = self.read_text(".codex/skills/openusim-welcome/SKILL.md")
@@ -76,14 +88,19 @@ class OpenUSimStageSkillDocsTest(unittest.TestCase):
             "# Experiment Spec",
             "## Goal",
             "## Topology",
+            "## Topology Realization",
             "## Workload",
+            "## Routing Intent",
             "## Network Overrides",
+            "## Transport Channel Mode",
             "## Observability",
             "## Startup Readiness",
             "## Execution Record",
+            "## Validation Notes",
             "## Analysis Notes",
         ):
             self.assertIn(marker, spec_rules_text)
+        self.assertIn("default: `on-demand`", spec_rules_text)
 
     def test_repo_agents_route_by_stage_not_monolith(self):
         agents_text = self.read_text("AGENTS.md")
