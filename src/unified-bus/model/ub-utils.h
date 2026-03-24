@@ -91,7 +91,7 @@ private:
     inline static std::map<std::string, std::ofstream *> files;  // 存储文件名和对应的文件句柄
 
     ns3::GlobalValue g_fault_enable =
-    ns3::GlobalValue("UB_FAULT_ENABLE", "fault moudle enabled", ns3::BooleanValue(false), ns3::MakeBooleanChecker());
+    ns3::GlobalValue("UB_FAULT_ENABLE", "Enable the fault injection module.", ns3::BooleanValue(false), ns3::MakeBooleanChecker());
 
     // 读取Traffic配置文件
     enum class FIELDCOUNT : int {
@@ -133,7 +133,7 @@ private:
     // 设置Trace全局变量
     ns3::GlobalValue g_trace_enable = ns3::GlobalValue("UB_TRACE_ENABLE",
                                                        "Master switch for all traces",
-                                                       ns3::BooleanValue(false),
+                                                       ns3::BooleanValue(true),
                                                        ns3::MakeBooleanChecker());
 
     ns3::GlobalValue g_task_trace_enable = ns3::GlobalValue("UB_TASK_TRACE_ENABLE",
@@ -152,12 +152,12 @@ private:
                                                             ns3::MakeBooleanChecker());
 
     ns3::GlobalValue g_parse_enable = ns3::GlobalValue("UB_PARSE_TRACE_ENABLE",
-                                                       "enable parse trace",
-                                                       ns3::BooleanValue(false),
+                                                       "Run the Python trace-parsing script after simulation ends.",
+                                                       ns3::BooleanValue(true),
                                                        ns3::MakeBooleanChecker());
 
     ns3::GlobalValue g_record_pkt_trace_enable = ns3::GlobalValue("UB_RECORD_PKT_TRACE",
-                                                                  "enable record all packet trace",
+                                                                  "Record per-hop packet path traces (high overhead).",
                                                                   ns3::BooleanValue(false),
                                                                   ns3::MakeBooleanChecker());
 

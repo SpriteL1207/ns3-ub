@@ -24,13 +24,13 @@ TypeId UbApp::GetTypeId(void)
             .SetGroupName("UnifiedBus")
             .AddConstructor<UbApp>()
             .AddAttribute("EnableMultiPath",
-                          "Enable Multipath feature",
+                          "Enable multi-path transport: create TPs on multiple source ports toward the same destination.",
                           BooleanValue(false),
                           MakeBooleanAccessor(&UbApp::m_multiPathEnable),
                           MakeBooleanChecker())
             .AddAttribute("UseShortestPaths",
                           "If true, only create TPs on source ports that belong to shortest paths.",
-                          BooleanValue(false),
+                          BooleanValue(true),
                           MakeBooleanAccessor(&UbApp::m_useShortestPaths),
                           MakeBooleanChecker())
             .AddTraceSource("MemTaskStartsNotify",

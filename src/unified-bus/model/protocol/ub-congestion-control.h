@@ -11,16 +11,12 @@ namespace ns3 {
 
 class UbTransportChannel;
 
-// Currently only CAQM is implemented, other algorithms to be added
 enum CongestionCtrlAlgo {
     CAQM,
-    LDCP,
-    DCQCN
 };
 
 /**
- * @brief UB Congestion control parent class.
- * Only Caqm can be used now.
+ * @brief UB congestion control base class.
  */
 class UbCongestionControl : public Object {
 public:
@@ -30,7 +26,6 @@ public:
 
     CongestionCtrlAlgo GetCongestionAlgo() {return m_algoType;}
 
-    // 获取剩余窗口，CAQM LDCP需要
     virtual uint32_t GetRestCwnd() {return UB_MTU_BYTE;}
 
     // 发送端生成networkHeader包头

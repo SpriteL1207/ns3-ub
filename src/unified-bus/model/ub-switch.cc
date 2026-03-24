@@ -23,8 +23,9 @@ TypeId UbSwitch::GetTypeId (void)
         .SetGroupName("UnifiedBus")
         .AddConstructor<UbSwitch> ()
         .AddAttribute("FlowControl",
-                      "The flow control mechanism to use (NONE, CBFC, CBFC_SHARED, or PFC).",
-                      EnumValue(FcType::NONE),
+                      "Flow control mechanism (NONE, CBFC, CBFC_SHARED, or PFC). "
+                      "UB Spec mandates credit-based flow control; CBFC is the baseline.",
+                      EnumValue(FcType::CBFC),
                       MakeEnumAccessor<FcType>(&UbSwitch::m_flowControlType),
                       MakeEnumChecker(FcType::NONE, "NONE",
                                       FcType::CBFC, "CBFC",

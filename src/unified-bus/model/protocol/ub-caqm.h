@@ -55,7 +55,7 @@ public:
     // 初始化
     void TpInit(Ptr<UbTransportChannel> tp) override;
 
-    // 获取剩余窗口，CAQM LDCP需要
+    // 获取剩余窗口
     uint32_t GetRestCwnd() override;
 
     // 发送端生成拥塞控制算法需要的header

@@ -39,7 +39,7 @@ TypeId UbTransportChannel::GetTypeId(void)
                       MakeUintegerAccessor(&UbTransportChannel::m_maxRetransAttempts),
                       MakeUintegerChecker<uint16_t>())
         .AddAttribute("RetransExponentFactor",
-                      "Exponential factor of the number of retransmissions.",
+                      "Exponential backoff multiplier applied to RTO on each retransmission attempt.",
                       UintegerValue(1),
                       MakeUintegerAccessor(&UbTransportChannel::m_retransExponentFactor),
                       MakeUintegerChecker<uint16_t>())
@@ -49,7 +49,7 @@ TypeId UbTransportChannel::GetTypeId(void)
                       MakeUintegerAccessor(&UbTransportChannel::m_defaultMaxWqeSegNum),
                       MakeUintegerChecker<uint32_t>())
         .AddAttribute("DefaultMaxInflightPacketSize",
-                      "Default cap on in-flight packets per TP.",
+                      "Maximum number of in-flight packets allowed per transport channel.",
                       UintegerValue(1000),
                       MakeUintegerAccessor(&UbTransportChannel::m_defaultMaxInflightPacketSize),
                       MakeUintegerChecker<uint32_t>())

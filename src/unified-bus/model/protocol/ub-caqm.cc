@@ -37,42 +37,42 @@ TypeId UbCaqm::GetTypeId(void)
             .SetParent<ns3::UbCongestionControl>()
             .AddConstructor<UbCaqm>()
             .AddAttribute("UbCaqmAlpha",
-                          "α, caqm window increase coefficient",
+                          "CAQM alpha: additive window increase coefficient (cwnd += alpha/cwnd * MTU per ACK).",
                           DoubleValue(0.5),
                           MakeDoubleAccessor(&UbCaqm::m_alpha),
                           MakeDoubleChecker<double>(0.0, 1.0))
             .AddAttribute("UbCaqmBeta",
-                          "β, caqm window decrease coefficient",
+                          "CAQM beta: multiplicative window decrease factor (cwnd -= CE * beta * MTU).",
                           DoubleValue(0.5),
                           MakeDoubleAccessor(&UbCaqm::m_beta),
                           MakeDoubleChecker<double>(0.0, 1.0))
             .AddAttribute("UbCaqmGamma",
-                          "γ, window low limit coefficient",
+                          "CAQM gamma: minimum congestion window floor coefficient (cwnd >= gamma * MTU).",
                           DoubleValue(0.5),
                           MakeDoubleAccessor(&UbCaqm::m_gamma),
                           MakeDoubleChecker<double>(0.0, 1.0))
             .AddAttribute("UbCaqmLambda",
-                          "λ, switch cc calculate coefficient",
+                          "CAQM lambda: switch-side credit counter EWMA smoothing coefficient.",
                           DoubleValue(0.5),
                           MakeDoubleAccessor(&UbCaqm::m_lambda),
                           MakeDoubleChecker<double>(0.0, 1.0))
             .AddAttribute("UbCaqmTheta",
-                          "θ, state reset time coefficient",
+                          "CAQM theta: idle RTT multiplier before resetting to slow-start (reset after theta * RTT).",
                           UintegerValue(10),
                           MakeUintegerAccessor(&UbCaqm::m_theta),
                           MakeUintegerChecker<uint32_t>())
             .AddAttribute("UbCaqmQt",
-                          "Qt, ideal max queue size in switch",
+                          "CAQM Qt: target queue depth in bytes at which the switch begins marking packets.",
                           UintegerValue(10 * UB_MTU_BYTE),
                           MakeUintegerAccessor(&UbCaqm::m_idealQueueSize),
                           MakeUintegerChecker<uint32_t>())
             .AddAttribute("UbCaqmCcUint",
-                          "ccUnit, the number of bytes represented by one cc",
+                          "CAQM CC unit: number of bytes represented by one credit-counter unit.",
                           UintegerValue(32),
                           MakeUintegerAccessor(&UbCaqm::m_ccUnit),
                           MakeUintegerChecker<uint32_t>())
             .AddAttribute("UbMarkProbability",
-                          "p, a packet marked probability",
+                          "CAQM marking probability for setting the congestion bit when CC > 0 but insufficient.",
                           DoubleValue(0.1),
                           MakeDoubleAccessor(&UbCaqm::m_markProbability),
                           MakeDoubleChecker<double>(0.0, 1.0));
@@ -101,7 +101,7 @@ TypeId UbHostCaqm::GetTypeId(void)
             .SetParent<ns3::UbCaqm>()
             .AddConstructor<UbHostCaqm>()
             .AddAttribute("UbCaqmCwnd",
-                          "Initial congestion window",
+                          "Initial congestion window size in bytes for host-side CAQM.",
                           UintegerValue(10 * UB_MTU_BYTE),
                           MakeUintegerAccessor(&UbHostCaqm::m_cwnd),
                           MakeUintegerChecker<uint32_t>());
@@ -125,7 +125,7 @@ void UbHostCaqm::TpInit(Ptr<UbTransportChannel> tp)
     m_tpn = tp->GetTpn();
 }
 
-// 获取剩余窗口，CAQM LDCP需要
+// 获取剩余窗口
 uint32_t UbHostCaqm::GetRestCwnd()
 {
     if (m_congestionCtrlEnabled) {
@@ -417,7 +417,7 @@ TypeId UbSwitchCaqm::GetTypeId(void)
             .SetParent<ns3::UbCaqm>()
             .AddConstructor<UbSwitchCaqm>()
             .AddAttribute("UbCcUpdatePeriod",
-                          "Switch static cc update time",
+                          "Switch-side credit counter periodic update interval.",
                           TimeValue(NanoSeconds(500)),
                           MakeTimeAccessor(&UbSwitchCaqm::m_ccUpdatePeriod),
                           MakeTimeChecker());
