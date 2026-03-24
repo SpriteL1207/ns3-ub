@@ -8,7 +8,7 @@ description: Use when the experiment specification is approved and the user want
 ## Overview
 
 Use repo-native tools to turn a stable `experiment-spec.md` into a runnable case and a concrete run.
-Keep custom Python limited to `network_attribute.txt` writing and a light case-file gate.
+Keep generated Python bounded and explicit: topology scripts must materialize CSVs directly into `{case_dir}/`, parameter validation must happen before run, and transport-channel expectations must follow the chosen `transport_channel_mode` (default `on-demand` unless the user explicitly wants preconfigured TP mappings).
 
 ## When to Use
 
@@ -37,20 +37,22 @@ All generation and execution happen within `{case_dir}/`.
 3. **Generate topology script in `{case_dir}/`:**
    a. Read topology family and parameters from spec
    b. Select code template from `../openusim-references/topology-options.md` Generation Patterns
-   c. Generate `{case_dir}/generate_topology.py` by substituting parameters
+   c. Generate `{case_dir}/generate_topology.py` by substituting parameters and set `graph.output_dir = "{case_dir}/"`
    d. Run: `python3 {case_dir}/generate_topology.py`
-   e. Verify outputs: `{case_dir}/node.csv`, `{case_dir}/topology.csv`, `{case_dir}/routing_table.csv`, `{case_dir}/transport_channel.csv`
+   e. Verify outputs in `{case_dir}/`: `node.csv`, `topology.csv`, `routing_table.csv`, and `transport_channel.csv` only when `transport_channel_mode = precomputed`; otherwise keep the default `on-demand` path
 4. Generate `traffic.csv` through `scratch/ns-3-ub-tools/traffic_maker/build_traffic.py` when the workload is not a reference file.
-5. Write a full `network_attribute.txt` snapshot through the thin query-based writer.
-6. Run the light case-file gate before execution.
-7. Run `./ns3` with the chosen case and monitor explicit errors.
-8. Record only durable execution facts in `experiment-spec.md`.
+5. Validate explicit overrides against the runtime parameter catalog before writing `network_attribute.txt`; stop early on unsupported keys.
+6. Write a full `network_attribute.txt` snapshot through the thin query-based writer.
+7. Run the light case-file gate before execution, passing the planned `transport_channel_mode`.
+8. Run `./ns3` with the chosen case and monitor explicit errors.
+9. Record only durable execution facts in `experiment-spec.md`.
 
 ## Stop And Ask
 
 - **The experiment specification does not exist or is incomplete** — return to plan stage.
 - **Repo startup facts block execution** — return to welcome stage.
-- The topology family in the spec has no mapped code template in `../openusim-references/topology-options.md` — ask the user to provide a custom script or restate as a supported family.
+- The topology family in the spec has no mapped code template in `../openusim-references/topology-options.md`, and the bound facts are still insufficient for a bounded `custom-graph`.
+- The explicit parameter overrides fail runtime-catalog validation — return to plan stage with the unsupported keys.
 - Existing repo tools cannot express the requested case without a new bounded decision.
 
 ## Handover
@@ -114,6 +116,11 @@ Return to `openusim-plan-experiment` when:
 ## Common Mistakes
 
 - Copying or modifying `user_topo_*.py` scripts instead of generating new scripts from code templates.
+- Forgetting to set `graph.output_dir` to the case root, which leaves generated CSVs under a timestamped subdirectory instead of `{case_dir}/`.
+- Treating `custom-graph` as unsupported just because it is not a named topology family.
+- Writing unvalidated override keys into `network_attribute.txt` and discovering the mistake only at run time.
+- Asking the user to preconfigure `transport_channel.csv` even though the default path should remain `on-demand`.
+- Requiring `transport_channel.csv` even when the chosen `transport_channel_mode` is `on-demand`.
 - Treating `--mtp-threads` as part of experiment intent instead of runtime execution.
 - Turning the case checker into a heavy semantic validator.
 - Hiding explicit execution errors instead of surfacing them and using them to drive the next decision.

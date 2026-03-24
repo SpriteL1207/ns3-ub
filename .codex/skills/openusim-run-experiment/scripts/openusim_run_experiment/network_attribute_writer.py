@@ -81,6 +81,7 @@ def _runtime_attribute_entries() -> list[dict]:
                 {
                     "parameter_key": f"{type_id}::{match.group('name')}",
                     "kind": "AddAttribute",
+                    "description": _normalize_whitespace(match.group("description")),
                     "value_type": _normalize_whitespace(match.group("value_type")),
                     "default_value": _normalize_whitespace(match.group("default_value")),
                     "module": component_name,
@@ -96,7 +97,6 @@ def _runtime_global_entries() -> list[dict]:
     try:
         output = _run_query("--PrintUbGlobals")
     except RuntimeError:
-        # --PrintUbGlobals not supported in this build; globals will be applied via overrides
         return []
     entries = []
     for match in GLOBAL_ENTRY_PATTERN.finditer(output):
@@ -104,6 +104,7 @@ def _runtime_global_entries() -> list[dict]:
             {
                 "parameter_key": match.group("name"),
                 "kind": "GlobalValue",
+                "description": _normalize_whitespace(match.group("description")),
                 "value_type": _normalize_whitespace(match.group("value_type")),
                 "default_value": _normalize_whitespace(match.group("default_value")),
                 "module": "GlobalValue",
@@ -183,6 +184,21 @@ _OBSERVABILITY_PRESETS = {
     },
 }
 
+_FALLBACK_UB_GLOBAL_KEYS = {
+    "UB_FAULT_ENABLE",
+    "UB_PRIORITY_NUM",
+    "UB_VL_NUM",
+    "UB_CC_ALGO",
+    "UB_CC_ENABLED",
+    "UB_TRACE_ENABLE",
+    "UB_TASK_TRACE_ENABLE",
+    "UB_PACKET_TRACE_ENABLE",
+    "UB_PORT_TRACE_ENABLE",
+    "UB_PARSE_TRACE_ENABLE",
+    "UB_RECORD_PKT_TRACE",
+    "UB_PYTHON_SCRIPT_PATH",
+}
+
 
 def observability_preset(tier: str) -> dict:
     """Return observability_overrides dict for a named tier.
@@ -219,11 +235,76 @@ def _merge_overrides(*override_groups: dict | None) -> dict:
     return merged
 
 
+def validate_overrides_against_catalog(
+    catalog: dict,
+    explicit_overrides: dict | None = None,
+    observability_overrides: dict | None = None,
+) -> dict:
+    """Validate overrides against the current runtime-catalog surface.
+
+    The catalog is authoritative for runtime-enumerated `ns3::...` attributes.
+    For UB globals, prefer runtime enumeration when available; otherwise allow only
+    the documented minimal UB-global fallback set needed by repo tooling.
+    """
+    merged_overrides = _merge_overrides(observability_overrides, explicit_overrides)
+    catalog_entry_by_key = {entry["parameter_key"]: entry for entry in catalog.get("entries", [])}
+    runtime_global_keys = {
+        entry["parameter_key"]
+        for entry in catalog.get("entries", [])
+        if entry.get("kind") == "GlobalValue"
+    }
+    has_runtime_global_catalog = bool(runtime_global_keys)
+
+    accepted_keys = []
+    unknown_keys = []
+    for key in sorted(merged_overrides):
+        if key in catalog_entry_by_key:
+            accepted_keys.append(key)
+            continue
+
+        if _infer_kind(key) == "default":
+            unknown_keys.append(key)
+            continue
+
+        if has_runtime_global_catalog:
+            if key in runtime_global_keys:
+                accepted_keys.append(key)
+            else:
+                unknown_keys.append(key)
+            continue
+
+        if key in _FALLBACK_UB_GLOBAL_KEYS:
+            accepted_keys.append(key)
+        else:
+            unknown_keys.append(key)
+
+    if unknown_keys:
+        raise ValueError(
+            "Unsupported network override keys for the current project surface: "
+            + ", ".join(sorted(unknown_keys))
+        )
+
+    return {
+        "accepted_keys": accepted_keys,
+        "unknown_keys": unknown_keys,
+        "validation_mode": (
+            "runtime-addattribute-and-global-catalog"
+            if has_runtime_global_catalog
+            else "runtime-addattribute-catalog-with-documented-ub-global-fallback"
+        ),
+    }
+
+
 def write_network_attributes(case_dir: Path, explicit_overrides=None, observability_overrides=None) -> dict:
     case_dir = Path(case_dir)
     case_dir.mkdir(parents=True, exist_ok=True)
 
     catalog, catalog_path = load_or_build_parameter_catalog()
+    validation_result = validate_overrides_against_catalog(
+        catalog,
+        explicit_overrides=explicit_overrides,
+        observability_overrides=observability_overrides,
+    )
     # Later groups override earlier ones: explicit user overrides take precedence
     merged_overrides = _merge_overrides(observability_overrides, explicit_overrides)
     resolved_values = {entry["parameter_key"]: entry["default_value"] for entry in catalog["entries"]}
@@ -258,4 +339,5 @@ def write_network_attributes(case_dir: Path, explicit_overrides=None, observabil
         "required_project_pins": {"UB_PYTHON_SCRIPT_PATH": PROJECT_TRACE_PARSER_PATH},
         "resolved_entry_count": len([line for line in lines if line.strip()]),
         "applied_overrides": merged_overrides,
+        "validation_mode": validation_result["validation_mode"],
     }

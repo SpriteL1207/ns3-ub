@@ -194,7 +194,7 @@ Each use case directory typically contains the following files (format can refer
 - `transport_channel.csv` - Transport channels
 - `traffic.csv` - Traffic definitions
 
-For the current `ub-quick-example` entry, supported modes, and commands, see: [docs/ub-quick-example.md](docs/ub-quick-example.md).
+For the current `ub-quick-example` entry, configuration semantics, and commands, see: [scratch/README.md](scratch/README.md).
 For detailed scenario configuration and file formats, see: [scratch/README.md](scratch/README.md).
 ---
 
@@ -203,6 +203,6 @@ For detailed scenario configuration and file formats, see: [scratch/README.md](s
 | Document | Description |
 |----------|-------------|
 | [README_en.md](README_en.md) | Project overview: UB components, repo layout, and key concepts |
-| [docs/ub-quick-example.md](docs/ub-quick-example.md) | Unified-bus config-driven user entry: supported modes, commands, and runtime boundary |
+| [scratch/README.md](scratch/README.md) | Unified-bus config-driven user entry: configuration semantics, commands, and runtime boundary |
 | [scratch/README.md](scratch/README.md) | Case execution and configuration: run `scratch/<case>` scenarios; define and validate case configs |
 | [open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools) | Toolchain (submodule): case generation and trace post-processing/analysis |

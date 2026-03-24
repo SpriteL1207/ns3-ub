@@ -12,7 +12,7 @@ BASE_REQUIRED_FILES = (
 )
 
 
-def check_case_files(case_dir: Path, transport_channel_mode: str = "precomputed") -> dict:
+def check_case_files(case_dir: Path, transport_channel_mode: str = "on_demand") -> dict:
     case_dir = Path(case_dir)
     required_files = list(BASE_REQUIRED_FILES)
     if transport_channel_mode != "on_demand":

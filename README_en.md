@@ -6,7 +6,7 @@
 
 **Quick Start**: [QUICK_START_en.md](QUICK_START_en.md)
 
-**UB Config-Driven Entry**: See [docs/ub-quick-example.md](docs/ub-quick-example.md)
+**UB Config-Driven Entry**: See [scratch/README.md](scratch/README.md)
 
 ## Project Overview
 

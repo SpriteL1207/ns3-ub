@@ -178,6 +178,10 @@ Affected mappings:
 - `build_traffic.py` CLI → `workload-options.md`, `spec-to-toolchain.md`
 - `trace_analysis/*.py` → `throughput-evidence.md`, `spec-to-toolchain.md`
 - `src/unified-bus/model/ub-utils.h` trace GlobalValue definition → `network_attribute_writer.py` `_OBSERVABILITY_PRESETS`, `trace-observability.md`
+- `src/unified-bus/model/ub-utils.h` + `src/unified-bus/model/ub-datatype.cc` + `src/unified-bus/model/protocol/ub-congestion-control.cc` UB GlobalValue definitions → `network_attribute_writer.py` `_FALLBACK_UB_GLOBAL_KEYS`
+- `src/unified-bus/model/ub-app.h` + `src/unified-bus/model/ub-traffic-gen.h` `TaOpcodeMap` → `workload-options.md` valid opType table
+- `src/unified-bus/model/ub-switch.cc` `MakeEnumChecker` (FlowControl, VlScheduler) → `spec-to-toolchain.md` parameter value source-of-truth table
+- `src/unified-bus/model/protocol/ub-routing-process.cc` `MakeEnumChecker` (RoutingAlgorithm) → `spec-to-toolchain.md` parameter value source-of-truth table
 - `SKILL.md` Required references changes → `test_skill_docs.py` assertions
 
 ---
