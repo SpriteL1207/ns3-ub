@@ -12,15 +12,13 @@ NS_OBJECT_ENSURE_REGISTERED(UbCongestionControl);
 
 GlobalValue g_congestionCtrlAlgo =
     GlobalValue("UB_CC_ALGO",
-                "Congestion control algorithm",
+                "Host/switch congestion control algorithm (currently only CAQM is available).",
                 EnumValue(CongestionCtrlAlgo::CAQM),
-                MakeEnumChecker (CongestionCtrlAlgo::CAQM, "CAQM",
-                                 CongestionCtrlAlgo::LDCP, "LDCP",
-                                 CongestionCtrlAlgo::DCQCN, "DCQCN"));
+                MakeEnumChecker(CongestionCtrlAlgo::CAQM, "CAQM"));
 
 GlobalValue g_congestionCtrlEnabled =
     GlobalValue("UB_CC_ENABLED",
-                "Congestion control enabled",
+                "Enable end-to-end congestion control on all transport channels.",
                 BooleanValue(false),
                 MakeBooleanChecker());
 

@@ -18,7 +18,7 @@ TypeId UbSwitchAllocator::GetTypeId(void)
         .SetParent<Object>()
         .AddConstructor<UbSwitchAllocator>()
         .AddAttribute("AllocationTime",
-                      "Time of Allocation Used.",
+                      "Latency of the switch allocation pipeline per scheduling round.",
                       TimeValue(NanoSeconds(10)),
                       MakeTimeAccessor(&UbSwitchAllocator::m_allocationTime),
                       MakeTimeChecker());

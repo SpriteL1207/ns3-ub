@@ -28,8 +28,12 @@ TypeId UbFault::GetTypeId(void)
     static TypeId tid = TypeId("ns3::UbFault")
                             .SetParent<Object>()
                             .AddConstructor<UbFault>()
-                            .AddAttribute("UbFaultUsePacketSpray", "is Packet Follow or not.", BooleanValue(false),
-                                          MakeBooleanAccessor(&UbFault::isPacketFlow), MakeBooleanChecker());
+                            .AddAttribute("UbFaultUsePacketSpray",
+                                          "When true, use per-packet spray for fault-injected flows; "
+                                          "when false, use per-flow forwarding.",
+                                          BooleanValue(false),
+                                          MakeBooleanAccessor(&UbFault::isPacketFlow),
+                                          MakeBooleanChecker());
     return tid;
 }
 vector<string> UbFault::Split(const string &s, char delim)

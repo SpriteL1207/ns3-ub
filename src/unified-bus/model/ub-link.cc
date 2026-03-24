@@ -15,7 +15,7 @@ TypeId UbLink::GetTypeId(void)
             .SetGroupName("UnifiedBus")
             .AddConstructor<UbLink>()
             .AddAttribute("Delay",
-                          "Transmission delay through the channel",
+                          "Propagation delay of the point-to-point link.",
                           TimeValue(Seconds(0)),
                           MakeTimeAccessor(&UbLink::m_delay),
                           MakeTimeChecker());

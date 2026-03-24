@@ -14,8 +14,8 @@ namespace ns3 {
 NS_OBJECT_ENSURE_REGISTERED(UbPort);
 NS_LOG_COMPONENT_DEFINE("UbPort");
 
-constexpr long DEFAULT_PFC_UP_THLD = 1677721;
-constexpr long DEFAULT_PFC_LOW_THLD = 1342176;
+constexpr long DEFAULT_PFC_UP_THLD = 819200;   // 800KB ≈ 78% of 1MB per-VL buffer
+constexpr long DEFAULT_PFC_LOW_THLD = 655360;  // 640KB ≈ 80% of XOFF threshold
 
 /*********************
  * UbEgressQueue
@@ -127,53 +127,58 @@ TypeId UbPort::GetTypeId(void)
             .SetParent<PointToPointNetDevice>()
             .AddConstructor<UbPort>()
             .AddAttribute("UbDataRate",
-                          "The default data rate for ub link",
+                          "Port data rate for Unified Bus link transmission.",
                           DataRateValue(DataRate ("400Gbps")),
                           MakeDataRateAccessor(&UbPort::m_bps),
                           MakeDataRateChecker())
             .AddAttribute("UbInterframeGap",
-                          "The time to wait between packet transmissions",
+                          "Minimum idle time inserted between consecutive packet transmissions.",
                           TimeValue(Seconds (0.0)),
                           MakeTimeAccessor(&UbPort::m_tInterframeGap),
                           MakeTimeChecker())
             .AddAttribute("CbfcFlitLenByte",
-                          "Cbfc flit len in Byte",
+                          "Flit size in bytes; the fixed-size data link layer transfer unit (Spec §1.6: 20 bytes).",
                           UintegerValue(20),
                           MakeUintegerAccessor(&UbPort::m_cbfcFlitLen),
                           MakeUintegerChecker<uint8_t>())
             .AddAttribute("CbfcFlitsPerCell",
-                          "Cbfc flits per cell",
-                          UintegerValue(4),
+                          "Number of flits per credit cell (Spec FLOW_CTRL_SIZE). "
+                          "Valid: {1,2,4,8,16,32,64,128}; spec default 8 = 160 bytes/cell.",
+                          UintegerValue(8),
                           MakeUintegerAccessor(&UbPort::m_cbfcFlitsPerCell),
                           MakeUintegerChecker<uint8_t>())
             .AddAttribute("CbfcRetCellGrainDataPacket",
-                          "Cbfc return cell grain data packet",
-                          UintegerValue(2),
+                          "Credit return granularity in DLLDP for data packets (Spec DATA_CREDIT_GRAIN_SIZE). "
+                          "Valid: {1,2,4,8,16,32,64,128} cells; spec default 4.",
+                          UintegerValue(4),
                           MakeUintegerAccessor(&UbPort::m_cbfcRetCellGrainDataPacket),
                           MakeUintegerChecker<uint8_t>())
             .AddAttribute("CbfcRetCellGrainControlPacket",
-                          "Cbfc return cell grain control packet",
-                          UintegerValue(2),
+                          "Credit return granularity in Crd_Ack Block for control packets "
+                          "(Spec CTRL_CREDIT_GRAIN_SIZE). Valid: {1,2,4,8,16,32,64,128} cells; spec default 1.",
+                          UintegerValue(1),
                           MakeUintegerAccessor(&UbPort::m_cbfcRetCellGrainControlPacket),
                           MakeUintegerChecker<uint8_t>())
             .AddAttribute("CbfcInitCreditCell",
-                          "According to the configuration of the receive buffer at the connected node port, "
-                          "the unit is cell",
-                          IntegerValue(1024),
+                          "Initial CBFC transmit credit in cells. In exclusive mode this equals "
+                          "floor(receive_buffer / cell_size); spec example: 1MB / 160B = 6553. "
+                          "In shared mode this is the per-VL reserved minimum and should be reduced.",
+                          IntegerValue(6553),
                           MakeIntegerAccessor(&UbPort::m_cbfcPortTxfree),
                           MakeIntegerChecker<int32_t>())
             .AddAttribute("CbfcSharedInitCreditCell",
-                          "Cbfc shared credit mode",
-                          IntegerValue(8192),
+                          "Shared credit pool size in cells for CBFC shared-credit mode. "
+                          "reserved + shared must not exceed per-VL buffer capacity in cells.",
+                          IntegerValue(4096),
                           MakeIntegerAccessor(&UbPort::m_cbfcSharedInitCells),
                           MakeIntegerChecker<int32_t>())
             .AddAttribute("PfcUpThld",
-                          "Pfc up thld",
+                          "PFC XOFF threshold in bytes; a PAUSE frame is sent when the receive queue exceeds this level.",
                           IntegerValue(DEFAULT_PFC_UP_THLD),
                           MakeIntegerAccessor(&UbPort::m_pfcUpThld),
                           MakeIntegerChecker<int32_t>())
             .AddAttribute("PfcLowThld",
-                          "Pfc low thld",
+                          "PFC XON threshold in bytes; the PAUSE is released when the receive queue drains below this level.",
                           IntegerValue(DEFAULT_PFC_LOW_THLD),
                           MakeIntegerAccessor(&UbPort::m_pfcLowThld),
                           MakeIntegerChecker<int32_t>())

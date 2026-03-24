@@ -148,12 +148,12 @@ TypeId UbJetty::GetTypeId(void)
                         .SetParent<Object>()
                         .SetGroupName("UnifiedBus")
                         .AddAttribute("JettyOooAckThreshold",
-                                      "Jetty Out-of-Order Ack Threshold",
+                                      "Maximum out-of-order ACK window tracked per Jetty (TASSN bitmap size).",
                                       UintegerValue(2048),
                                       MakeUintegerAccessor(&UbJetty::m_oooAckThreshold),
                                       MakeUintegerChecker<uint32_t>())
                         .AddAttribute("UbInflightMax",
-                                      "jetty inflight max",
+                                      "Maximum number of in-flight WQE segments per Jetty before back-pressure.",
                                       UintegerValue(10000),
                                       MakeUintegerAccessor(&UbJetty::m_inflightMax),
                                       MakeUintegerChecker<uint32_t>());

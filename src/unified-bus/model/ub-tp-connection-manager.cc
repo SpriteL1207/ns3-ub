@@ -42,7 +42,7 @@ TypeId TpConnectionManager::GetTypeId()
         .SetParent<Object>()
         .SetGroupName("UnifiedBus")
         .AddAttribute("RemoveUselessTp",
-                      "remove useless tp instance",
+                      "Automatically destroy idle transport channels that have completed all WQE segments.",
                       BooleanValue(false),
                       MakeBooleanAccessor(&TpConnectionManager::m_removeUselessTp),
                       MakeBooleanChecker());

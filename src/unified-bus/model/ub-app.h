@@ -80,10 +80,10 @@ private:
     };
 
     // 控制器
-    bool m_multiPathEnable;
+    bool m_multiPathEnable = false;
 
-    GetTpnRuleT m_getTpnRule = GetTpnRuleT::BY_PEERNODE_PRIORITY; // 获取Tpn的方式
-    bool m_useShortestPaths = true; // 是否根据跳数寻找最短路径
+    GetTpnRuleT m_getTpnRule = GetTpnRuleT::BY_PEERNODE_PRIORITY;
+    bool m_useShortestPaths = true;
 
     Ptr<Node> m_node;              // 当前节点
 
