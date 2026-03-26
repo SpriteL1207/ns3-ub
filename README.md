@@ -16,7 +16,7 @@
 
 `ns-3-UB` 是基于[灵衢基础规范](https://www.unifiedbus.com/zh)构建的 ns-3 仿真模块，实现了灵衢基础规范中功能层、事务层、传输层、网络层和数据链路层的协议框架与配套算法。本项目旨在为协议创新、网络架构探索以及拥塞控制、流量控制、负载均衡、路由算法等网络算法研究提供仿真平台。
 
-> 虽尽力贴近灵衢基础规范，但两者间仍存在差异。请以灵衢基础规范为权威指南。
+> 本项目力求与灵衢基础规范保持一致，但仿真实现与规范之间仍可能存在差异。请以灵衢基础规范为权威参考。
 
 `ns-3-UB` 可用于研究基于 UB 协议的：
 - 面向流量模式亲和、低成本、高可靠的创新拓扑架构。
@@ -25,7 +25,7 @@
 - 面向超节点网络的新内存语义传输控制技术。
 - 创新的自适应路由、负载均衡、拥塞控制和 QoS 优化算法。
 
-> 本项目针对规范未指明的策略/算法（如交换机建模方式、路由选择、拥塞标记、缓冲与仲裁策略等）提供可插拔的“参考实现”。这些实现不属于灵衢基础规范的一部分，仅作示例/基线，可替换或关闭。
+> 本项目针对规范未指明的策略与算法（如交换机建模方式、路由选择、拥塞标记、缓冲与仲裁策略等）提供可插拔的“参考实现”。这些实现不属于灵衢基础规范的一部分，仅作为示例与基线方案，用户可按需替换或禁用。
 >
 > 本项目不包含的功能包括但不限于：硬件内部细节建模、物理层、性能参数、控制面行为（如初始化行为、异常事件处理等）、内存管理、安全策略等。
 
@@ -186,12 +186,12 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 - **流量注入组件** (`ub-traffic-gen.*`) - 读取用户流量配置，为仿真节点按串并行关系注入流量
 - **TP Connection Manager** (`ub-tp-connection-manager.h`) - TP Channel 管理器，方便用户查找各节点 TP Channel 信息
 - **Switch Allocator** (`ub-allocator.*`) - 建模了交换机为数据包分配出端口的过程
-- **Queue Manager** (`ub-buffer-manager.*`) - 缓冲区管理模块，影响负载均衡、流量控制、排队、丢包等行为
+- **Queue Manager** (`ub-queue-manager.*`) - 缓冲区管理模块，影响负载均衡、流量控制、排队、丢包等行为
 - **Routing Process** (`ub-routing-process.*`) - 路由表模块，实现了路由表的管理与查询功能
 - **Congestion Control** (`ub-congestion-control.*`) - 拥塞控制算法框架模块
 - **C-AQM 算法** (`ub-caqm.*`) - C-AQM 拥塞控制算法实现
 - **Flow Control** (`ub-flow-control.*`) - 流量控制框架模块
-- **故障注入模块** (`ub-fault.*`) - 用于在特定流量过程中注入丢包率、高时延、拥塞程度、错包、闪断、降 lane 等故障参数。
+- **故障注入模块** (`ub-fault.*`) - 用于在特定流量过程中注入丢包率、高时延、拥塞程度、错包、闪断、降 lane 等故障参数
 
 #### 数据类型和工具
 - **Datatype** (`ub-datatype.*`) - UB 数据类型定义
@@ -229,18 +229,16 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 
 
 
-### 4. Repo-local OpenUSim Skills
+### 4. OpenUSim Skills（仓库内置）
 
-本仓库随代码库一起维护一组 repo-local OpenUSim skills，目录位于 ` .codex/skills/ `。
+本仓库在 `.codex/skills/` 目录下维护一组 OpenUSim Skills，为基于 `ns-3-ub` 的实验工作流提供分阶段的 Agent 辅助能力：
 
-这些 skills 不是独立工具包，而是面向当前 `ns-3-ub` 工作树的 Agent 辅助入口，用来分阶段协助完成实验工作流：
+- `openusim-welcome`：基于 [README.md](README.md) 与 [QUICK_START.md](QUICK_START.md) 检查仓库环境状态，并辅助完成快速启动验证
+- `openusim-plan-experiment`：根据自然语言描述的实验目标，逐步明确拓扑、流量模式与关键参数，生成结构化的 `experiment-spec.md`
+- `openusim-run-experiment`：基于仓库中的 `./ns3`、`scratch/ub-quick-example` 与 `scratch/ns-3-ub-tools/` 生成用例、补全配置文件、执行仿真并捕获运行时错误
+- `openusim-analyze-results`：综合仿真输出、用例配置与代码逻辑，判断结果是否符合预期并提出后续调整建议
 
-- `openusim-welcome`：依据 [README.md](README.md) 与 [QUICK_START.md](QUICK_START.md) 检查仓库启动状态，并帮助完成有界的 Quick Start 烟雾验证
-- `openusim-plan-experiment`：根据自然语言目标逐步收口实验目的、拓扑、流量和关键参数，并整理到 `experiment-spec.md`
-- `openusim-run-experiment`：复用仓库现有 `./ns3`、`scratch/ub-quick-example` 和 `scratch/ns-3-ub-tools/` 生成 case、补全 `network_attribute.txt`、执行仿真并监视显式错误
-- `openusim-analyze-results`：结合输出结果、用例输入和代码语义，分析结果是否符合实验目的并给出下一轮调整方向
-
-这意味着它们需要与主仓代码和 `ns-3-ub-tools` 子模块保持同版本协作，不建议拆成单独 submodule 维护。
+上述 Skills 与主仓代码及 `ns-3-ub-tools` 子模块紧密耦合，随仓库统一维护。
 
 ## 许可证
 

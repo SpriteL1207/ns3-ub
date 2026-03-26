@@ -22,7 +22,7 @@
 -	Innovations in other research areas like adaptive routing, load balancing, congestion control, and QoS optimization algorithms.
 
 
-> This project provides pluggable "reference implementations" for policies/algorithms not specified in the UB Base Specification (such as switch modeling, route selection, congestion marking, buffering, and arbitration, etc.). These reference implementations are not part of the UB Base Specification and are only used as examples/baselines that can be replaced or disabled.
+> This project provides pluggable "reference implementations" for policies/algorithms not specified in the UB Base Specification (such as switch modeling, route selection, congestion marking, buffering, and arbitration, etc.). These reference implementations are not part of the UB Base Specification and serve solely as examples and baselines; users may replace or disable them as needed.
 >
 > Functions not implemented in this project include, but are not limited to: detailed modeling for hardware internals, physical layer, performance parameters, control plane behavior (such as initialization behavior, error and exception event handling, etc.), memory management, security policies, etc.
 
@@ -169,7 +169,7 @@ The UB module is a simulation component implemented based on the UB Base Specifi
 - **UB Link** (`ub-link.*`) - Point-to-point connections between nodes
 
 #### Protocol Stack Components
-- **Programming Interface Instances** (`ub-api-ldst*`, `ub-app.*`) - Load/Store and URMA programming interface instances, interfacing with the programming models defined in the function layer
+- **Programming Interface Instances** (`ub-ldst-instance*`, `ub-ldst-thread*`, `ub-ldst-api*`) - Load/Store programming interface instances, interfacing with the programming models defined in the function layer
 - **UB Function** (`ub-function.*`) - Function layer protocol framework implementation, supporting Load/Store and URMA programming models
 - **UB Transaction** (`ub-transaction.*`) - Transaction layer protocol framework implementation
 - **UB Transport** (`ub-transport.*`) - Transport layer protocol framework implementation
@@ -180,12 +180,12 @@ The UB module is a simulation component implemented based on the UB Base Specifi
 - **Traffic Injection Component** (`ub-traffic-gen.*`) - Reads user traffic configuration and injects traffic for simulation nodes according to specified serial and parallel relationships
 - **TP Connection Manager** (`ub-tp-connection-manager.h`) - TP Channel manager, facilitating user's lookup of TP Channel information for each node
 - **Switch Allocator** (`ub-allocator.*`) - Modelling the whole process of output port lookup for packets in a switch
-- **Queue Manager** (`ub-buffer-manager.*`) - Buffer management module, affecting load balancing, flow control, queuing, packet dropping, and other behaviors
+- **Queue Manager** (`ub-queue-manager.*`) - Buffer management module, affecting load balancing, flow control, queuing, packet dropping, and other behaviors
 - **Routing Process** (`ub-routing-process.*`) - Routing module, implementing routing table management and query functionality
 - **Congestion Control** (`ub-congestion-control.*`) - Framework module for congestion control algorithms
 - **CAQM Algorithm** (`ub-caqm.*`) - C-AQM congestion control algorithm implementation
 - **Flow Control** (`ub-flow-control.*`) - Flow control framework module
-- **Fault Injection Module** (`ub-fault.*`) - Fault injection module for applying fault-related parameters (e.g., packet loss rate, high latency, congestion levels, packet errors, transient disconnections, lane reduction) to specific traffic
+- **Fault Injection Module** (`ub-fault.*`) - Applies fault-related parameters (e.g., packet loss rate, high latency, congestion levels, packet errors, transient disconnections, lane reduction) to specific traffic flows
 
 #### Data Types and Tools
 - **Datatype** (`ub-datatype.*`) - UB data type definitions
@@ -221,18 +221,16 @@ Provides the complete network simulation workflow to support:
 - **Performance Analysis Tools**: Throughput calculation, latency analysis, CDF plotting
 - **Formatted Result Output**: Automatically generates basic result information tables for flow completion time, bandwidth, etc., with optional generation of packet-level, hop-by-hop information within the network
 
-### 4. Repo-local OpenUSim Skills
+### 4. OpenUSim Skills (Repository-Bundled)
 
-This repository also maintains a repo-local set of OpenUSim skills under ` .codex/skills/ `.
+This repository maintains a set of OpenUSim Skills under `.codex/skills/`, providing stage-by-stage agent assistance for the `ns-3-ub` experiment workflow:
 
-These skills are not a standalone toolkit. They are an agent-facing entrypoint for the current `ns-3-ub` working tree and split the experiment workflow into bounded stages:
+- `openusim-welcome`: verifies the repository environment against [README_en.md](README_en.md) and [QUICK_START_en.md](QUICK_START_en.md), then assists with quick-start validation
+- `openusim-plan-experiment`: refines a natural-language experiment goal into a structured `experiment-spec.md` covering topology, traffic patterns, and key parameters
+- `openusim-run-experiment`: leverages `./ns3`, `scratch/ub-quick-example`, and `scratch/ns-3-ub-tools/` to generate cases, complete configuration files, execute simulations, and capture runtime errors
+- `openusim-analyze-results`: correlates simulation outputs with case configurations and code semantics, assessing whether results meet expectations and suggesting next-step adjustments
 
-- `openusim-welcome`: checks startup facts from [README_en.md](README_en.md) and [QUICK_START_en.md](QUICK_START_en.md), then helps with a bounded Quick Start smoke run
-- `openusim-plan-experiment`: converges a natural-language goal into one stable `experiment-spec.md`
-- `openusim-run-experiment`: reuses `./ns3`, `scratch/ub-quick-example`, and `scratch/ns-3-ub-tools/` to generate a case, write `network_attribute.txt`, run the simulation, and surface explicit execution errors
-- `openusim-analyze-results`: interprets outputs against the original experiment goal and helps identify likely causes for the next iteration
-
-Because of that, they are maintained together with the main repo and the `ns-3-ub-tools` submodule instead of as a separate submodule.
+These skills are tightly coupled with the main repository and the `ns-3-ub-tools` submodule, and are maintained in-tree accordingly.
 
 ## License
 

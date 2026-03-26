@@ -107,7 +107,7 @@ conda install pandas matplotlib seaborn
 
 ```bash
 # 如使用 Conda，请确保其 bin 在 PATH 前（或先激活环境）
-export PATH=/home/ytxing/miniconda3/bin:$PATH
+# export PATH=<your-conda-path>/bin:$PATH
 
 # 安装依赖
 python3 -m pip install --user -r scratch/ns-3-ub-tools/requirements.txt
@@ -196,8 +196,7 @@ ls scratch/2dfm4x4-multipath_a2a/output/
 - `transport_channel.csv` - 传输通道
 - `traffic.csv` - 流量定义
 
-`ub-quick-example` 的当前入口说明、配置文件格式与典型命令，请参见： [scratch/README.md](scratch/README.md) 。
-更多配置细节与场景文件格式说明，请参见： [scratch/README.md](scratch/README.md) 。
+有关 `ub-quick-example` 的入口说明、配置文件格式与典型命令，请参见 [scratch/README.md](scratch/README.md)。
 
 ---
 
@@ -206,6 +205,5 @@ ls scratch/2dfm4x4-multipath_a2a/output/
 | 文档 | 描述 |
 |------|------|
 | [README.md](README.md) | 项目总览：UB 模块能力、目录结构与核心概念 |
-| [scratch/README.md](scratch/README.md) | unified-bus config-driven 用户入口：配置文件语义、运行命令与边界 |
-| [scratch/README.md](scratch/README.md) | 用例执行与配置：运行 `scratch/<case>` 用例，与配置文件说明 |
+| [scratch/README.md](scratch/README.md) | 配置驱动入口：配置文件语义、运行命令、用例执行与参数说明 |
 | [open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools) | 配套工具链（子模块）：用例配置生成与 trace 后处理与分析 |

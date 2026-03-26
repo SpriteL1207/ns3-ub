@@ -105,7 +105,7 @@ Tip: The recommended entry is `scratch/ub-quick-example`; if examples are enable
 
 ```bash
 # If using Conda, ensure its bin is in PATH first (or activate environment first)
-export PATH=/home/ytxing/miniconda3/bin:$PATH
+# export PATH=<your-conda-path>/bin:$PATH
 
 # Install dependencies
 python3 -m pip install --user -r scratch/ns-3-ub-tools/requirements.txt
@@ -120,7 +120,7 @@ ls scratch/2nodes_single-tp/output/
 
 If you encounter `ModuleNotFoundError: No module named 'pandas'`, it means the runtime `python3` is inconsistent with the interpreter used to install dependencies; please check PATH, or use `python3 -m pip install --user ...` to install dependencies in the current interpreter.
 
-## Examples under scratch (Available Use Cases List)
+## Examples under scratch
 
 The following are the available use case directories and corresponding run commands currently provided in the repository:
 
@@ -160,7 +160,7 @@ The following are the available use case directories and corresponding run comma
 
 Note: Some large-scale use cases take a long time to run. Please use `--mtp-threads=8` to enable multi-threading (requires `--enable-mtp` compilation).
 
-## Full Workflow Example (Complete Workflow Verification)
+## Full Workflow Example
 
 ```bash
 # Run complete example, including Python post-processing
@@ -183,7 +183,7 @@ ls scratch/2dfm4x4-multipath_a2a/output/
 # task_statistics.csv  throughput.csv
 ```
 
-## Config Files (Configuration File Description)
+## Configuration Files
 
 Each use case directory typically contains the following files (format can refer to existing examples):
 
@@ -194,8 +194,7 @@ Each use case directory typically contains the following files (format can refer
 - `transport_channel.csv` - Transport channels
 - `traffic.csv` - Traffic definitions
 
-For the current `ub-quick-example` entry, configuration semantics, and commands, see: [scratch/README.md](scratch/README.md).
-For detailed scenario configuration and file formats, see: [scratch/README.md](scratch/README.md).
+For the `ub-quick-example` entry, configuration semantics, and commands, see [scratch/README.md](scratch/README.md).
 ---
 
 ## Related Documentation
@@ -203,6 +202,5 @@ For detailed scenario configuration and file formats, see: [scratch/README.md](s
 | Document | Description |
 |----------|-------------|
 | [README_en.md](README_en.md) | Project overview: UB components, repo layout, and key concepts |
-| [scratch/README.md](scratch/README.md) | Unified-bus config-driven user entry: configuration semantics, commands, and runtime boundary |
-| [scratch/README.md](scratch/README.md) | Case execution and configuration: run `scratch/<case>` scenarios; define and validate case configs |
+| [scratch/README.md](scratch/README.md) | Config-driven entry: configuration semantics, commands, case execution, and parameter reference |
 | [open-usim/ns-3-ub-tools](https://gitcode.com/open-usim/ns-3-ub-tools) | Toolchain (submodule): case generation and trace post-processing/analysis |
