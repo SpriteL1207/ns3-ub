@@ -2,7 +2,7 @@
 
 **Language**: [English](README_en.md) | [中文](README.md)
 
-> **[NEW] Version 1.1.0 Released** · Check [Release Notes](RELEASE_NOTES_UB.md) for major updates
+> **[NEW] Version 1.2.0 Released (March 2026)** · Check [Release Notes](RELEASE_NOTES_UB.md) for major updates
 
 **Quick Start**: [QUICK_START_en.md](QUICK_START_en.md)
 
