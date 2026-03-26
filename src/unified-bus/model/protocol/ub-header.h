@@ -127,8 +127,6 @@ private:
     uint32_t usedBytes = 18;
     uint32_t reserveSize = totalHeaderSize - usedBytes;
     uint8_t reserveFillValue = 0;  // reserve字段填充值
-
-    // 添加一些便于理解的常量
 };
 
 /**

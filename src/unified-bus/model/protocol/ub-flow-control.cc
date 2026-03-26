@@ -493,7 +493,6 @@ bool UbCbfcSharedCredit::CbfcSharedRestoreCrd(Ptr<Packet> p)
     return ret;
 }
 
-
 TypeId UbPfc::GetTypeId(void)
 {
     static TypeId tid = TypeId("ns3::UbPfc")
@@ -597,7 +596,6 @@ void UbPfc::HandleReleaseOccupiedFlowControl(Ptr<Packet> p, uint32_t inPortId, u
 
 void UbPfc::HandleSentPacket(Ptr<Packet> p, Ptr<UbIngressQueue> ingressQ)
 {
-    // do nothing
 }
 
 void UbPfc::HandleReceivedControlPacket(Ptr<Packet> p)
@@ -607,14 +605,10 @@ void UbPfc::HandleReceivedControlPacket(Ptr<Packet> p)
 
 void UbPfc::HandleReceivedPacket(Ptr<Packet> p)
 {
-    Ptr<Node> node = NodeList::GetNode(m_nodeId);
-    Ptr<UbPort> port = DynamicCast<UbPort>(node->GetDevice(m_portId));
-
     Ptr<Packet> pfcPkt = CheckPfcThreshold(p, m_portId);
     if (pfcPkt != nullptr) {
         SendPfc(pfcPkt, m_portId);
     }
-    return;
 }
 
 bool UbPfc::UpdatePfcStatus(Ptr<Packet> p)
@@ -766,10 +760,10 @@ void UbPfc::UpdatePfcDynamicCredits(Ptr<UbPort> port, uint32_t portId, int ubVlN
         uint64_t hdrmUsed = queueManager->GetQueueIngressHeadroomBytes(portId, pri);
         uint64_t sharedUsed = queueManager->GetQueueIngressSharedBytes(portId, pri);
 
-        bool inHeadroom = (hdrmUsed > 0);
-        bool overXoff = (sharedUsed > 0) && (sharedUsed >= xoffThresh);
+        bool inHeadroom = hdrmUsed > 0;
+        bool overXoff = sharedUsed >= xoffThresh && sharedUsed > 0;
         bool shouldPause = inHeadroom || overXoff;
-        bool shouldResume = !shouldPause && (sharedUsed == 0 || sharedUsed <= xonThresh);
+        bool shouldResume = !shouldPause && sharedUsed <= xonThresh;
 
         if (shouldPause) {
             NS_LOG_DEBUG("PFC-dynamic PAUSE: inPort=" << portId
