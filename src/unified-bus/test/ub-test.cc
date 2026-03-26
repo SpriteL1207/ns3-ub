@@ -17,6 +17,14 @@
 #include "ns3/node-container.h"
 #include "ns3/ub-utils.h"
 #include "ns3/ub-controller.h"
+#include "ns3/ub-congestion-control.h"
+#include "ns3/ub-function.h"
+#include "ns3/ub-link.h"
+#include "ns3/ub-port.h"
+#include "ns3/ub-routing-process.h"
+#include "ns3/ub-switch.h"
+#include "ns3/ub-tag.h"
+#include "ns3/ub-transaction.h"
 
 #include <chrono>
 #include <cstdlib>
@@ -28,6 +36,174 @@
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("UbTest");
+
+namespace {
+
+constexpr uint32_t kUrmaWriteRegressionJettyNum = 0;
+constexpr uint32_t kUrmaWriteRegressionTaskId = 9001;
+constexpr uint32_t kUrmaReadRegressionJettyNum = 1;
+constexpr uint32_t kUrmaReadRegressionTaskId = 9002;
+constexpr uint32_t kUrmaReadMultiPacketTaskId = 9003;
+constexpr uint32_t kUrmaWriteRegressionSenderTpn = 101;
+constexpr uint32_t kUrmaWriteRegressionReceiverTpn = 202;
+constexpr auto kUrmaWriteRegressionPriority = UB_PRIORITY_DEFAULT;
+
+struct LocalTpTopology
+{
+    Ptr<Node> sender;
+    Ptr<Node> switch0;
+    Ptr<Node> switch1;
+    Ptr<Node> receiver;
+    Ptr<UbPort> senderPort;
+    Ptr<UbPort> switch0DevicePort;
+    Ptr<UbPort> switch0CorePort;
+    Ptr<UbPort> switch1CorePort;
+    Ptr<UbPort> switch1DevicePort;
+    Ptr<UbPort> receiverPort;
+};
+
+Ptr<UbPort>
+CreatePort(Ptr<Node> node)
+{
+    Ptr<UbPort> port = CreateObject<UbPort>();
+    port->SetAddress(Mac48Address::Allocate());
+    node->AddDevice(port);
+    return port;
+}
+
+void
+InitNode(Ptr<Node> node, UbNodeType_t nodeType, uint32_t portCount)
+{
+    Ptr<UbSwitch> sw = CreateObject<UbSwitch>();
+    node->AggregateObject(sw);
+    sw->SetNodeType(nodeType);
+
+    if (nodeType == UB_DEVICE)
+    {
+        Ptr<UbController> controller = CreateObject<UbController>();
+        node->AggregateObject(controller);
+        controller->CreateUbFunction();
+        controller->CreateUbTransaction();
+    }
+
+    for (uint32_t index = 0; index < portCount; ++index)
+    {
+        CreatePort(node);
+    }
+
+    sw->Init();
+    Ptr<UbCongestionControl> congestionCtrl = UbCongestionControl::Create(UB_SWITCH);
+    congestionCtrl->SwitchInit(sw);
+}
+
+void
+AddShortestRoute(Ptr<Node> node, uint32_t destNodeId, uint32_t destPortId, uint16_t outPort)
+{
+    std::vector<uint16_t> outPorts = {outPort};
+    Ptr<UbRoutingProcess> routing = node->GetObject<UbSwitch>()->GetRoutingProcess();
+    routing->AddShortestRoute(NodeIdToIp(destNodeId).Get(), outPorts);
+    routing->AddShortestRoute(NodeIdToIp(destNodeId, destPortId).Get(), outPorts);
+}
+
+LocalTpTopology
+BuildLocalTpTopology(bool addReverseRoutes = true)
+{
+    LocalTpTopology topo;
+    topo.sender = CreateObject<Node>(0);
+    topo.switch0 = CreateObject<Node>(0);
+    topo.switch1 = CreateObject<Node>(0);
+    topo.receiver = CreateObject<Node>(0);
+
+    InitNode(topo.sender, UB_DEVICE, 1);
+    InitNode(topo.switch0, UB_SWITCH, 2);
+    InitNode(topo.switch1, UB_SWITCH, 2);
+    InitNode(topo.receiver, UB_DEVICE, 1);
+
+    topo.senderPort = DynamicCast<UbPort>(topo.sender->GetDevice(0));
+    topo.switch0DevicePort = DynamicCast<UbPort>(topo.switch0->GetDevice(0));
+    topo.switch0CorePort = DynamicCast<UbPort>(topo.switch0->GetDevice(1));
+    topo.switch1CorePort = DynamicCast<UbPort>(topo.switch1->GetDevice(0));
+    topo.switch1DevicePort = DynamicCast<UbPort>(topo.switch1->GetDevice(1));
+    topo.receiverPort = DynamicCast<UbPort>(topo.receiver->GetDevice(0));
+
+    Ptr<UbLink> leftLink = CreateObject<UbLink>();
+    topo.senderPort->Attach(leftLink);
+    topo.switch0DevicePort->Attach(leftLink);
+
+    Ptr<UbLink> coreLink = CreateObject<UbLink>();
+    topo.switch0CorePort->Attach(coreLink);
+    topo.switch1CorePort->Attach(coreLink);
+
+    Ptr<UbLink> rightLink = CreateObject<UbLink>();
+    topo.switch1DevicePort->Attach(rightLink);
+    topo.receiverPort->Attach(rightLink);
+
+    AddShortestRoute(topo.sender,
+                     topo.receiver->GetId(),
+                     topo.receiverPort->GetIfIndex(),
+                     topo.senderPort->GetIfIndex());
+    AddShortestRoute(topo.switch0,
+                     topo.receiver->GetId(),
+                     topo.receiverPort->GetIfIndex(),
+                     topo.switch0CorePort->GetIfIndex());
+    AddShortestRoute(topo.switch1,
+                     topo.receiver->GetId(),
+                     topo.receiverPort->GetIfIndex(),
+                     topo.switch1DevicePort->GetIfIndex());
+
+    if (addReverseRoutes)
+    {
+        AddShortestRoute(topo.receiver,
+                         topo.sender->GetId(),
+                         topo.senderPort->GetIfIndex(),
+                         topo.receiverPort->GetIfIndex());
+        AddShortestRoute(topo.switch1,
+                         topo.sender->GetId(),
+                         topo.senderPort->GetIfIndex(),
+                         topo.switch1CorePort->GetIfIndex());
+        AddShortestRoute(topo.switch0,
+                         topo.sender->GetId(),
+                         topo.senderPort->GetIfIndex(),
+                         topo.switch0DevicePort->GetIfIndex());
+    }
+
+    return topo;
+}
+
+void
+InstallStaticTpPair(const LocalTpTopology& topo)
+{
+    Ptr<UbController> senderCtrl = topo.sender->GetObject<UbController>();
+    Ptr<UbController> receiverCtrl = topo.receiver->GetObject<UbController>();
+
+    if (!senderCtrl->IsTPExists(kUrmaWriteRegressionSenderTpn))
+    {
+        Ptr<UbCongestionControl> senderCc = UbCongestionControl::Create(UB_DEVICE);
+        senderCtrl->CreateTp(topo.sender->GetId(),
+                             topo.receiver->GetId(),
+                             topo.senderPort->GetIfIndex(),
+                             topo.receiverPort->GetIfIndex(),
+                             kUrmaWriteRegressionPriority,
+                             kUrmaWriteRegressionSenderTpn,
+                             kUrmaWriteRegressionReceiverTpn,
+                             senderCc);
+    }
+
+    if (!receiverCtrl->IsTPExists(kUrmaWriteRegressionReceiverTpn))
+    {
+        Ptr<UbCongestionControl> receiverCc = UbCongestionControl::Create(UB_DEVICE);
+        receiverCtrl->CreateTp(topo.receiver->GetId(),
+                               topo.sender->GetId(),
+                               topo.receiverPort->GetIfIndex(),
+                               topo.senderPort->GetIfIndex(),
+                               kUrmaWriteRegressionPriority,
+                               kUrmaWriteRegressionReceiverTpn,
+                               kUrmaWriteRegressionSenderTpn,
+                               receiverCc);
+    }
+}
+
+} // namespace
 
 /**
  * @brief Unified-bus functionality test
@@ -95,6 +271,652 @@ void UbFunctionalityTest::DoRun()
     
     NS_LOG_INFO("All basic tests completed successfully");
 }
+
+class UbUrmaReadWqeMetadataPropagationTest : public TestCase
+{
+  public:
+    UbUrmaReadWqeMetadataPropagationTest()
+        : TestCase("UnifiedBus - URMA_READ WQE metadata propagates through Jetty segmentation")
+    {
+    }
+
+    void DoRun() override
+    {
+        Ptr<Node> node = CreateObject<Node>();
+        Ptr<UbController> controller = CreateObject<UbController>();
+        node->AggregateObject(controller);
+        controller->CreateUbFunction();
+        controller->CreateUbTransaction();
+
+        Ptr<UbFunction> function = controller->GetUbFunction();
+        const uint32_t jettyNum = 7;
+        const uint32_t taskId = 1234;
+        const uint32_t payloadBytes = 4096;
+        function->CreateJetty(node->GetId(), node->GetId() + 1, jettyNum);
+
+        Ptr<UbWqe> wqe = function->CreateWqe(node->GetId(),
+                                             node->GetId() + 1,
+                                             payloadBytes,
+                                             taskId,
+                                             TaOpcode::TA_OPCODE_READ);
+        NS_TEST_ASSERT_MSG_NE(wqe, nullptr, "CreateWqe should return a valid WQE");
+        NS_TEST_ASSERT_MSG_EQ(static_cast<uint8_t>(wqe->GetType()),
+                              static_cast<uint8_t>(TaOpcode::TA_OPCODE_READ),
+                              "URMA_READ must map to TA_OPCODE_READ");
+        NS_TEST_ASSERT_MSG_EQ(static_cast<uint8_t>(wqe->GetSegmentKind()),
+                              static_cast<uint8_t>(UbTransactionSegmentKind::REQUEST),
+                              "CreateWqe should initialize segment kind as request");
+        NS_TEST_ASSERT_MSG_EQ(wqe->GetOriginJettyNum(),
+                              UINT32_MAX,
+                              "originJettyNum should be invalid before enqueue");
+        NS_TEST_ASSERT_MSG_EQ(wqe->GetRequestTassn(),
+                              UINT32_MAX,
+                              "requestTassn should be invalid before enqueue");
+        NS_TEST_ASSERT_MSG_EQ(static_cast<uint8_t>(wqe->GetRequestOpcode()),
+                              static_cast<uint8_t>(TaOpcode::TA_OPCODE_READ),
+                              "requestOpcode should preserve read opcode");
+        NS_TEST_ASSERT_MSG_EQ(wqe->GetResponseBytes(),
+                              payloadBytes,
+                              "CreateWqe should initialize read response bytes");
+        NS_TEST_ASSERT_MSG_EQ(wqe->GetLogicalBytes(),
+                              payloadBytes,
+                              "READ WQE logicalBytes should equal request bytes");
+        NS_TEST_ASSERT_MSG_EQ(wqe->GetPayloadBytes(),
+                              0u,
+                              "READ WQE payloadBytes should be zero");
+        NS_TEST_ASSERT_MSG_EQ(wqe->GetCarrierBytes(),
+                              1u,
+                              "READ WQE carrierBytes should force one request packet");
+        NS_TEST_ASSERT_MSG_EQ(wqe->NeedsTransactionResponse(),
+                              true,
+                              "URMA read must require transaction response");
+
+        function->PushWqeToJetty(wqe, jettyNum);
+        NS_TEST_ASSERT_MSG_EQ(wqe->GetOriginJettyNum(),
+                              jettyNum,
+                              "PushWqe must assign originJettyNum from bound Jetty");
+        NS_TEST_ASSERT_MSG_EQ(wqe->GetRequestTassn(),
+                              wqe->GetTaSsnStart(),
+                              "PushWqe must assign requestTassn from WQE TA SSN start");
+
+        Ptr<UbJetty> jetty = function->GetJetty(jettyNum);
+        NS_TEST_ASSERT_MSG_NE(jetty, nullptr, "Jetty should exist after CreateJetty");
+        Ptr<UbWqeSegment> segment = jetty->GetNextWqeSegment();
+        NS_TEST_ASSERT_MSG_NE(segment, nullptr, "Jetty should generate a segment for queued WQE");
+        NS_TEST_ASSERT_MSG_EQ(static_cast<uint8_t>(segment->GetType()),
+                              static_cast<uint8_t>(TaOpcode::TA_OPCODE_READ),
+                              "Segment opcode should remain TA_OPCODE_READ");
+        NS_TEST_ASSERT_MSG_EQ(static_cast<uint8_t>(segment->GetSegmentKind()),
+                              static_cast<uint8_t>(UbTransactionSegmentKind::REQUEST),
+                              "Segment should preserve request kind");
+        NS_TEST_ASSERT_MSG_EQ(segment->GetOriginJettyNum(),
+                              jettyNum,
+                              "Segment should inherit originJettyNum");
+        NS_TEST_ASSERT_MSG_EQ(segment->GetRequestTassn(),
+                              wqe->GetRequestTassn(),
+                              "Segment should inherit requestTassn");
+        NS_TEST_ASSERT_MSG_EQ(static_cast<uint8_t>(segment->GetRequestOpcode()),
+                              static_cast<uint8_t>(TaOpcode::TA_OPCODE_READ),
+                              "Segment should preserve requestOpcode");
+        NS_TEST_ASSERT_MSG_EQ(segment->GetResponseBytes(),
+                              payloadBytes,
+                              "Segment should carry read response byte count");
+        NS_TEST_ASSERT_MSG_EQ(segment->GetLogicalBytes(),
+                              payloadBytes,
+                              "READ request slice logicalBytes should preserve request bytes");
+        NS_TEST_ASSERT_MSG_EQ(segment->GetPayloadBytes(),
+                              0u,
+                              "READ request slice payloadBytes should be zero");
+        NS_TEST_ASSERT_MSG_EQ(segment->GetCarrierBytes(),
+                              1u,
+                              "READ request slice carrierBytes should be one");
+        NS_TEST_ASSERT_MSG_EQ(segment->NeedsTransactionResponse(),
+                              true,
+                              "Segment should preserve response-required flag");
+    }
+};
+
+class UbUrmaWriteCompletionNeedsTransactionResponseTest : public TestCase
+{
+  public:
+    UbUrmaWriteCompletionNeedsTransactionResponseTest()
+        : TestCase("UnifiedBus - URMA_WRITE completes on TA response instead of request TP ACK")
+    {
+    }
+
+    void DoRun() override
+    {
+        LocalTpTopology topo = BuildLocalTpTopology();
+        InstallStaticTpPair(topo);
+
+        Ptr<UbController> senderCtrl = topo.sender->GetObject<UbController>();
+        Ptr<UbFunction> senderFunction = senderCtrl->GetUbFunction();
+        Ptr<UbTransaction> senderTransaction = senderCtrl->GetUbTransaction();
+        senderFunction->CreateJetty(topo.sender->GetId(),
+                                    topo.receiver->GetId(),
+                                    kUrmaWriteRegressionJettyNum);
+        const std::vector<uint32_t> tpns = {kUrmaWriteRegressionSenderTpn};
+        const bool bindOk = senderTransaction->JettyBindTp(topo.sender->GetId(),
+                                                           topo.receiver->GetId(),
+                                                           kUrmaWriteRegressionJettyNum,
+                                                           false,
+                                                           tpns);
+        NS_TEST_ASSERT_MSG_EQ(bindOk, true, "Sender Jetty should bind to static TP pair");
+
+        Ptr<UbJetty> jetty = senderFunction->GetJetty(kUrmaWriteRegressionJettyNum);
+        NS_TEST_ASSERT_MSG_NE(jetty, nullptr, "Sender Jetty should exist");
+        jetty->SetClientCallback(
+            MakeCallback(&UbUrmaWriteCompletionNeedsTransactionResponseTest::OnTaskCompleted, this));
+
+        Ptr<UbTransportChannel> senderTp = senderCtrl->GetTpByTpn(kUrmaWriteRegressionSenderTpn);
+        NS_TEST_ASSERT_MSG_NE(senderTp, nullptr, "Sender TP should exist");
+        senderTp->TraceConnectWithoutContext(
+            "LastPacketACKsNotify",
+            MakeCallback(&UbUrmaWriteCompletionNeedsTransactionResponseTest::ObserveSenderTpAck, this));
+        senderTp->TraceConnectWithoutContext(
+            "LastPacketReceivesNotify",
+            MakeCallback(&UbUrmaWriteCompletionNeedsTransactionResponseTest::ObserveSenderResponsePacket,
+                         this));
+
+        Ptr<UbWqe> wqe = senderFunction->CreateWqe(topo.sender->GetId(),
+                                                   topo.receiver->GetId(),
+                                                   64 * 1024,
+                                                   kUrmaWriteRegressionTaskId,
+                                                   TaOpcode::TA_OPCODE_WRITE);
+        Simulator::ScheduleNow(&UbFunction::PushWqeToJetty,
+                               senderFunction,
+                               wqe,
+                               kUrmaWriteRegressionJettyNum);
+
+        Simulator::Stop(MilliSeconds(1));
+        Simulator::Run();
+
+        NS_TEST_ASSERT_MSG_EQ(m_requestTpAckObserved,
+                              true,
+                              "Sender should observe request TP ACK");
+        NS_TEST_ASSERT_MSG_EQ(m_completedImmediatelyAfterRequestTpAck,
+                              false,
+                              "URMA write must not complete immediately after request TP ACK");
+        NS_TEST_ASSERT_MSG_EQ(m_responsePacketObserved,
+                              true,
+                              "Sender should receive a transaction response packet");
+        NS_TEST_ASSERT_MSG_EQ(m_taskCompleted,
+                              true,
+                              "URMA write should complete after transaction response");
+        NS_TEST_ASSERT_MSG_EQ(m_completedTaskId,
+                              kUrmaWriteRegressionTaskId,
+                              "Completion callback should report the original task");
+        const bool completionAfterResponse = m_taskCompleteTime >= m_responsePacketTime;
+        NS_TEST_ASSERT_MSG_EQ(completionAfterResponse,
+                              true,
+                              "Task completion must not precede transaction response arrival");
+
+        Simulator::Destroy();
+    }
+
+  private:
+    void ObserveSenderTpAck(uint32_t,
+                            uint32_t taskId,
+                            uint32_t srcTpn,
+                            uint32_t dstTpn,
+                            uint32_t,
+                            uint32_t,
+                            uint32_t)
+    {
+        if (taskId != kUrmaWriteRegressionTaskId ||
+            srcTpn != kUrmaWriteRegressionSenderTpn ||
+            dstTpn != kUrmaWriteRegressionReceiverTpn)
+        {
+            return;
+        }
+
+        if (!m_requestTpAckObserved)
+        {
+            m_requestTpAckObserved = true;
+            Simulator::ScheduleNow(
+                &UbUrmaWriteCompletionNeedsTransactionResponseTest::CheckCompletionAfterRequestTpAck,
+                this);
+        }
+    }
+
+    void ObserveSenderResponsePacket(uint32_t,
+                                     uint32_t srcTpn,
+                                     uint32_t dstTpn,
+                                     uint32_t,
+                                     uint32_t,
+                                     uint32_t)
+    {
+        if (srcTpn != kUrmaWriteRegressionReceiverTpn || dstTpn != kUrmaWriteRegressionSenderTpn)
+        {
+            return;
+        }
+
+        if (!m_responsePacketObserved)
+        {
+            m_responsePacketObserved = true;
+            m_responsePacketTime = Simulator::Now();
+        }
+    }
+
+    void CheckCompletionAfterRequestTpAck()
+    {
+        m_completedImmediatelyAfterRequestTpAck = m_taskCompleted;
+    }
+
+    void OnTaskCompleted(uint32_t taskId, uint32_t)
+    {
+        m_taskCompleted = true;
+        m_completedTaskId = taskId;
+        m_taskCompleteTime = Simulator::Now();
+    }
+
+    bool m_requestTpAckObserved{false};
+    bool m_responsePacketObserved{false};
+    bool m_taskCompleted{false};
+    bool m_completedImmediatelyAfterRequestTpAck{false};
+    uint32_t m_completedTaskId{UINT32_MAX};
+    Time m_responsePacketTime{Seconds(0)};
+    Time m_taskCompleteTime{Seconds(0)};
+};
+
+class UbUrmaReadCompletionNeedsReadResponseTest : public TestCase
+{
+  public:
+    UbUrmaReadCompletionNeedsReadResponseTest()
+        : TestCase("UnifiedBus - URMA_READ completes on READ_RESPONSE instead of request TP ACK")
+    {
+    }
+
+    void DoRun() override
+    {
+        LocalTpTopology topo = BuildLocalTpTopology();
+        InstallStaticTpPair(topo);
+
+        Ptr<UbController> senderCtrl = topo.sender->GetObject<UbController>();
+        Ptr<UbFunction> senderFunction = senderCtrl->GetUbFunction();
+        Ptr<UbTransaction> senderTransaction = senderCtrl->GetUbTransaction();
+        senderFunction->CreateJetty(topo.sender->GetId(),
+                                    topo.receiver->GetId(),
+                                    kUrmaReadRegressionJettyNum);
+        const std::vector<uint32_t> tpns = {kUrmaWriteRegressionSenderTpn};
+        const bool bindOk = senderTransaction->JettyBindTp(topo.sender->GetId(),
+                                                           topo.receiver->GetId(),
+                                                           kUrmaReadRegressionJettyNum,
+                                                           false,
+                                                           tpns);
+        NS_TEST_ASSERT_MSG_EQ(bindOk, true, "Sender Jetty should bind to static TP pair");
+
+        Ptr<UbJetty> jetty = senderFunction->GetJetty(kUrmaReadRegressionJettyNum);
+        NS_TEST_ASSERT_MSG_NE(jetty, nullptr, "Sender Jetty should exist");
+        jetty->SetClientCallback(
+            MakeCallback(&UbUrmaReadCompletionNeedsReadResponseTest::OnTaskCompleted, this));
+
+        Ptr<UbTransportChannel> senderTp = senderCtrl->GetTpByTpn(kUrmaWriteRegressionSenderTpn);
+        NS_TEST_ASSERT_MSG_NE(senderTp, nullptr, "Sender TP should exist");
+        senderTp->TraceConnectWithoutContext(
+            "LastPacketACKsNotify",
+            MakeCallback(&UbUrmaReadCompletionNeedsReadResponseTest::ObserveSenderTpAck, this));
+        senderTp->TraceConnectWithoutContext(
+            "LastPacketReceivesNotify",
+            MakeCallback(&UbUrmaReadCompletionNeedsReadResponseTest::ObserveSenderReadResponse,
+                         this));
+
+        Ptr<UbWqe> wqe = senderFunction->CreateWqe(topo.sender->GetId(),
+                                                   topo.receiver->GetId(),
+                                                   4096,
+                                                   kUrmaReadRegressionTaskId,
+                                                   TaOpcode::TA_OPCODE_READ);
+        Simulator::ScheduleNow(&UbFunction::PushWqeToJetty,
+                               senderFunction,
+                               wqe,
+                               kUrmaReadRegressionJettyNum);
+
+        Simulator::Stop(MilliSeconds(1));
+        Simulator::Run();
+
+        NS_TEST_ASSERT_MSG_EQ(m_requestTpAckObserved,
+                              true,
+                              "Sender should observe read request TP ACK");
+        NS_TEST_ASSERT_MSG_EQ(m_completedImmediatelyAfterRequestTpAck,
+                              false,
+                              "URMA read must not complete immediately after request TP ACK");
+        NS_TEST_ASSERT_MSG_EQ(m_readResponseObserved,
+                              true,
+                              "Sender should receive a READ_RESPONSE packet");
+        NS_TEST_ASSERT_MSG_EQ(m_taskCompleted,
+                              true,
+                              "URMA read should complete after READ_RESPONSE");
+        NS_TEST_ASSERT_MSG_EQ(m_completedTaskId,
+                              kUrmaReadRegressionTaskId,
+                              "Completion callback should report the original read task");
+        const bool completionAfterResponse = m_taskCompleteTime >= m_readResponseTime;
+        NS_TEST_ASSERT_MSG_EQ(completionAfterResponse,
+                              true,
+                              "Task completion must not precede READ_RESPONSE arrival");
+
+        Simulator::Destroy();
+    }
+
+  private:
+    void ObserveSenderTpAck(uint32_t,
+                            uint32_t taskId,
+                            uint32_t srcTpn,
+                            uint32_t dstTpn,
+                            uint32_t,
+                            uint32_t,
+                            uint32_t)
+    {
+        if (taskId != kUrmaReadRegressionTaskId ||
+            srcTpn != kUrmaWriteRegressionSenderTpn ||
+            dstTpn != kUrmaWriteRegressionReceiverTpn)
+        {
+            return;
+        }
+
+        if (!m_requestTpAckObserved)
+        {
+            m_requestTpAckObserved = true;
+            Simulator::ScheduleNow(
+                &UbUrmaReadCompletionNeedsReadResponseTest::CheckCompletionAfterRequestTpAck,
+                this);
+        }
+    }
+
+    void ObserveSenderReadResponse(uint32_t,
+                                   uint32_t srcTpn,
+                                   uint32_t dstTpn,
+                                   uint32_t,
+                                   uint32_t,
+                                   uint32_t)
+    {
+        if (srcTpn != kUrmaWriteRegressionReceiverTpn || dstTpn != kUrmaWriteRegressionSenderTpn)
+        {
+            return;
+        }
+
+        if (!m_readResponseObserved)
+        {
+            m_readResponseObserved = true;
+            m_readResponseTime = Simulator::Now();
+        }
+    }
+
+    void CheckCompletionAfterRequestTpAck()
+    {
+        m_completedImmediatelyAfterRequestTpAck = m_taskCompleted;
+    }
+
+    void OnTaskCompleted(uint32_t taskId, uint32_t)
+    {
+        m_taskCompleted = true;
+        m_completedTaskId = taskId;
+        m_taskCompleteTime = Simulator::Now();
+    }
+
+    bool m_requestTpAckObserved{false};
+    bool m_readResponseObserved{false};
+    bool m_taskCompleted{false};
+    bool m_completedImmediatelyAfterRequestTpAck{false};
+    uint32_t m_completedTaskId{UINT32_MAX};
+    Time m_readResponseTime{Seconds(0)};
+    Time m_taskCompleteTime{Seconds(0)};
+};
+
+class UbUrmaReadMultiPacketResponseCountTest : public TestCase
+{
+  public:
+    UbUrmaReadMultiPacketResponseCountTest()
+        : TestCase("UnifiedBus - multi-packet URMA_READ generates one READ_RESPONSE")
+    {
+    }
+
+    void DoRun() override
+    {
+        LocalTpTopology topo = BuildLocalTpTopology();
+        InstallStaticTpPair(topo);
+
+        Ptr<UbController> senderCtrl = topo.sender->GetObject<UbController>();
+        Ptr<UbFunction> senderFunction = senderCtrl->GetUbFunction();
+        Ptr<UbTransaction> senderTransaction = senderCtrl->GetUbTransaction();
+        senderFunction->CreateJetty(topo.sender->GetId(),
+                                    topo.receiver->GetId(),
+                                    kUrmaReadRegressionJettyNum);
+        const std::vector<uint32_t> tpns = {kUrmaWriteRegressionSenderTpn};
+        const bool bindOk = senderTransaction->JettyBindTp(topo.sender->GetId(),
+                                                           topo.receiver->GetId(),
+                                                           kUrmaReadRegressionJettyNum,
+                                                           false,
+                                                           tpns);
+        NS_TEST_ASSERT_MSG_EQ(bindOk, true, "Sender Jetty should bind to static TP pair");
+
+        Ptr<UbJetty> jetty = senderFunction->GetJetty(kUrmaReadRegressionJettyNum);
+        NS_TEST_ASSERT_MSG_NE(jetty, nullptr, "Sender Jetty should exist");
+        jetty->SetClientCallback(
+            MakeCallback(&UbUrmaReadMultiPacketResponseCountTest::OnTaskCompleted, this));
+
+        Ptr<UbTransportChannel> senderTp = senderCtrl->GetTpByTpn(kUrmaWriteRegressionSenderTpn);
+        NS_TEST_ASSERT_MSG_NE(senderTp, nullptr, "Sender TP should exist");
+        senderTp->TraceConnectWithoutContext(
+            "LastPacketReceivesNotify",
+            MakeCallback(&UbUrmaReadMultiPacketResponseCountTest::ObserveSenderReadResponse,
+                         this));
+
+        Ptr<UbWqe> wqe = senderFunction->CreateWqe(topo.sender->GetId(),
+                                                   topo.receiver->GetId(),
+                                                   64 * 1024,
+                                                   kUrmaReadMultiPacketTaskId,
+                                                   TaOpcode::TA_OPCODE_READ);
+        Simulator::ScheduleNow(&UbFunction::PushWqeToJetty,
+                               senderFunction,
+                               wqe,
+                               kUrmaReadRegressionJettyNum);
+
+        Simulator::Stop(MilliSeconds(1));
+        Simulator::Run();
+
+        NS_TEST_ASSERT_MSG_EQ(m_readResponseCount,
+                              1u,
+                              "A multi-packet read request should generate exactly one READ_RESPONSE");
+        NS_TEST_ASSERT_MSG_EQ(m_taskCompleteCount,
+                              1u,
+                              "A multi-packet read request should complete exactly once");
+
+        Simulator::Destroy();
+    }
+
+  private:
+    void ObserveSenderReadResponse(uint32_t,
+                                   uint32_t srcTpn,
+                                   uint32_t dstTpn,
+                                   uint32_t,
+                                   uint32_t,
+                                   uint32_t)
+    {
+        if (srcTpn != kUrmaWriteRegressionReceiverTpn || dstTpn != kUrmaWriteRegressionSenderTpn)
+        {
+            return;
+        }
+
+        ++m_readResponseCount;
+    }
+
+    void OnTaskCompleted(uint32_t taskId, uint32_t)
+    {
+        if (taskId == kUrmaReadMultiPacketTaskId)
+        {
+            ++m_taskCompleteCount;
+        }
+    }
+
+    uint32_t m_readResponseCount{0};
+    uint32_t m_taskCompleteCount{0};
+};
+
+class UbUrmaReadMultiSliceRequestPacketSemanticsTest : public TestCase
+{
+  public:
+    UbUrmaReadMultiSliceRequestPacketSemanticsTest()
+        : TestCase("UnifiedBus - multi-slice URMA_READ request packets carry zero payload")
+    {
+    }
+
+    void DoRun() override
+    {
+        (void)UbFlowTag::GetTypeId();
+        (void)UbPacketTraceTag::GetTypeId();
+        (void)utils::UbUtils::Get();
+        GlobalValue::Bind("UB_RECORD_PKT_TRACE", BooleanValue(true));
+
+        LocalTpTopology topo = BuildLocalTpTopology();
+        InstallStaticTpPair(topo);
+        m_expectedSrc = topo.sender->GetId();
+        m_expectedDst = topo.receiver->GetId();
+
+        Ptr<UbController> senderCtrl = topo.sender->GetObject<UbController>();
+        Ptr<UbFunction> senderFunction = senderCtrl->GetUbFunction();
+        Ptr<UbTransaction> senderTransaction = senderCtrl->GetUbTransaction();
+        senderFunction->CreateJetty(topo.sender->GetId(),
+                                    topo.receiver->GetId(),
+                                    kUrmaReadRegressionJettyNum);
+        const std::vector<uint32_t> tpns = {kUrmaWriteRegressionSenderTpn};
+        const bool bindOk = senderTransaction->JettyBindTp(topo.sender->GetId(),
+                                                           topo.receiver->GetId(),
+                                                           kUrmaReadRegressionJettyNum,
+                                                           false,
+                                                           tpns);
+        NS_TEST_ASSERT_MSG_EQ(bindOk, true, "Sender Jetty should bind to static TP pair");
+        Ptr<UbJetty> senderJetty = senderFunction->GetJetty(kUrmaReadRegressionJettyNum);
+        NS_TEST_ASSERT_MSG_NE(senderJetty, nullptr, "Sender Jetty should exist");
+        senderJetty->SetClientCallback(
+            MakeCallback(&UbUrmaReadMultiSliceRequestPacketSemanticsTest::OnTaskCompleted, this));
+
+        Ptr<UbController> receiverCtrl = topo.receiver->GetObject<UbController>();
+        Ptr<UbTransportChannel> receiverTp = receiverCtrl->GetTpByTpn(kUrmaWriteRegressionReceiverTpn);
+        NS_TEST_ASSERT_MSG_NE(receiverTp, nullptr, "Receiver TP should exist");
+        receiverTp->TraceConnectWithoutContext(
+            "TpRecvNotify",
+            MakeCallback(
+                &UbUrmaReadMultiSliceRequestPacketSemanticsTest::ObserveTargetPacketReceive,
+                this));
+        receiverTp->TraceConnectWithoutContext(
+            "WqeSegmentCompletesNotify",
+            MakeCallback(
+                &UbUrmaReadMultiSliceRequestPacketSemanticsTest::ObserveTargetReadRequestSlice,
+                this));
+        Ptr<UbTransportChannel> senderTp = senderCtrl->GetTpByTpn(kUrmaWriteRegressionSenderTpn);
+        NS_TEST_ASSERT_MSG_NE(senderTp, nullptr, "Sender TP should exist");
+        senderTp->TraceConnectWithoutContext(
+            "LastPacketReceivesNotify",
+            MakeCallback(
+                &UbUrmaReadMultiSliceRequestPacketSemanticsTest::ObserveSenderReadResponse,
+                this));
+
+        Ptr<UbWqe> wqe = senderFunction->CreateWqe(topo.sender->GetId(),
+                                                   topo.receiver->GetId(),
+                                                   128 * 1024,
+                                                   kUrmaReadMultiPacketTaskId,
+                                                   TaOpcode::TA_OPCODE_READ);
+        Simulator::ScheduleNow(&UbFunction::PushWqeToJetty,
+                               senderFunction,
+                               wqe,
+                               kUrmaReadRegressionJettyNum);
+
+        Simulator::Stop(MilliSeconds(1));
+        Simulator::Run();
+
+        NS_TEST_ASSERT_MSG_EQ(m_readRequestPacketCount,
+                              2u,
+                              "128KiB read should produce 2 read request packets");
+        NS_TEST_ASSERT_MSG_EQ(m_zeroPayloadReadRequestCount,
+                              2u,
+                              "Each read request packet should carry zero payload");
+        NS_TEST_ASSERT_MSG_EQ(m_targetReadRequestSliceCount,
+                              2u,
+                              "128KiB read should complete 2 request slices at TA");
+        NS_TEST_ASSERT_MSG_EQ(m_readResponseCount,
+                              2u,
+                              "128KiB read should generate 2 read responses");
+        NS_TEST_ASSERT_MSG_EQ(m_taskCompleteCount,
+                              1u,
+                              "Multi-slice read should still complete the WQE exactly once");
+
+        Simulator::Destroy();
+        GlobalValue::Bind("UB_RECORD_PKT_TRACE", BooleanValue(false));
+    }
+
+  private:
+    void ObserveTargetPacketReceive(uint32_t,
+                                    uint32_t,
+                                    uint32_t src,
+                                    uint32_t dst,
+                                    uint32_t srcTpn,
+                                    uint32_t dstTpn,
+                                    PacketType type,
+                                    uint32_t payloadBytes,
+                                    uint32_t taskId,
+                                    UbPacketTraceTag)
+    {
+        if (type != PacketType::PACKET || taskId != kUrmaReadMultiPacketTaskId)
+        {
+            return;
+        }
+        if (src != m_expectedSrc || dst != m_expectedDst)
+        {
+            return;
+        }
+        if (srcTpn != kUrmaWriteRegressionSenderTpn || dstTpn != kUrmaWriteRegressionReceiverTpn)
+        {
+            return;
+        }
+
+        ++m_readRequestPacketCount;
+        if (payloadBytes == 0)
+        {
+            ++m_zeroPayloadReadRequestCount;
+        }
+    }
+
+    void ObserveTargetReadRequestSlice(uint32_t,
+                                       uint32_t taskId,
+                                       uint32_t)
+    {
+        if (taskId == kUrmaReadMultiPacketTaskId)
+        {
+            ++m_targetReadRequestSliceCount;
+        }
+    }
+
+    void ObserveSenderReadResponse(uint32_t,
+                                   uint32_t srcTpn,
+                                   uint32_t dstTpn,
+                                   uint32_t,
+                                   uint32_t,
+                                   uint32_t)
+    {
+        if (srcTpn != kUrmaWriteRegressionReceiverTpn || dstTpn != kUrmaWriteRegressionSenderTpn)
+        {
+            return;
+        }
+
+        ++m_readResponseCount;
+    }
+
+    void OnTaskCompleted(uint32_t taskId, uint32_t)
+    {
+        if (taskId == kUrmaReadMultiPacketTaskId)
+        {
+            ++m_taskCompleteCount;
+        }
+    }
+
+    uint32_t m_readRequestPacketCount{0};
+    uint32_t m_zeroPayloadReadRequestCount{0};
+    uint32_t m_targetReadRequestSliceCount{0};
+    uint32_t m_readResponseCount{0};
+    uint32_t m_taskCompleteCount{0};
+    uint32_t m_expectedSrc{UINT32_MAX};
+    uint32_t m_expectedDst{UINT32_MAX};
+};
 
 class UbCreateNodeSystemIdTest : public TestCase
 {
@@ -468,6 +1290,11 @@ UbTestSuite::UbTestSuite()
     : TestSuite("unified-bus", Type::UNIT)
 {
     AddTestCase(new UbFunctionalityTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbUrmaReadWqeMetadataPropagationTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbUrmaWriteCompletionNeedsTransactionResponseTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbUrmaReadCompletionNeedsReadResponseTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbUrmaReadMultiPacketResponseCountTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbUrmaReadMultiSliceRequestPacketSemanticsTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbTraceDirSetupTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbMpiRankExtractionHelperTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbSameMpiRankHelperTest(), TestCase::Duration::QUICK);
@@ -565,13 +1392,42 @@ class UbQuickExampleSpoofedMpiEnvSystemTest : public TestCase
 namespace
 {
 
+bool
+HasQuickExampleBinary(const std::filesystem::path& repoRoot)
+{
+    return std::filesystem::exists(
+               repoRoot / "build/src/unified-bus/examples/ns3.44-ub-quick-example-default") ||
+           std::filesystem::exists(repoRoot / "build/src/unified-bus/examples/ns3.44-ub-quick-example");
+}
+
+std::filesystem::path
+LocateQuickExampleBinary(const std::filesystem::path& repoRoot)
+{
+    const std::filesystem::path defaultBinary =
+        repoRoot / "build/src/unified-bus/examples/ns3.44-ub-quick-example-default";
+    if (std::filesystem::exists(defaultBinary))
+    {
+        return defaultBinary;
+    }
+
+    return repoRoot / "build/src/unified-bus/examples/ns3.44-ub-quick-example";
+}
+
 std::filesystem::path
 LocateRepoRoot()
 {
-    std::filesystem::path repoRoot = NS_TEST_SOURCEDIR;
-    const std::filesystem::path binaryRelativePath =
-        "build/src/unified-bus/examples/ns3.44-ub-quick-example-default";
-    for (uint32_t i = 0; i < 4 && !std::filesystem::exists(repoRoot / binaryRelativePath); ++i)
+    std::filesystem::path repoRoot = PROJECT_SOURCE_PATH;
+    if (HasQuickExampleBinary(repoRoot))
+    {
+        return repoRoot;
+    }
+
+    repoRoot = NS_TEST_SOURCEDIR;
+    if (repoRoot.is_relative())
+    {
+        repoRoot = std::filesystem::path(PROJECT_SOURCE_PATH) / repoRoot;
+    }
+    for (uint32_t i = 0; i < 4 && !HasQuickExampleBinary(repoRoot); ++i)
     {
         repoRoot = repoRoot.parent_path();
     }
@@ -585,8 +1441,7 @@ RunQuickExampleCommand(const std::string& testFile,
                        const std::string& casePathRelative)
 {
     const std::filesystem::path repoRoot = LocateRepoRoot();
-    const std::filesystem::path binaryPath =
-        repoRoot / "build/src/unified-bus/examples/ns3.44-ub-quick-example-default";
+    const std::filesystem::path binaryPath = LocateQuickExampleBinary(repoRoot);
 
     std::string command;
     if (!commandPrefix.empty())
@@ -703,8 +1558,7 @@ RunQuickExampleAbsoluteCaseCommand(const std::string& testFile,
                                    const std::filesystem::path& casePath)
 {
     const std::filesystem::path repoRoot = LocateRepoRoot();
-    const std::filesystem::path binaryPath =
-        repoRoot / "build/src/unified-bus/examples/ns3.44-ub-quick-example-default";
+    const std::filesystem::path binaryPath = LocateQuickExampleBinary(repoRoot);
 
     std::string command;
     if (!commandPrefix.empty())
@@ -1013,6 +1867,143 @@ class UbQuickExampleLocalDependentDagSingleThreadSystemTest : public TestCase
     }
 };
 
+class UbQuickExampleLocalSingleUrmaReadSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleLocalSingleUrmaReadSystemTest()
+        : TestCase("UnifiedBus - ub-quick-example local single URMA_READ runs in single-thread")
+    {
+    }
+
+    void DoRun() override
+    {
+        SetDataDir(NS_TEST_SOURCEDIR);
+        const std::string trafficCsv =
+            "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases\n"
+            "0,0,3,4096,URMA_READ,7,10ns,10,\n";
+        const std::filesystem::path caseDir =
+            CopyCaseDirWithTrafficFile("scratch/ub-local-hybrid-minimal", trafficCsv);
+
+        auto [status, output] =
+            RunQuickExampleAbsoluteCaseCommand(CreateTempDirFilename(GetName() + ".log"),
+                                               "--mtp-threads=1 --test",
+                                               "",
+                                               caseDir);
+
+        std::error_code ec;
+        std::filesystem::remove_all(caseDir, ec);
+
+        NS_TEST_ASSERT_MSG_EQ(status, 0, "single URMA_READ case should exit successfully");
+        NS_TEST_ASSERT_MSG_NE(output.find("TEST : 00000 : PASSED"),
+                              std::string::npos,
+                              "single URMA_READ case should report PASSED");
+    }
+};
+
+class UbQuickExampleLocalSingleUrmaWriteSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleLocalSingleUrmaWriteSystemTest()
+        : TestCase("UnifiedBus - ub-quick-example local single URMA_WRITE runs in single-thread")
+    {
+    }
+
+    void DoRun() override
+    {
+        SetDataDir(NS_TEST_SOURCEDIR);
+        const std::string trafficCsv =
+            "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases\n"
+            "0,0,3,4096,URMA_WRITE,7,10ns,10,\n";
+        const std::filesystem::path caseDir =
+            CopyCaseDirWithTrafficFile("scratch/ub-local-hybrid-minimal", trafficCsv);
+
+        auto [status, output] =
+            RunQuickExampleAbsoluteCaseCommand(CreateTempDirFilename(GetName() + ".log"),
+                                               "--mtp-threads=1 --test",
+                                               "",
+                                               caseDir);
+
+        std::error_code ec;
+        std::filesystem::remove_all(caseDir, ec);
+
+        NS_TEST_ASSERT_MSG_EQ(status, 0, "single URMA_WRITE case should exit successfully");
+        NS_TEST_ASSERT_MSG_NE(output.find("TEST : 00000 : PASSED"),
+                              std::string::npos,
+                              "single URMA_WRITE case should report PASSED");
+    }
+};
+
+class UbQuickExampleLocalWriteThenReadSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleLocalWriteThenReadSystemTest()
+        : TestCase("UnifiedBus - ub-quick-example local URMA_WRITE then URMA_READ runs in single-thread")
+    {
+    }
+
+    void DoRun() override
+    {
+        SetDataDir(NS_TEST_SOURCEDIR);
+        const std::string trafficCsv =
+            "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases\n"
+            "0,0,3,4096,URMA_WRITE,7,10ns,10,\n"
+            "1,0,3,4096,URMA_READ,7,10ns,20,10\n";
+        const std::filesystem::path caseDir =
+            CopyCaseDirWithTrafficFile("scratch/ub-local-hybrid-minimal", trafficCsv);
+
+        auto [status, output] =
+            RunQuickExampleAbsoluteCaseCommand(CreateTempDirFilename(GetName() + ".log"),
+                                               "--mtp-threads=1 --test",
+                                               "",
+                                               caseDir);
+
+        std::error_code ec;
+        std::filesystem::remove_all(caseDir, ec);
+
+        NS_TEST_ASSERT_MSG_EQ(status, 0, "dependent URMA write/read case should exit successfully");
+        NS_TEST_ASSERT_MSG_NE(output.find("TEST : 00000 : PASSED"),
+                              std::string::npos,
+                              "dependent URMA write/read case should report PASSED");
+    }
+};
+
+class UbQuickExampleLocalMixedUrmaReadWriteSystemTest : public TestCase
+{
+  public:
+    UbQuickExampleLocalMixedUrmaReadWriteSystemTest()
+        : TestCase("UnifiedBus - ub-quick-example local mixed URMA read-write workload runs in single-thread")
+    {
+    }
+
+    void DoRun() override
+    {
+        SetDataDir(NS_TEST_SOURCEDIR);
+        const std::string trafficCsv =
+            "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases\n"
+            "0,0,3,4096,URMA_WRITE,7,10ns,10,\n"
+            "1,0,3,8192,URMA_READ,7,10ns,20,\n"
+            "2,3,0,4096,URMA_WRITE,7,10ns,30,\n"
+            "3,3,0,8192,URMA_READ,7,10ns,40,\n";
+        const std::filesystem::path caseDir =
+            CopyCaseDirWithTrafficFile("scratch/ub-local-hybrid-minimal", trafficCsv);
+
+        auto [status, output] =
+            RunQuickExampleAbsoluteCaseCommand(
+                CreateTempDirFilename("ub-quick-example-local-mixed-urma-read-write.log"),
+                                               "--mtp-threads=1 --test",
+                                               "",
+                                               caseDir);
+
+        std::error_code ec;
+        std::filesystem::remove_all(caseDir, ec);
+
+        NS_TEST_ASSERT_MSG_EQ(status, 0, "mixed URMA read/write case should exit successfully");
+        NS_TEST_ASSERT_MSG_NE(output.find("TEST : 00000 : PASSED"),
+                              std::string::npos,
+                              "mixed URMA read/write case should report PASSED");
+    }
+};
+
 class UbQuickExampleLocalDependentDagMtpRedSystemTest : public TestCase
 {
   public:
@@ -1135,6 +2126,14 @@ class UbQuickExampleSystemTestSuite : public TestSuite
         AddTestCase(new UbQuickExampleSameCasePathSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleConflictingCasePathSystemTest(), TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleOptionalTransportChannelSystemTest(),
+                    TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleLocalSingleUrmaWriteSystemTest(),
+                    TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleLocalSingleUrmaReadSystemTest(),
+                    TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleLocalWriteThenReadSystemTest(),
+                    TestCase::Duration::QUICK);
+        AddTestCase(new UbQuickExampleLocalMixedUrmaReadWriteSystemTest(),
                     TestCase::Duration::QUICK);
         AddTestCase(new UbQuickExampleLocalDependentDagSingleThreadSystemTest(),
                     TestCase::Duration::QUICK);

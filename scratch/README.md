@@ -260,7 +260,7 @@ Recommendation: Generate `traffic.csv` (e.g., all-to-all, RDMA-like patterns, co
 - `taskId` — integer ID (unique per file).
 - `sourceNode` / `destNode` — end-host node IDs.
 - `dataSize(Byte)` — payload size in bytes.
-- `opType` — e.g., `URMA_WRITE`, `MEM_STORE`, … (supported by `UbApp`/API LDST layer).
+- `opType` — e.g., `URMA_WRITE`, `URMA_READ`, `MEM_STORE`, … (supported by `UbApp`/API LDST layer).
 - `priority` — 0..(UB_PRIORITY_NUM-1).
 - `delay` — schedule offset relative to simulation start (Time).
 - `phaseId` — integer phase tag; tasks with the same phase can run concurrently.
@@ -269,9 +269,18 @@ Recommendation: Generate `traffic.csv` (e.g., all-to-all, RDMA-like patterns, co
 Examples:
 ```
 0,0,1,4000000,URMA_WRITE,7,10ns,0,
+1,0,1,4096,URMA_READ,7,20ns,1,0
 0,0,10,16384009,MEM_STORE,7,10ns,1,
 1,0,13,16384000,MEM_STORE,7,10ns,1,
 ```
+
+Current URMA read/write constraints in `traffic.csv`:
+- `URMA_WRITE` and `URMA_READ` do not require extra CSV columns for remote address, token, local address, or read offset in this iteration.
+- `URMA_WRITE` and `URMA_READ` complete on transaction responses (`TAACK` / `READ_RESPONSE`), not when the request's TP ACK arrives.
+- Only the ROI success path is modeled for URMA read/write at the transaction layer right now; other service modes are rejected explicitly.
+- `URMA_READ` is sliced at the TA layer. Each read request slice sends exactly one TP request packet with zero wire payload; the logical slice length is carried in `MAETAH.Length`.
+- Each `URMA_READ` request slice generates exactly one `READ_RESPONSE`. The response is queued through `m_tpRelatedRemoteRequests` and may be split into multiple TP packets, but it is not transaction-sliced again.
+- A multi-slice `URMA_READ` WQE still completes only once, after all slice responses arrive back at the initiator.
 
 UB’s runner (`UbTrafficGen`) uses these to enqueue WQEs, connect to the proper `TpConnectionManager`, and drive sending/ACK tracking. The post-processing script `trace_analysis/task_statistics.py` merges Task and Packet traces back into this CSV, adding columns:
 - `taskStartTime(us)`, `taskCompletesTime(us)` — task timeline

@@ -2,7 +2,9 @@
 #ifndef UB_TRANSPORT_H
 #define UB_TRANSPORT_H
 
+#include <map>
 #include <queue>
+#include <utility>
 #include "ns3/object.h"
 #include "ns3/packet.h"
 #include "ns3/ipv4-address.h"
@@ -82,7 +84,10 @@ public:
     bool IsEmpty() override;
     bool IsLimited() override;
 
-    Ptr<Packet> GenDataPacket(Ptr<UbWqeSegment> wqeSegment, uint32_t payload_size);
+    Ptr<Packet> GenDataPacket(Ptr<UbWqeSegment> wqeSegment,
+                              uint32_t payloadSize,
+                              uint32_t wireLengthBytes,
+                              uint32_t progressBytes);
 
     /**
      * @brief Process Transport Acknowledgment message
@@ -239,9 +244,21 @@ public:
 
     uint32_t GetWqeSegmentVecSize() { return m_wqeSegmentVector.size(); }
 private:
+    struct InboundTaUnitState
+    {
+        Ptr<UbWqeSegment> segment;
+        uint32_t bytesReceived{0};
+    };
+
     void DoDispose() override;
 
     Ptr<UbTransaction> GetTransaction();
+    Ptr<UbWqeSegment> TrackInboundTaPacket(const UbTransportHeader& tpHeader,
+                                           const UbTransactionHeader& taHeader,
+                                           uint32_t logicalBytes,
+                                           uint32_t payloadBytes,
+                                           uint32_t taskId);
+    bool ShouldCompleteOnTpAck(const Ptr<UbWqeSegment>& segment) const;
 
     TracedCallback<uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t> m_traceFirstPacketSendsNotify;
     TracedCallback<uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t> m_traceLastPacketSendsNotify;
@@ -282,6 +299,7 @@ private:
     Ipv4Address m_dip;        // Destination IP address
 
     std::vector<Ptr<UbWqeSegment>> m_remoteRequest; // FIFO
+    std::map<std::pair<uint32_t, uint32_t>, InboundTaUnitState> m_inboundTaUnits;
 
     // Queue parameters
     uint32_t m_maxQueueSize;

@@ -100,16 +100,38 @@ void UbFunction::DestroyJetty(uint32_t jettyNum)
     }
 }
 
-Ptr<UbWqe> UbFunction::CreateWqe(uint32_t src, uint32_t dest, uint32_t size, uint32_t wqeId)
+Ptr<UbWqe> UbFunction::CreateWqe(uint32_t src,
+                                 uint32_t dest,
+                                 uint32_t size,
+                                 uint32_t wqeId,
+                                 TaOpcode type)
 {
     NS_LOG_DEBUG(this);
     // 创建新的 WQE
     Ptr<UbWqe> ubWqe = CreateObject<UbWqe>();
     ubWqe->SetSrc(src);
     ubWqe->SetDest(dest);
+    ubWqe->SetType(type);
     ubWqe->SetSize(size);
     ubWqe->SetWqeId(wqeId);
+    ubWqe->SetSegmentKind(UbTransactionSegmentKind::REQUEST);
+    // These fields are undefined before the WQE is enqueued into a concrete Jetty.
+    ubWqe->SetOriginJettyNum(UINT32_MAX);
+    ubWqe->SetRequestTassn(UINT32_MAX);
+    ubWqe->SetRequestOpcode(type);
+    ubWqe->SetResponseBytes(type == TaOpcode::TA_OPCODE_READ ? size : 0);
+    ubWqe->SetRemoteAddress(0);
+    ubWqe->SetNeedsTransactionResponse(type == TaOpcode::TA_OPCODE_WRITE ||
+                                       type == TaOpcode::TA_OPCODE_READ);
+    ubWqe->SetLogicalBytes(size);
+    ubWqe->SetPayloadBytes(type == TaOpcode::TA_OPCODE_READ ? 0 : size);
+    ubWqe->SetCarrierBytes(type == TaOpcode::TA_OPCODE_READ ? ubWqe->GetTaSsnSize() : size);
     return ubWqe;
+}
+
+Ptr<UbWqe> UbFunction::CreateWqe(uint32_t src, uint32_t dest, uint32_t size, uint32_t wqeId)
+{
+    return CreateWqe(src, dest, size, wqeId, TaOpcode::TA_OPCODE_WRITE);
 }
 
 void UbFunction::PushWqeToJetty(Ptr<UbWqe> wqe, uint32_t jettyNum)
@@ -275,6 +297,16 @@ Ptr<UbWqeSegment> UbJetty::GenWqeSegment(Ptr<UbWqe> wqe, uint32_t segmentSize)
     segment->SetJettyNum(wqe->GetJettyNum());
     segment->SetTaMsn(wqe->GetTaMsn());
     segment->SetTaSsn(m_taSsnSndNxt); // 使用当前的分段序号
+    segment->SetSegmentKind(wqe->GetSegmentKind());
+    segment->SetOriginJettyNum(wqe->GetOriginJettyNum());
+    segment->SetRequestTassn(wqe->GetRequestTassn());
+    segment->SetRequestOpcode(wqe->GetRequestOpcode());
+    segment->SetResponseBytes(wqe->GetResponseBytes());
+    segment->SetRemoteAddress(wqe->GetRemoteAddress());
+    segment->SetNeedsTransactionResponse(wqe->NeedsTransactionResponse());
+    segment->SetLogicalBytes(segmentSize);
+    segment->SetPayloadBytes(wqe->GetType() == TaOpcode::TA_OPCODE_READ ? 0 : segmentSize);
+    segment->SetCarrierBytes(wqe->GetType() == TaOpcode::TA_OPCODE_READ ? 1 : segmentSize);
 
     // TP layer information will be set during subsequent TP layer scheduling
 
@@ -294,6 +326,19 @@ void UbJetty::PushWqe(Ptr<UbWqe> ubWqe)
     ubWqe->SetTaSsnStart(m_taSsnCnt);
     uint64_t ssnSize = (ubWqe->GetSize() + UB_WQE_TA_SEGMENT_BYTE - 1) / UB_WQE_TA_SEGMENT_BYTE;
     ubWqe->SetTaSsnSize(ssnSize);
+    // Assign request identity only after Jetty binding is known.
+    ubWqe->SetSegmentKind(UbTransactionSegmentKind::REQUEST);
+    ubWqe->SetOriginJettyNum(m_jettyNum);
+    ubWqe->SetRequestTassn(ubWqe->GetTaSsnStart());
+    ubWqe->SetRequestOpcode(ubWqe->GetType());
+    ubWqe->SetResponseBytes(ubWqe->GetType() == TaOpcode::TA_OPCODE_READ ? ubWqe->GetSize() : 0);
+    ubWqe->SetRemoteAddress(0);
+    ubWqe->SetNeedsTransactionResponse(ubWqe->GetType() == TaOpcode::TA_OPCODE_WRITE ||
+                                       ubWqe->GetType() == TaOpcode::TA_OPCODE_READ);
+    ubWqe->SetLogicalBytes(ubWqe->GetSize());
+    ubWqe->SetPayloadBytes(ubWqe->GetType() == TaOpcode::TA_OPCODE_READ ? 0 : ubWqe->GetSize());
+    ubWqe->SetCarrierBytes(ubWqe->GetType() == TaOpcode::TA_OPCODE_READ ? ssnSize
+                                                                         : ubWqe->GetSize());
 
     // 更新 Jetty 的 MSN 和 SSN 计数器
     m_taMsnCnt++;

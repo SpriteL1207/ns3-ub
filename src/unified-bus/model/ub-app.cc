@@ -100,10 +100,8 @@ void UbApp::SendTraffic(TrafficRecord record)
         std::vector<uint32_t> threadIds = {0, 1};
         ldstInstance->HandleLdstTask(record.sourceNode, record.destNode, record.dataSize,
                           record.taskId, record.priority, type, threadIds, 0);
-    } else if (record.opType == "URMA_WRITE" || record.opType == "URMA_READ" || record.opType == "URMA_WRITE_NOTIFY") {
-        const bool isRead = record.opType == "URMA_READ";
-        const bool isWriteNotify = record.opType == "URMA_WRITE_NOTIFY";
-        TaOpcode opcode = isRead ? TaOpcode::TA_OPCODE_READ : TaOpcode::TA_OPCODE_WRITE;
+    } else if (record.opType == "URMA_WRITE" || record.opType == "URMA_READ") {
+        // URMA发送
         Ptr<UbFunction> ubFunc = GetNode()->GetObject<UbController>()->GetUbFunction();
         Ptr<UbTransaction> ubTa = GetNode()->GetObject<UbController>()->GetUbTransaction();
         bool jettyExist = ubFunc->IsJettyExists(m_jettyNum);
@@ -117,29 +115,18 @@ void UbApp::SendTraffic(TrafficRecord record)
             record.destNode, UINT32_MAX, UINT32_MAX, record.priority);
         bool bindRst = ubTa->JettyBindTp(record.sourceNode, record.destNode, m_jettyNum, m_multiPathEnable, tpns);
         if (bindRst) {
-            Ptr<UbJetty> currJetty = ubFunc->GetJetty(m_jettyNum);
-            SetFinishCallback(MakeCallback(&UbApp::OnTaskCompleted, this), currJetty);
-            auto submitWqe = [&](uint32_t wqeTaskId, uint32_t size, TaOpcode wqeOpcode, bool notifyWqe) {
-                if (notifyWqe) {
-                    NS_LOG_INFO("Write Notify WQE Starts, jettyNum: " << m_jettyNum
-                                << " baseTaskId: " << GetBaseTaskId(wqeTaskId));
-                    WriteNotifyTaskStarts(GetNode()->GetId(), m_jettyNum, GetBaseTaskId(wqeTaskId));
-                } else {
-                    NS_LOG_INFO("WQE Starts, jettyNum: " << m_jettyNum << " taskId: " << wqeTaskId
-                                << " opcode: " << static_cast<uint32_t>(wqeOpcode));
-                    WqeTaskStartsNotify(GetNode()->GetId(), m_jettyNum, wqeTaskId);
-                    NS_LOG_INFO("[APPLICATION INFO] taskId: " << wqeTaskId << ",start time:"
-                                << Simulator::Now().GetNanoSeconds() << "ns");
-                }
-                Ptr<UbWqe> wqe = ubFunc->CreateWqe(record.sourceNode, record.destNode, size, wqeTaskId);
-                wqe->SetType(wqeOpcode);
-                ubFunc->PushWqeToJetty(wqe, m_jettyNum);
-            };
-            submitWqe(record.taskId, record.dataSize, opcode, false);
-            if (isWriteNotify) {
-                uint32_t notifyTaskId = MakeNotifyTaskId(record.taskId);
-                submitWqe(notifyTaskId, WRITE_NOTIFY_BYTE_SIZE, TaOpcode::TA_OPCODE_WRITE_NOTIFY, true);
-            }
+            Ptr<UbJetty> curr_jetty = ubFunc->GetJetty(m_jettyNum);
+            SetFinishCallback(MakeCallback(&UbApp::OnTaskCompleted, this), curr_jetty);
+            NS_LOG_INFO("WQE Starts, jettyNum: " << m_jettyNum << " taskId: " << record.taskId);
+            NS_LOG_INFO("Src: " << record.sourceNode << " Dst: " << record.destNode);
+            WqeTaskStartsNotify(GetNode()->GetId(), m_jettyNum, record.taskId);
+            NS_LOG_INFO("[APPLICATION INFO] taskId: " << record.taskId << ",start time:" <<
+                Simulator::Now().GetNanoSeconds() << "ns");
+            NS_ASSERT_MSG(TaOpcodeMap.find(record.opType) != TaOpcodeMap.end(), "TaOpcode Not Exist");
+            TaOpcode type = TaOpcodeMap[record.opType];
+            Ptr<UbWqe> wqe =
+                ubFunc->CreateWqe(record.sourceNode, record.destNode, record.dataSize, record.taskId, type);
+            ubFunc->PushWqeToJetty(wqe, m_jettyNum);
         }
         m_jettyNum++; // m_jettyNum 在client里是唯一的，不重复的
     } else {
@@ -150,12 +137,6 @@ void UbApp::SendTraffic(TrafficRecord record)
 void UbApp::OnTaskCompleted(uint32_t taskId, uint32_t jettyNum)
 {
     NS_LOG_FUNCTION(this << taskId);
-    if (IsNotifyTaskId(taskId)) {
-        uint32_t baseTaskId = GetBaseTaskId(taskId);
-        NS_LOG_INFO("Write Notify Completes, jettyNum: " << jettyNum << " baseTaskId: " << baseTaskId);
-        WriteNotifyTaskCompletes(GetNode()->GetId(), jettyNum, baseTaskId);
-        return;
-    }
     NS_LOG_INFO("WQE Completes, jettyNum: " << jettyNum << " taskId: " << taskId);
     WqeTaskCompletesNotify(GetNode()->GetId(), jettyNum, taskId);
     NS_LOG_INFO("[APPLICATION INFO] taskId: " << taskId << ",finish time:" << Simulator::Now().GetNanoSeconds() << "ns");
@@ -205,15 +186,4 @@ void UbApp::WqeTaskCompletesNotify(uint32_t nodeId, uint32_t jettyNum, uint32_t 
     m_traceWqeTaskCompletesNotify(nodeId, jettyNum, taskId);
 }
 
-void UbApp::WriteNotifyTaskStarts(uint32_t nodeId, uint32_t jettyNum, uint32_t baseTaskId)
-{
-    m_traceWriteNotifyTaskStarts(nodeId, jettyNum, baseTaskId);
-}
-
-void UbApp::WriteNotifyTaskCompletes(uint32_t nodeId, uint32_t jettyNum, uint32_t baseTaskId)
-{
-    m_traceWriteNotifyTaskCompletes(nodeId, jettyNum, baseTaskId);
-}
-
 } // namespace ns3
-

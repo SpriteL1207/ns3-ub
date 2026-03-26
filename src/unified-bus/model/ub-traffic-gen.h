@@ -81,7 +81,6 @@ public:
 
     map<std::string, TaOpcode> TaOpcodeMap = {
         {"URMA_WRITE", TaOpcode::TA_OPCODE_WRITE},
-        {"URMA_WRITE_NOTIFY", TaOpcode::TA_OPCODE_WRITE_NOTIFY},
         {"URMA_READ", TaOpcode::TA_OPCODE_READ},
         {"MEM_STORE", TaOpcode::TA_OPCODE_WRITE},
         {"MEM_LOAD", TaOpcode::TA_OPCODE_READ}
