@@ -2061,19 +2061,6 @@ HasQuickExampleBinary(const std::filesystem::path& repoRoot)
 }
 
 std::filesystem::path
-LocateQuickExampleBinary(const std::filesystem::path& repoRoot)
-{
-    const std::filesystem::path defaultBinary =
-        repoRoot / "build/src/unified-bus/examples/ns3.44-ub-quick-example-default";
-    if (std::filesystem::exists(defaultBinary))
-    {
-        return defaultBinary;
-    }
-
-    return repoRoot / "build/src/unified-bus/examples/ns3.44-ub-quick-example";
-}
-
-std::filesystem::path
 LocateRepoRoot()
 {
     std::filesystem::path repoRoot = PROJECT_SOURCE_PATH;
