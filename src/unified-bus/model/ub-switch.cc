@@ -23,14 +23,15 @@ TypeId UbSwitch::GetTypeId (void)
         .SetGroupName("UnifiedBus")
         .AddConstructor<UbSwitch> ()
         .AddAttribute("FlowControl",
-                      "Flow control mechanism (NONE, CBFC, CBFC_SHARED, or PFC). "
-                      "UB Spec mandates credit-based flow control; CBFC is the baseline.",
+                      "Flow control mechanism (NONE, CBFC, CBFC_SHARED, PFC_FIXED, or PFC_DYNAMIC). "
+                      "CBFC and PFC modes are peer policies over the same ingress accounting model.",
                       EnumValue(FcType::CBFC),
                       MakeEnumAccessor<FcType>(&UbSwitch::m_flowControlType),
                       MakeEnumChecker(FcType::NONE, "NONE",
                                       FcType::CBFC, "CBFC",
-                                      FcType::CBFC_SHARED_CRD, "CBFC_SHARED",
-                                      FcType::PFC, "PFC"))
+                                      FcType::CBFC_SHARED, "CBFC_SHARED",
+                                      FcType::PFC_FIXED, "PFC_FIXED",
+                                      FcType::PFC_DYNAMIC, "PFC_DYNAMIC"))
         .AddAttribute("VlScheduler",
                       "VL inter-scheduling algorithm (SP or DWRR).",
                       EnumValue(SP),
@@ -50,6 +51,11 @@ void UbSwitch::Init()
 {
     auto node = GetObject<Node>();
     m_portsNum = node->GetNDevices();
+    NS_LOG_DEBUG("UbSwitch Init: nodeId=" << node->GetId()
+                 << " flowControlMode=" << static_cast<int>(m_flowControlType)
+                 << " ports=" << m_portsNum
+                 << " vlNum=" << m_vlNum);
+
     // alg init
     switch (m_vlScheduler) {
         case DWRR:
@@ -530,13 +536,17 @@ void UbSwitch::SendPacket(Ptr<Packet> packet, uint32_t inPort, uint32_t outPort,
 {
     auto node = GetObject<Node>();
     Ptr<UbPort> recvPort = DynamicCast<ns3::UbPort>(node->GetDevice(inPort));
+    UbPacketType_t packetType = GetPacketType(packet);
 
     m_voq[outPort][priority][inPort]->Push(packet);
 
     // Update both InPort and OutPort view buffer statistics
     m_queueManager->PushToVoq(inPort, outPort, priority, packet->GetSize());
 
-    if (IsPFCEnable()) {
+    // Only data packets participate in ingress data-plane accounting/threshold reactions.
+    // Locally generated control frames still share the scheduler, but they are a modeling
+    // simplification and must not recursively trigger another round of data-packet handling.
+    if (packetType != UB_CONTROL_FRAME && IsPFCEnable()) {
         recvPort->m_flowControl->HandleReceivedPacket(packet);
     }
 
@@ -546,19 +556,17 @@ void UbSwitch::SendPacket(Ptr<Packet> packet, uint32_t inPort, uint32_t outPort,
 
 /**
  * @brief Send control frame (PFC/CBFC) on specified port
- * Control frames use highest priority (0) and are locally generated (inPort = outPort)
+ * Control frames use highest priority (0) and are locally generated (inPort = outPort).
+ *
+ * Modeling note:
+ * Control frames share the VOQ/scheduler path so that link arbitration still sees them,
+ * but they deliberately bypass data-plane ingress admission/accounting. We do not model
+ * the full post-drop control-plane behavior, so pretending to run reserve/shared/headroom
+ * admission here would only create inconsistent state.
  */
 void UbSwitch::SendControlFrame(Ptr<Packet> packet, uint32_t portId)
 {
-    // Control frames: inPort = outPort, priority = 0
     uint32_t priority = 0;
-
-    // Check if high priority buffer has space (should rarely be full)
-    if (!m_queueManager->CheckInPortSpace(portId, priority, packet->GetSize())) {
-        NS_LOG_WARN("High priority buffer full! Port=" << portId
-                    << " This should rarely happen for control frames.");
-    }
-
     SendPacket(packet, portId, portId, priority);
 }
 
@@ -589,12 +597,12 @@ bool UbSwitch::IsCBFCEnable()
 
 bool UbSwitch::IsCBFCSharedEnable()
 {
-    return m_flowControlType == FcType::CBFC_SHARED_CRD;
+    return m_flowControlType == FcType::CBFC_SHARED;
 }
 
 bool UbSwitch::IsPFCEnable()
 {
-    return m_flowControlType == FcType::PFC;
+    return m_flowControlType == FcType::PFC_FIXED || m_flowControlType == FcType::PFC_DYNAMIC;
 }
 
 Ptr<UbQueueManager> UbSwitch::GetQueueManager()

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
-#include "ns3/ub-queue-manager.h"
-#include "ns3/ub-header.h"
+#include "ub-queue-manager.h"
+#include "protocol/ub-header.h"
+#include "ns3/uinteger.h"
+#include <algorithm>
 
 namespace ns3 {
 
@@ -119,36 +121,92 @@ TypeId UbQueueManager::GetTypeId(void)
         .SetParent<Object>()
         .SetGroupName("UnifiedBus")
         .AddConstructor<UbQueueManager>()
-        .AddAttribute("BufferSizePerInportPriority",
-        "Buffer size limit per (inPort, priority) queue in bytes.",
-        UintegerValue(DEFAULT_INPORT_PRIORITY_BUFFER_SIZE),
-        MakeUintegerAccessor(&UbQueueManager::m_inPortPriorityBufferLimit),
+        .AddAttribute("ReservePerQueueBytes",
+        "Per-queue reserve in bytes. Queue means one ingress (port, VL) queue.",
+        UintegerValue(DEFAULT_RESERVE_PER_QUEUE_BYTES),
+        MakeUintegerAccessor(&UbQueueManager::m_reservePerQueueBytes),
+        MakeUintegerChecker<uint32_t>())
+        .AddAttribute("SharedPoolBytes",
+        "Global shared ingress pool in bytes. Bytes beyond reserve consume this pool before headroom.",
+        UintegerValue(DEFAULT_SHARED_POOL_BYTES),
+        MakeUintegerAccessor(&UbQueueManager::m_sharedPoolBytes),
+        MakeUintegerChecker<uint64_t>())
+        .AddAttribute("AlphaShift",
+        "Dynamic threshold shift for the global shared pool. "
+        "xoff = (SharedPoolBytes - GlobalSharedUsedBytes) >> alpha. 0 = no per-queue fairness limit.",
+        UintegerValue(DEFAULT_ALPHA_SHIFT),
+        MakeUintegerAccessor(&UbQueueManager::m_alphaShift),
+        MakeUintegerChecker<uint32_t>())
+        .AddAttribute("HeadroomPerPortBytes",
+        "Per-port headroom in bytes for absorbing in-flight packets during PFC pause.",
+        UintegerValue(DEFAULT_HEADROOM_PER_PORT_BYTES),
+        MakeUintegerAccessor(&UbQueueManager::m_headroomPerPortBytes),
+        MakeUintegerChecker<uint32_t>())
+        .AddAttribute("ResumeOffset",
+        "PFC resume anti-oscillation offset in bytes. Must be >= 1 MTU (4KB for UB).",
+        UintegerValue(DEFAULT_RESUME_OFFSET),
+        MakeUintegerAccessor(&UbQueueManager::m_resumeOffset),
         MakeUintegerChecker<uint32_t>());
     return tid;
 }
 
 void UbQueueManager::Init()
 {
-    // 初始化双视图统计数组
-    m_inPortBuffer.resize(m_portsNum);
-    for (auto& i : m_inPortBuffer) {
-        i.resize(m_vlNum, 0);
+    NS_ABORT_MSG_IF(m_alphaShift >= 64, "UbQueueManager AlphaShift must be < 64");
+
+    m_inPortBuffer.assign(m_portsNum, std::vector<uint64_t>(m_vlNum, 0));
+    m_outPortBuffer.assign(m_portsNum, std::vector<uint64_t>(m_vlNum, 0));
+    m_hdrmBytes.assign(m_portsNum, std::vector<uint64_t>(m_vlNum, 0));
+
+    m_sharedUsedBytes = 0;
+    m_totalHeadroomBytes = static_cast<uint64_t>(m_headroomPerPortBytes) * m_portsNum;
+    m_totalReservedBytes = static_cast<uint64_t>(m_reservePerQueueBytes) * m_vlNum * m_portsNum;
+
+    if (m_sharedPoolBytes == 0) {
+        NS_LOG_DEBUG("SharedPoolBytes is 0; ingress admission degenerates to reserve + optional headroom");
     }
-    m_outPortBuffer.resize(m_portsNum);
-    for (auto& i : m_outPortBuffer) {
-        i.resize(m_vlNum, 0);
+
+    if (m_headroomPerPortBytes == 0) {
+        NS_LOG_DEBUG("HeadroomPerPortBytes is 0; packets beyond reserve/shared limits will be dropped immediately");
     }
-    
-    NS_LOG_DEBUG("UbQueueManager Init: portsNum=" << m_portsNum 
-                 << " vlNum=" << m_vlNum
-                 << " inPortPriorityBufferLimit=" << m_inPortPriorityBufferLimit);
+
+    uint64_t maxXoffThresh = GetXoffThreshold();
+
+    if (m_sharedPoolBytes > 0 && m_resumeOffset > maxXoffThresh) {
+        NS_LOG_WARN("ResumeOffset (" << m_resumeOffset
+                    << ") > max xoff threshold (" << maxXoffThresh
+                    << " = sharedPool " << m_sharedPoolBytes << " >> " << m_alphaShift
+                    << "), PFC xon watermark is below zero — PFC will only resume when "
+                    "sharedUsed drops to 0. Consider reducing ResumeOffset or AlphaShift.");
+    }
+
+    NS_LOG_DEBUG("UbQueueManager Init: reservePerQueue=" << m_reservePerQueueBytes
+                 << " sharedPoolGlobal=" << m_sharedPoolBytes
+                 << " headroomPerPort=" << m_headroomPerPortBytes
+                 << " totalReserved=" << m_totalReservedBytes
+                 << " totalHeadroom=" << m_totalHeadroomBytes
+                 << " totalIngressBudget=" << (m_totalReservedBytes + m_totalHeadroomBytes + m_sharedPoolBytes)
+                 << " alphaShift=" << m_alphaShift
+                 << " resumeOffset=" << m_resumeOffset);
 }
 
 // ========== VOQ Dual-View Operations ==========
 
+bool UbQueueManager::IsBypassedControlFrame(uint32_t inPort, uint32_t outPort, uint32_t priority) const
+{
+    // Unified-bus models locally generated control frames as (inPort == outPort, priority == 0).
+    // They share the VOQ scheduler, but intentionally bypass data-plane ingress accounting:
+    // no reserve/shared/headroom bookkeeping and no out-port occupancy contribution.
+    return priority == 0 && inPort == outPort;
+}
+
 bool UbQueueManager::CheckVoqSpace(uint32_t inPort, uint32_t outPort, 
                                     uint32_t priority, uint32_t pSize)
 {
+    if (IsBypassedControlFrame(inPort, outPort, priority)) {
+        return true;
+    }
+
     // Check if both views have space
     bool inPortOk = CheckInPortSpace(inPort, priority, pSize);
     bool outPortOk = CheckOutPortSpace(outPort, priority, pSize);
@@ -158,16 +216,7 @@ bool UbQueueManager::CheckVoqSpace(uint32_t inPort, uint32_t outPort,
 
 bool UbQueueManager::CheckInPortSpace(uint32_t inPort, uint32_t priority, uint32_t pSize)
 {
-    bool hasSpace = (m_inPortBuffer[inPort][priority] + pSize < m_inPortPriorityBufferLimit);
-    
-    if (!hasSpace) {
-        NS_LOG_DEBUG("CheckInPortSpace FAIL: inPort=" << inPort 
-                     << " pri=" << priority
-                     << " used=" << m_inPortBuffer[inPort][priority] 
-                     << " limit=" << m_inPortPriorityBufferLimit);
-    }
-    
-    return hasSpace;
+    return CheckIngressAdmission(inPort, priority, pSize);
 }
 
 bool UbQueueManager::CheckOutPortSpace(uint32_t outPort, uint32_t priority, uint32_t pSize)
@@ -183,27 +232,39 @@ bool UbQueueManager::CheckOutPortSpace(uint32_t outPort, uint32_t priority, uint
     return true;  // Always return true, OutPort view has no hard limit
 }
 
-void UbQueueManager::PushToVoq(uint32_t inPort, uint32_t outPort, 
+void UbQueueManager::PushToVoq(uint32_t inPort, uint32_t outPort,
                                 uint32_t priority, uint32_t pSize)
 {
-    // 同时更新两个视图（物理上只有一个包在VOQ中）
-    m_inPortBuffer[inPort][priority] += pSize;
+    if (IsBypassedControlFrame(inPort, outPort, priority)) {
+        NS_LOG_DEBUG("PushToVoq bypassed data-plane accounting for local control frame: inPort="
+                     << inPort << " outPort=" << outPort << " pri=" << priority
+                     << " size=" << pSize);
+        return;
+    }
+
+    UpdateIngressAdmission(inPort, priority, pSize);
     m_outPortBuffer[outPort][priority] += pSize;
-    
-    NS_LOG_DEBUG("PushToVoq: inPort=" << inPort << " outPort=" << outPort 
+
+    NS_LOG_DEBUG("PushToVoq: inPort=" << inPort << " outPort=" << outPort
                  << " pri=" << priority << " size=" << pSize
                  << " | inPortBuf=" << m_inPortBuffer[inPort][priority]
                  << " outPortBuf=" << m_outPortBuffer[outPort][priority]);
 }
 
-void UbQueueManager::PopFromVoq(uint32_t inPort, uint32_t outPort, 
+void UbQueueManager::PopFromVoq(uint32_t inPort, uint32_t outPort,
                                  uint32_t priority, uint32_t pSize)
 {
-    // 同时更新两个视图
-    m_inPortBuffer[inPort][priority] -= pSize;
+    if (IsBypassedControlFrame(inPort, outPort, priority)) {
+        NS_LOG_DEBUG("PopFromVoq bypassed data-plane accounting for local control frame: inPort="
+                     << inPort << " outPort=" << outPort << " pri=" << priority
+                     << " size=" << pSize);
+        return;
+    }
+
+    RemoveFromIngressAdmission(inPort, priority, pSize);
     m_outPortBuffer[outPort][priority] -= pSize;
-    
-    NS_LOG_DEBUG("PopFromVoq: inPort=" << inPort << " outPort=" << outPort 
+
+    NS_LOG_DEBUG("PopFromVoq: inPort=" << inPort << " outPort=" << outPort
                  << " pri=" << priority << " size=" << pSize
                  << " | inPortBuf=" << m_inPortBuffer[inPort][priority]
                  << " outPortBuf=" << m_outPortBuffer[outPort][priority]);
@@ -211,12 +272,12 @@ void UbQueueManager::PopFromVoq(uint32_t inPort, uint32_t outPort,
 
 // ========== 查询接口：InPort视图 ==========
 
-uint64_t UbQueueManager::GetInPortBufferUsed(uint32_t inPort, uint32_t priority)
+uint64_t UbQueueManager::GetQueueIngressNonHeadroomBytes(uint32_t inPort, uint32_t priority) const
 {
     return m_inPortBuffer[inPort][priority];
 }
 
-uint64_t UbQueueManager::GetTotalInPortBufferUsed(uint32_t inPort)
+uint64_t UbQueueManager::GetPortIngressNonHeadroomBytes(uint32_t inPort) const
 {
     uint64_t sum = 0;
     for (uint32_t i = 0; i < m_vlNum; i++) {
@@ -239,6 +300,124 @@ uint64_t UbQueueManager::GetTotalOutPortBufferUsed(uint32_t outPort)
         sum += m_outPortBuffer[outPort][i];
     }
     return sum;
+}
+
+void UbQueueManager::SetReservePerQueueBytes(uint32_t size)
+{
+    m_reservePerQueueBytes = size;
+}
+
+// ========== Three-Tier Buffer: Admission Control ==========
+
+bool UbQueueManager::CheckIngressAdmission(uint32_t inPort, uint32_t priority, uint32_t pSize)
+{
+    uint64_t portHdrmUsed = 0;
+    for (uint32_t i = 0; i < m_vlNum; i++) {
+        portHdrmUsed += m_hdrmBytes[inPort][i];
+    }
+
+    if (m_hdrmBytes[inPort][priority] > 0) {
+        if (portHdrmUsed + pSize > m_headroomPerPortBytes) {
+            NS_LOG_DEBUG("CheckIngressAdmission DROP (sticky hdrm full): inPort=" << inPort
+                         << " pri=" << priority
+                         << " portHdrmUsed=" << portHdrmUsed
+                         << " hdrmLimit=" << m_headroomPerPortBytes);
+            return false;
+        }
+        return true;
+    }
+
+    uint64_t newBytes = m_inPortBuffer[inPort][priority] + pSize;
+    if (newBytes <= m_reservePerQueueBytes) {
+        return true;
+    }
+
+    uint64_t xoffThresh = GetXoffThreshold();
+    uint64_t sharedAfter = newBytes - m_reservePerQueueBytes;
+    bool hdrmFull = (portHdrmUsed + pSize > m_headroomPerPortBytes);
+    bool willUseHdrm = (sharedAfter > xoffThresh);
+
+    if (hdrmFull && willUseHdrm) {
+        NS_LOG_DEBUG("CheckIngressAdmission DROP: inPort=" << inPort
+                     << " pri=" << priority
+                     << " portHdrmUsed=" << portHdrmUsed
+                     << " hdrmLimit=" << m_headroomPerPortBytes
+                     << " sharedAfter=" << sharedAfter
+                     << " xoffThresh=" << xoffThresh);
+        return false;
+    }
+    return true;
+}
+
+void UbQueueManager::UpdateIngressAdmission(uint32_t inPort, uint32_t priority, uint32_t pSize)
+{
+    if (m_hdrmBytes[inPort][priority] > 0) {
+        m_hdrmBytes[inPort][priority] += pSize;
+        return;
+    }
+
+    uint64_t newBytes = m_inPortBuffer[inPort][priority] + pSize;
+
+    if (newBytes <= m_reservePerQueueBytes) {
+        m_inPortBuffer[inPort][priority] += pSize;
+    } else {
+        uint64_t thresh = GetXoffThreshold();
+        uint64_t sharedAfter = newBytes - m_reservePerQueueBytes;
+        if (sharedAfter > thresh) {
+            NS_ASSERT_MSG(m_headroomPerPortBytes > 0,
+                          "Headroom admission should only trigger when HeadroomPerPortBytes is positive");
+            m_hdrmBytes[inPort][priority] += pSize;
+        } else {
+            uint64_t prevShared = GetQueueIngressSharedBytes(inPort, priority);
+            m_inPortBuffer[inPort][priority] = newBytes;
+            m_sharedUsedBytes += (sharedAfter - prevShared);
+        }
+    }
+}
+
+void UbQueueManager::RemoveFromIngressAdmission(uint32_t inPort, uint32_t priority, uint32_t pSize)
+{
+    uint64_t fromHdrm = std::min(m_hdrmBytes[inPort][priority], static_cast<uint64_t>(pSize));
+    uint64_t fromIngress = pSize - fromHdrm;
+
+    uint64_t prevShared = GetQueueIngressSharedBytes(inPort, priority);
+
+    m_hdrmBytes[inPort][priority] -= fromHdrm;
+    m_inPortBuffer[inPort][priority] -= fromIngress;
+
+    uint64_t curShared = GetQueueIngressSharedBytes(inPort, priority);
+    uint64_t freedShared = prevShared > curShared ? prevShared - curShared : 0;
+    m_sharedUsedBytes -= std::min(freedShared, m_sharedUsedBytes);
+}
+
+// ========== Three-Tier Buffer: Queries ==========
+
+uint64_t UbQueueManager::GetXoffThreshold() const
+{
+    uint64_t remaining = m_sharedPoolBytes > m_sharedUsedBytes ? m_sharedPoolBytes - m_sharedUsedBytes : 0;
+    return remaining >> m_alphaShift;
+}
+
+uint64_t UbQueueManager::GetXonThreshold() const
+{
+    uint64_t xoff = GetXoffThreshold();
+    return xoff > m_resumeOffset ? xoff - m_resumeOffset : 0;
+}
+
+uint64_t UbQueueManager::GetQueueIngressSharedBytes(uint32_t inPort, uint32_t priority) const
+{
+    uint64_t used = m_inPortBuffer[inPort][priority];
+    return used > m_reservePerQueueBytes ? used - m_reservePerQueueBytes : 0;
+}
+
+uint64_t UbQueueManager::GetQueueIngressHeadroomBytes(uint32_t inPort, uint32_t priority) const
+{
+    return m_hdrmBytes[inPort][priority];
+}
+
+uint64_t UbQueueManager::GetQueueIngressTotalBytes(uint32_t inPort, uint32_t priority) const
+{
+    return GetQueueIngressNonHeadroomBytes(inPort, priority) + GetQueueIngressHeadroomBytes(inPort, priority);
 }
 
 } // namespace ns3

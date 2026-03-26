@@ -145,7 +145,7 @@ public:
     virtual ~UbPfc() {}
     virtual FcType GetFcType() override;
     
-    void Init(int32_t portpfcUpThld, int32_t portpfcLowThld, uint32_t nodeId, uint32_t portId);
+    void Init(FcType mode, int32_t portpfcUpThld, int32_t portpfcLowThld, uint32_t nodeId, uint32_t portId);
     
     virtual bool IsFcLimited(Ptr<UbIngressQueue> ingressQ) override;
     virtual void HandleReleaseOccupiedFlowControl(Ptr<Packet> p,
@@ -156,8 +156,10 @@ public:
     bool UpdatePfcStatus(Ptr<Packet> p);
     void SendPfc(Ptr<Packet> pfcPacket, uint32_t targetPortId);
     Ptr<Packet> CheckPfcThreshold(Ptr<Packet> p, uint32_t portId);
+    void UpdatePfcFixedCredits(Ptr<UbPort> port, uint32_t portId, int ubVlNum);
+    void UpdatePfcDynamicCredits(Ptr<UbPort> port, uint32_t portId, int ubVlNum);
 public:
-    FcType m_fcType { FcType::PFC };
+    FcType m_fcType { FcType::PFC_FIXED };
     uint32_t m_portId;
     uint32_t m_nodeId;
     void DoDispose() override;

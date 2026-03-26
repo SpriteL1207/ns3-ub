@@ -12,6 +12,13 @@ namespace ns3 {
 
 constexpr long DEFAULT_INPORT_PRIORITY_BUFFER_SIZE = 1048576;  // 1MB
 
+// Explicit ingress buffer knobs
+constexpr uint32_t DEFAULT_RESERVE_PER_QUEUE_BYTES = DEFAULT_INPORT_PRIORITY_BUFFER_SIZE;
+constexpr uint64_t DEFAULT_SHARED_POOL_BYTES       = 0;
+constexpr uint32_t DEFAULT_HEADROOM_PER_PORT_BYTES = 0;
+constexpr uint32_t DEFAULT_ALPHA_SHIFT             = 1;
+constexpr uint32_t DEFAULT_RESUME_OFFSET           = 4 * 1024;
+
 enum class IngressQueueType {
     VOQ,        // Virtual Output Queue - 转发数据包队列
     TP,         // Transport Channel - 传输层可靠通道
@@ -164,12 +171,12 @@ public:
      * @param priority 优先级
      * @return 字节数
      */
-    uint64_t GetInPortBufferUsed(uint32_t inPort, uint32_t priority);
+    uint64_t GetQueueIngressNonHeadroomBytes(uint32_t inPort, uint32_t priority) const;
     
     /**
      * @brief 获取入端口所有优先级的总buffer占用
      */
-    uint64_t GetTotalInPortBufferUsed(uint32_t inPort);
+    uint64_t GetPortIngressNonHeadroomBytes(uint32_t inPort) const;
     
     // ========== 查询接口：OutPort视图（用于路由和拥塞控制） ==========
     
@@ -189,20 +196,53 @@ public:
     /**
      * @brief 获取每个(port, priority)队列的buffer大小限制（用于丢包判断）
      */
-    uint32_t GetBufferSizePerQueue() const { return m_inPortPriorityBufferLimit; }
+    uint32_t GetReservePerQueueBytes() const { return m_reservePerQueueBytes; }
     
-    void SetBufferSize(uint32_t size);
+    void SetReservePerQueueBytes(uint32_t size);
+
+    // ========== Three-Tier Buffer: Admission Control ==========
+
+    bool CheckIngressAdmission(uint32_t inPort, uint32_t priority, uint32_t pSize);
+
+    // ========== Three-Tier Buffer: Query APIs ==========
+
+    uint64_t GetXoffThreshold() const;
+    uint64_t GetXonThreshold() const;
+    uint64_t GetQueueIngressSharedBytes(uint32_t inPort, uint32_t priority) const;
+    uint64_t GetGlobalSharedUsedBytes() const { return m_sharedUsedBytes; }
+    uint64_t GetQueueIngressHeadroomBytes(uint32_t inPort, uint32_t priority) const;
+    uint64_t GetQueueIngressTotalBytes(uint32_t inPort, uint32_t priority) const;
+    uint32_t GetResumeOffset() const { return m_resumeOffset; }
+    uint64_t GetSharedPoolBytes() const { return m_sharedPoolBytes; }
+    uint32_t GetHeadroomPerPortBytes() const { return m_headroomPerPortBytes; }
 
 private:
     using DarrayU64 = std::vector<std::vector<uint64_t>>;
+    bool IsBypassedControlFrame(uint32_t inPort, uint32_t outPort, uint32_t priority) const;
+
     uint32_t m_vlNum = 0;
     uint32_t m_portsNum = 0;
-    uint32_t m_inPortPriorityBufferLimit;  // InPort buffer limit per (inPort, priority) queue (for drop decision)
+    uint32_t m_reservePerQueueBytes {DEFAULT_RESERVE_PER_QUEUE_BYTES};
     
     // 双视图统计（同一个包在VOQ中，但从两个维度统计）
     DarrayU64 m_inPortBuffer;   // [inPort][priority] - 用于流控
     DarrayU64 m_outPortBuffer;  // [outPort][priority] - 用于路由和拥塞控制
+
+    // ========== Three-Tier Buffer: Internals ==========
+
+    void UpdateIngressAdmission(uint32_t inPort, uint32_t priority, uint32_t pSize);
+    void RemoveFromIngressAdmission(uint32_t inPort, uint32_t priority, uint32_t pSize);
+
+    uint64_t m_sharedPoolBytes {DEFAULT_SHARED_POOL_BYTES};
+    uint32_t m_alphaShift {DEFAULT_ALPHA_SHIFT};
+    uint32_t m_headroomPerPortBytes {DEFAULT_HEADROOM_PER_PORT_BYTES};
+    uint32_t m_resumeOffset {DEFAULT_RESUME_OFFSET};
+
+    uint64_t m_totalHeadroomBytes {0};
+    uint64_t m_totalReservedBytes {0};
+    uint64_t m_sharedUsedBytes {0};
+    DarrayU64 m_hdrmBytes;    // [inPort][priority] headroom usage
 };
 } // namespace ns3
 
-#endif /* UB_BUFFER_MANAGE_H */
+#endif /* UB_QUEUE_MANAGER_H */
