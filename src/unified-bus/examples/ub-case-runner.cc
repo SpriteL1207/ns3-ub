@@ -222,7 +222,7 @@ int ReportUnsupportedTrafficGenMpi()
 
 RuntimeSelection::Mode ResolveRuntimeMode(bool enableMpi, uint32_t mtpThreads)
 {
-    const bool wantsMtp = IsMtpRequested(mtpThreads);
+    [[maybe_unused]] const bool wantsMtp = IsMtpRequested(mtpThreads);
     if (enableMpi)
     {
 #ifdef NS3_MTP

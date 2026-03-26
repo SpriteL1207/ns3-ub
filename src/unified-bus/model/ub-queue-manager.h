@@ -85,7 +85,7 @@ public:
         }
         m_queue.push(p);
     }
-    IngressQueueType GetIngressQueueType();
+    IngressQueueType GetIngressQueueType() override;
     uint32_t GetNextPacketSize() override;
 
 private:

@@ -80,7 +80,7 @@ public:
      * @param port Port to send through
      */
     Ptr<Packet> GetNextPacket() override;
-    uint32_t GetNextPacketSize();
+    uint32_t GetNextPacketSize() override;
     bool IsEmpty() override;
     bool IsLimited() override;
 
