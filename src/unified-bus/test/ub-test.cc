@@ -2243,6 +2243,10 @@ CopyCaseDirWithTrafficFile(const std::string& sourceCasePathRelative, const std:
     return tempCaseDir;
 }
 
+// The old ub-local-hybrid-minimal fixture was removed as a non-core sample, so
+// local single-thread quick-example tests reuse the maintained 2-node case.
+constexpr const char* kLocalSingleThreadQuickExampleCase = "scratch/2nodes_single-tp";
+
 std::pair<int, std::string>
 RunQuickExampleAbsoluteCaseCommand(const std::string& testFile,
                                    const std::string& extraArgs,
@@ -2574,9 +2578,9 @@ class UbQuickExampleLocalSingleUrmaReadSystemTest : public TestCase
         SetDataDir(NS_TEST_SOURCEDIR);
         const std::string trafficCsv =
             "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases\n"
-            "0,0,3,4096,URMA_READ,7,10ns,10,\n";
+            "0,0,1,4096,URMA_READ,7,10ns,10,\n";
         const std::filesystem::path caseDir =
-            CopyCaseDirWithTrafficFile("scratch/ub-local-hybrid-minimal", trafficCsv);
+            CopyCaseDirWithTrafficFile(kLocalSingleThreadQuickExampleCase, trafficCsv);
 
         auto [status, output] =
             RunQuickExampleAbsoluteCaseCommand(CreateTempDirFilename(GetName() + ".log"),
@@ -2607,9 +2611,9 @@ class UbQuickExampleLocalSingleUrmaWriteSystemTest : public TestCase
         SetDataDir(NS_TEST_SOURCEDIR);
         const std::string trafficCsv =
             "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases\n"
-            "0,0,3,4096,URMA_WRITE,7,10ns,10,\n";
+            "0,0,1,4096,URMA_WRITE,7,10ns,10,\n";
         const std::filesystem::path caseDir =
-            CopyCaseDirWithTrafficFile("scratch/ub-local-hybrid-minimal", trafficCsv);
+            CopyCaseDirWithTrafficFile(kLocalSingleThreadQuickExampleCase, trafficCsv);
 
         auto [status, output] =
             RunQuickExampleAbsoluteCaseCommand(CreateTempDirFilename(GetName() + ".log"),
@@ -2640,10 +2644,10 @@ class UbQuickExampleLocalWriteThenReadSystemTest : public TestCase
         SetDataDir(NS_TEST_SOURCEDIR);
         const std::string trafficCsv =
             "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases\n"
-            "0,0,3,4096,URMA_WRITE,7,10ns,10,\n"
-            "1,0,3,4096,URMA_READ,7,10ns,20,10\n";
+            "0,0,1,4096,URMA_WRITE,7,10ns,10,\n"
+            "1,0,1,4096,URMA_READ,7,10ns,20,10\n";
         const std::filesystem::path caseDir =
-            CopyCaseDirWithTrafficFile("scratch/ub-local-hybrid-minimal", trafficCsv);
+            CopyCaseDirWithTrafficFile(kLocalSingleThreadQuickExampleCase, trafficCsv);
 
         auto [status, output] =
             RunQuickExampleAbsoluteCaseCommand(CreateTempDirFilename(GetName() + ".log"),
@@ -2674,12 +2678,12 @@ class UbQuickExampleLocalMixedUrmaReadWriteSystemTest : public TestCase
         SetDataDir(NS_TEST_SOURCEDIR);
         const std::string trafficCsv =
             "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases\n"
-            "0,0,3,4096,URMA_WRITE,7,10ns,10,\n"
-            "1,0,3,8192,URMA_READ,7,10ns,20,\n"
-            "2,3,0,4096,URMA_WRITE,7,10ns,30,\n"
-            "3,3,0,8192,URMA_READ,7,10ns,40,\n";
+            "0,0,1,4096,URMA_WRITE,7,10ns,10,\n"
+            "1,0,1,8192,URMA_READ,7,10ns,20,\n"
+            "2,1,0,4096,URMA_WRITE,7,10ns,30,\n"
+            "3,1,0,8192,URMA_READ,7,10ns,40,\n";
         const std::filesystem::path caseDir =
-            CopyCaseDirWithTrafficFile("scratch/ub-local-hybrid-minimal", trafficCsv);
+            CopyCaseDirWithTrafficFile(kLocalSingleThreadQuickExampleCase, trafficCsv);
 
         auto [status, output] =
             RunQuickExampleAbsoluteCaseCommand(
