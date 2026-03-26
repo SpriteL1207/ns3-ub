@@ -82,11 +82,16 @@ Common UB attributes you’ll see (all names below come from `GetTypeId().AddAtt
   - `ns3::UbPort::UbDataRate` (DataRate)
   - `ns3::UbPort::UbInterframeGap` (Time)
 - Credit-based/PFC knobs:
+  - `ns3::UbSwitch::FlowControl` (`NONE`, `CBFC`, `CBFC_SHARED`, `PFC_FIXED`, `PFC_DYNAMIC`)
   - `ns3::UbPort::CbfcFlitLenByte`, `CbfcFlitsPerCell`, `CbfcInitCreditCell`, `CbfcRetCellGrainDataPacket`, `CbfcRetCellGrainControlPacket`
   - `ns3::UbPort::PfcUpThld`, `PfcLowThld`
 - Congestion control (CAQM) and buffers:
   - `ns3::UbCaqm::*`, `ns3::UbHostCaqm::*`, `ns3::UbSwitchCaqm::*`
-  - `ns3::UbQueueManager::BufferSize`
+  - `ns3::UbQueueManager::ReservePerQueueBytes`
+  - `ns3::UbQueueManager::SharedPoolBytes`
+  - `ns3::UbQueueManager::HeadroomPerPortBytes`
+  - `ns3::UbQueueManager::AlphaShift`
+  - `ns3::UbQueueManager::ResumeOffset`
 - Transport behavior (`ns3::UbTransportChannel`):
   - `UsePacketSpray` (bool)
   - `UseShortestPaths` (bool)
@@ -399,9 +404,14 @@ Place these in `network_attribute.txt` as needed (values shown are examples take
   - `default ns3::UbApiLdstThread::UsePacketSpray "true"`
   - `default ns3::UbApiLdstThread::UseShortestPaths "true"`
 - Flow control and buffers (as needed)
+  - `default ns3::UbSwitch::FlowControl "PFC_FIXED"`
   - `default ns3::UbPort::PfcUpThld "1677721"`
   - `default ns3::UbPort::PfcLowThld "1342176"`
-  - `default ns3::UbQueueManager::BufferSize "12582912"`
+  - `default ns3::UbQueueManager::ReservePerQueueBytes "1048576"`
+  - `default ns3::UbQueueManager::SharedPoolBytes "12582912"`
+  - `default ns3::UbQueueManager::HeadroomPerPortBytes "262144"`
+  - `default ns3::UbQueueManager::AlphaShift "1"`
+  - `default ns3::UbQueueManager::ResumeOffset "4096"`
 - Congestion control
   - `global UB_CC_ALGO "CAQM"`
   - `global UB_CC_ENABLED "false"`

@@ -14,7 +14,7 @@ namespace ns3 {
 NS_OBJECT_ENSURE_REGISTERED(UbPort);
 NS_LOG_COMPONENT_DEFINE("UbPort");
 
-constexpr long DEFAULT_PFC_UP_THLD = 819200;   // 800KB ≈ 78% of 1MB per-VL buffer
+constexpr long DEFAULT_PFC_UP_THLD = 819200;   // 800KB ≈ 78% of 1MB per-queue reserve
 constexpr long DEFAULT_PFC_LOW_THLD = 655360;  // 640KB ≈ 80% of XOFF threshold
 
 /*********************
@@ -280,7 +280,7 @@ void UbPort::CreateAndInitFc(FcType type)
                 NS_LOG_DEBUG("[UbPort CreateAndInitFc] flowControl Cbfc Init");
             }
             break;
-        case FcType::CBFC_SHARED_CRD:
+        case FcType::CBFC_SHARED:
             m_flowControl = CreateObject<UbCbfcSharedCredit>();
             if (m_flowControl == nullptr) {
                 NS_FATAL_ERROR("Failed to create UbCbfcSharedCredit object for port " << m_portId);
@@ -297,18 +297,24 @@ void UbPort::CreateAndInitFc(FcType type)
                 NS_LOG_DEBUG("[UbPort CreateAndInitFc] flowControl CbfcSharedMode Init");
             }
             break;
-        case FcType::PFC:
+        case FcType::PFC_FIXED:
+        case FcType::PFC_DYNAMIC:
             m_flowControl = CreateObject<UbPfc>();
             if (m_flowControl == nullptr) {
                 NS_FATAL_ERROR("Failed to create UbPfc object for port " << m_portId);
             } else {
                 auto flowControl = DynamicCast<UbPfc>(m_flowControl);
-                flowControl->Init(m_pfcUpThld, m_pfcLowThld, GetNode()->GetId(), m_portId);
+                flowControl->Init(type, m_pfcUpThld, m_pfcLowThld, GetNode()->GetId(), m_portId);
                 IntegerValue val;
                 g_ub_vl_num.GetValue(val);
                 int ubVlNum = val.Get();
                 m_revQueueSize.resize(ubVlNum, 0);
-                NS_LOG_DEBUG("[UbPort CreateAndInitFc] flowControl Pfc Init");
+                for (int pri = 0; pri < ubVlNum; ++pri) {
+                    // PFC starts from the link-up/resumed state. Keeping the local port-side
+                    // credit image explicit avoids empty-queue/xoff==0 cases looking paused.
+                    m_credits[pri] = UB_CREDIT_MAX_VALUE;
+                }
+                NS_LOG_DEBUG("[UbPort CreateAndInitFc] flowControl Pfc Init mode=" << static_cast<int>(type));
             }
             break;
         case FcType::NONE:

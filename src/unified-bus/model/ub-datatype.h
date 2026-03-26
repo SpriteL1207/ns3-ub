@@ -1255,17 +1255,18 @@ private:
  * 用于标识传输组，管理多个相关的TP通道。
  */
 struct TpgTag {
+    struct Fields {
+        uint64_t src : 18;
+        uint64_t dest : 18;
+        uint64_t priority : 4;
+        uint64_t type : 2;
+        uint64_t id : 4;
+        uint64_t reserved : 18;
+    };
+
     union {
         uint64_t value;
-
-        struct {
-            uint64_t src : 18;
-            uint64_t dest : 18;
-            uint64_t priority : 4;
-            uint64_t type : 2;
-            uint64_t id : 4;
-            uint64_t reserved : 18;
-        } fields;
+        Fields fields;
     };
 
     // 构造函数

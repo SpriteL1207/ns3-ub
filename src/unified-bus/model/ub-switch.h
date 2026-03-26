@@ -21,8 +21,9 @@ class UbCongestionControl;
 
 enum class FcType {
     CBFC,
-    CBFC_SHARED_CRD,
-    PFC,
+    CBFC_SHARED,
+    PFC_FIXED,
+    PFC_DYNAMIC,
     NONE  // No flow control
 };
 

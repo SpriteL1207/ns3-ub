@@ -18,20 +18,30 @@
 #include "ns3/ub-utils.h"
 #include "ns3/ub-controller.h"
 #include "ns3/ub-congestion-control.h"
+#include "ns3/ub-flow-control.h"
 #include "ns3/ub-function.h"
 #include "ns3/ub-link.h"
 #include "ns3/ub-port.h"
+#include "ns3/ub-queue-manager.h"
 #include "ns3/ub-routing-process.h"
 #include "ns3/ub-switch.h"
 #include "ns3/ub-tag.h"
 #include "ns3/ub-transaction.h"
+#include "ns3/ub-datalink.h"
 
 #include <chrono>
+#include <csignal>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <sstream>
+#include <vector>
+#ifndef _WIN32
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 using namespace ns3;
 
@@ -959,6 +969,589 @@ class UbCreateNodeSystemIdTest : public TestCase
     }
 };
 
+class UbSwitchFlowControlModeAttributeTest : public TestCase
+{
+  public:
+    UbSwitchFlowControlModeAttributeTest()
+        : TestCase("UnifiedBus - UbSwitch flow-control mode attribute round-trips")
+    {
+    }
+
+    void DoRun() override
+    {
+        Config::Reset();
+        Ptr<UbSwitch> sw = CreateObject<UbSwitch>();
+        sw->SetAttribute("FlowControl", EnumValue(FcType::PFC_DYNAMIC));
+
+        EnumValue<FcType> modeValue;
+        sw->GetAttribute("FlowControl", modeValue);
+
+        NS_TEST_ASSERT_MSG_EQ(static_cast<int>(modeValue.Get()),
+                              static_cast<int>(FcType::PFC_DYNAMIC),
+                              "UbSwitch flow-control mode attribute should round-trip through the Config system");
+        Config::Reset();
+    }
+};
+
+namespace
+{
+
+struct UbSinglePortPfcFixture
+{
+    Ptr<Node> node;
+    Ptr<UbSwitch> sw;
+    Ptr<UbPort> port;
+    Ptr<UbQueueManager> queueManager;
+    Ptr<UbPfc> pfc;
+};
+
+struct UbMultiPortSwitchFixture
+{
+    Ptr<Node> node;
+    Ptr<UbSwitch> sw;
+    std::vector<Ptr<UbPort>> ports;
+    Ptr<UbQueueManager> queueManager;
+};
+
+UbSinglePortPfcFixture
+CreateSinglePortPfcFixture(FcType mode,
+                           uint32_t reserveBytes,
+                           uint64_t sharedPoolBytes,
+                           uint32_t headroomPerPortBytes,
+                           uint32_t resumeOffsetBytes,
+                           uint32_t alphaShift,
+                           int32_t hiThresh,
+                           int32_t loThresh)
+{
+    Config::SetDefault("ns3::UbSwitch::FlowControl", EnumValue(mode));
+    Config::SetDefault("ns3::UbPort::PfcUpThld", IntegerValue(hiThresh));
+    Config::SetDefault("ns3::UbPort::PfcLowThld", IntegerValue(loThresh));
+    Config::SetDefault("ns3::UbQueueManager::ReservePerQueueBytes", UintegerValue(reserveBytes));
+    Config::SetDefault("ns3::UbQueueManager::SharedPoolBytes", UintegerValue(sharedPoolBytes));
+    Config::SetDefault("ns3::UbQueueManager::HeadroomPerPortBytes", UintegerValue(headroomPerPortBytes));
+    Config::SetDefault("ns3::UbQueueManager::ResumeOffset", UintegerValue(resumeOffsetBytes));
+    Config::SetDefault("ns3::UbQueueManager::AlphaShift", UintegerValue(alphaShift));
+
+    UbSinglePortPfcFixture fixture;
+    fixture.node = CreateObject<Node>();
+    fixture.sw = CreateObject<UbSwitch>();
+    fixture.node->AggregateObject(fixture.sw);
+    fixture.port = CreateObject<UbPort>();
+    fixture.node->AddDevice(fixture.port);
+    fixture.sw->Init();
+    fixture.queueManager = fixture.sw->GetQueueManager();
+    fixture.pfc = DynamicCast<UbPfc>(fixture.port->GetFlowControl());
+    return fixture;
+}
+
+UbMultiPortSwitchFixture
+CreateMultiPortSwitchFixture(FcType mode,
+                             uint32_t portsNum,
+                             uint32_t reserveBytes,
+                             uint64_t sharedPoolBytes,
+                             uint32_t headroomPerPortBytes,
+                             uint32_t resumeOffsetBytes,
+                             uint32_t alphaShift,
+                             const std::vector<std::pair<int32_t, int32_t>>& pfcThresholds)
+{
+    Config::SetDefault("ns3::UbSwitch::FlowControl", EnumValue(mode));
+    Config::SetDefault("ns3::UbQueueManager::ReservePerQueueBytes", UintegerValue(reserveBytes));
+    Config::SetDefault("ns3::UbQueueManager::SharedPoolBytes", UintegerValue(sharedPoolBytes));
+    Config::SetDefault("ns3::UbQueueManager::HeadroomPerPortBytes", UintegerValue(headroomPerPortBytes));
+    Config::SetDefault("ns3::UbQueueManager::ResumeOffset", UintegerValue(resumeOffsetBytes));
+    Config::SetDefault("ns3::UbQueueManager::AlphaShift", UintegerValue(alphaShift));
+
+    UbMultiPortSwitchFixture fixture;
+    fixture.node = CreateObject<Node>();
+    fixture.sw = CreateObject<UbSwitch>();
+    fixture.node->AggregateObject(fixture.sw);
+
+    fixture.ports.reserve(portsNum);
+    for (uint32_t portId = 0; portId < portsNum; ++portId)
+    {
+        Ptr<UbPort> port = CreateObject<UbPort>();
+        if (portId < pfcThresholds.size())
+        {
+            port->SetAttribute("PfcUpThld", IntegerValue(pfcThresholds[portId].first));
+            port->SetAttribute("PfcLowThld", IntegerValue(pfcThresholds[portId].second));
+        }
+        fixture.node->AddDevice(port);
+        fixture.ports.push_back(port);
+    }
+
+    fixture.sw->Init();
+    fixture.queueManager = fixture.sw->GetQueueManager();
+    return fixture;
+}
+
+Ptr<UbQueueManager>
+CreateQueueManagerFixture(uint32_t ports,
+                          uint32_t vlNum,
+                          uint32_t reserveBytes,
+                          uint64_t sharedPoolBytes,
+                          uint32_t headroomPerPortBytes,
+                          uint32_t resumeOffsetBytes,
+                          uint32_t alphaShift)
+{
+    Config::SetDefault("ns3::UbQueueManager::ReservePerQueueBytes", UintegerValue(reserveBytes));
+    Config::SetDefault("ns3::UbQueueManager::SharedPoolBytes", UintegerValue(sharedPoolBytes));
+    Config::SetDefault("ns3::UbQueueManager::HeadroomPerPortBytes", UintegerValue(headroomPerPortBytes));
+    Config::SetDefault("ns3::UbQueueManager::ResumeOffset", UintegerValue(resumeOffsetBytes));
+    Config::SetDefault("ns3::UbQueueManager::AlphaShift", UintegerValue(alphaShift));
+
+    Ptr<UbQueueManager> queueManager = CreateObject<UbQueueManager>();
+    queueManager->SetPortsNum(ports);
+    queueManager->SetVLNum(vlNum);
+    queueManager->Init();
+    return queueManager;
+}
+
+#ifndef _WIN32
+int
+RunInChildProcess(const std::function<void()>& fn)
+{
+    pid_t pid = fork();
+    if (pid == -1)
+    {
+        return -1;
+    }
+
+    if (pid == 0)
+    {
+        fn();
+        std::_Exit(0);
+    }
+
+    int status = 0;
+    int waitRet = waitpid(pid, &status, 0);
+    if (waitRet == -1)
+    {
+        return -1;
+    }
+    return status;
+}
+#endif
+
+} // namespace
+
+class UbPfcFixedModeCountsHeadroomTest : public TestCase
+{
+  public:
+    UbPfcFixedModeCountsHeadroomTest()
+        : TestCase("UnifiedBus - PFC_FIXED counts headroom occupancy")
+    {
+    }
+
+    void DoRun() override
+    {
+        Config::Reset();
+        constexpr uint32_t kPriority = 1;
+        auto fixture = CreateSinglePortPfcFixture(FcType::PFC_FIXED,
+                                                  100,
+                                                  0,
+                                                  50,
+                                                  10,
+                                                  0,
+                                                  100,
+                                                  40);
+
+        fixture.queueManager->PushToVoq(0, 0, kPriority, 120);
+
+        NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetQueueIngressNonHeadroomBytes(0, kPriority),
+                              0u,
+                              "Reserve/shared accounting should stay at zero when the packet enters headroom directly");
+        NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetQueueIngressHeadroomBytes(0, kPriority),
+                              120u,
+                              "Headroom bytes should record the packet when sharedPool is zero");
+
+        Ptr<Packet> pfcPacket = fixture.pfc->CheckPfcThreshold(Create<Packet>(1), 0);
+        NS_TEST_ASSERT_MSG_NE(pfcPacket,
+                              nullptr,
+                              "PFC_FIXED should send PAUSE when total ingress occupancy crosses the high watermark");
+        NS_TEST_ASSERT_MSG_EQ(fixture.port->GetCredits(kPriority),
+                              0u,
+                              "PFC_FIXED PAUSE should clear credits for the congested priority");
+
+        fixture.queueManager->PopFromVoq(0, 0, kPriority, 120);
+        pfcPacket = fixture.pfc->CheckPfcThreshold(Create<Packet>(1), 0);
+        NS_TEST_ASSERT_MSG_NE(pfcPacket,
+                              nullptr,
+                              "PFC_FIXED should send RESUME after the queue drains below the low watermark");
+        NS_TEST_ASSERT_MSG_EQ(fixture.port->GetCredits(kPriority),
+                              UB_CREDIT_MAX_VALUE,
+                              "PFC_FIXED RESUME should restore credits for the drained priority");
+        Simulator::Destroy();
+        Config::Reset();
+    }
+};
+
+class UbPfcDynamicModePauseResumeTest : public TestCase
+{
+  public:
+    UbPfcDynamicModePauseResumeTest()
+        : TestCase("UnifiedBus - PFC_DYNAMIC pauses and resumes from shared occupancy")
+    {
+    }
+
+    void DoRun() override
+    {
+        Config::Reset();
+        constexpr uint32_t kPriority = 1;
+        auto fixture = CreateSinglePortPfcFixture(FcType::PFC_DYNAMIC,
+                                                  100,
+                                                  100,
+                                                  50,
+                                                  10,
+                                                  0,
+                                                  1000,
+                                                  900);
+
+        fixture.queueManager->PushToVoq(0, 0, kPriority, 120);
+        fixture.queueManager->PushToVoq(0, 0, kPriority, 60);
+
+        NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetQueueIngressSharedBytes(0, kPriority),
+                              80u,
+                              "PFC_DYNAMIC test should build shared occupancy before pause");
+        NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetQueueIngressHeadroomBytes(0, kPriority),
+                              0u,
+                              "PFC_DYNAMIC pause case should be driven by shared bytes, not headroom");
+
+        Ptr<Packet> pfcPacket = fixture.pfc->CheckPfcThreshold(Create<Packet>(1), 0);
+        NS_TEST_ASSERT_MSG_NE(pfcPacket,
+                              nullptr,
+                              "PFC_DYNAMIC should send PAUSE when shared occupancy reaches the dynamic threshold");
+        NS_TEST_ASSERT_MSG_EQ(fixture.port->GetCredits(kPriority),
+                              0u,
+                              "PFC_DYNAMIC PAUSE should clear credits for the congested priority");
+
+        fixture.queueManager->PopFromVoq(0, 0, kPriority, 60);
+        pfcPacket = fixture.pfc->CheckPfcThreshold(Create<Packet>(1), 0);
+        NS_TEST_ASSERT_MSG_NE(pfcPacket,
+                              nullptr,
+                              "PFC_DYNAMIC should send RESUME after shared occupancy drains below xon");
+        NS_TEST_ASSERT_MSG_EQ(fixture.port->GetCredits(kPriority),
+                              UB_CREDIT_MAX_VALUE,
+                              "PFC_DYNAMIC RESUME should restore credits for the drained priority");
+        Simulator::Destroy();
+        Config::Reset();
+    }
+};
+
+class UbControlFrameUsesDedicatedAccountingTest : public TestCase
+{
+  public:
+    UbControlFrameUsesDedicatedAccountingTest()
+        : TestCase("UnifiedBus - control frames keep dedicated occupancy accounting")
+    {
+    }
+
+    void DoRun() override
+    {
+        Config::Reset();
+        auto fixture = CreateMultiPortSwitchFixture(FcType::NONE,
+                                                    /*portsNum*/ 1,
+                                                    /*reserveBytes*/ 0,
+                                                    /*sharedPoolBytes*/ 0,
+                                                    /*headroomPerPortBytes*/ 0,
+                                                    /*resumeOffsetBytes*/ 16,
+                                                    /*alphaShift*/ 1,
+                                                    {});
+
+        uint8_t credits[16] = {};
+        credits[0] = 1;
+        Ptr<Packet> controlPacket = UbDataLink::GenControlCreditPacket(credits);
+        uint32_t controlBytes = controlPacket->GetSize();
+        fixture.sw->SendControlFrame(controlPacket, 0);
+
+        NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetQueueIngressNonHeadroomBytes(0, 0),
+                              0u,
+                              "Control frames must not consume data ingress reserve/shared accounting");
+        NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetQueueIngressSharedBytes(0, 0),
+                              0u,
+                              "Control frames must not consume shared-pool accounting");
+        NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetQueueIngressHeadroomBytes(0, 0),
+                              0u,
+                              "Control frames must not consume headroom accounting");
+        NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetIngressControlBytes(0, 0),
+                              controlBytes,
+                              "Control frames should remain observable through dedicated ingress control accounting");
+        NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetOutPortControlBytes(0, 0),
+                              controlBytes,
+                              "Control frames should remain observable through dedicated out-port control accounting");
+
+        fixture.queueManager->PopFromVoq(0, 0, 0, controlBytes);
+        NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetIngressControlBytes(0, 0),
+                              0u,
+                              "Control accounting should drain when the queued control frame departs");
+        NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetOutPortControlBytes(0, 0),
+                              0u,
+                              "Out-port control accounting should drain when the queued control frame departs");
+        Simulator::Destroy();
+        Config::Reset();
+    }
+};
+
+#ifndef _WIN32
+class UbDataPacketHeaderRejectsPriorityZeroTest : public TestCase
+{
+  public:
+    UbDataPacketHeaderRejectsPriorityZeroTest()
+        : TestCase("UnifiedBus - data packet headers reject priority 0 in this simulator model")
+    {
+    }
+
+    void DoRun() override
+    {
+        int status = RunInChildProcess([]() {
+            Ptr<Packet> packet = Create<Packet>(0);
+            UbDataLink::GenPacketHeader(packet,
+                                        false,
+                                        false,
+                                        0,
+                                        0,
+                                        false,
+                                        false,
+                                        UbDatalinkHeaderConfig::PACKET_IPV4);
+        });
+
+        NS_TEST_ASSERT_MSG_EQ(WIFSIGNALED(status),
+                              1,
+                              "Generating a data packet on priority 0 should abort");
+        NS_TEST_ASSERT_MSG_EQ(WTERMSIG(status),
+                              SIGABRT,
+                              "Generating a data packet on priority 0 should fail with SIGABRT");
+    }
+};
+
+class UbSendControlFrameRejectsDataPacketTest : public TestCase
+{
+  public:
+    UbSendControlFrameRejectsDataPacketTest()
+        : TestCase("UnifiedBus - SendControlFrame rejects non-control packets")
+    {
+    }
+
+    void DoRun() override
+    {
+        int status = RunInChildProcess([]() {
+            Config::Reset();
+            auto fixture = CreateMultiPortSwitchFixture(FcType::NONE,
+                                                        /*portsNum*/ 1,
+                                                        /*reserveBytes*/ 0,
+                                                        /*sharedPoolBytes*/ 0,
+                                                        /*headroomPerPortBytes*/ 0,
+                                                        /*resumeOffsetBytes*/ 16,
+                                                        /*alphaShift*/ 1,
+                                                        {});
+
+            Ptr<Packet> dataPacket = Create<Packet>(0);
+            UbDataLink::GenPacketHeader(dataPacket,
+                                        false,
+                                        false,
+                                        1,
+                                        1,
+                                        false,
+                                        false,
+                                        UbDatalinkHeaderConfig::PACKET_IPV4);
+            fixture.sw->SendControlFrame(dataPacket, 0);
+        });
+
+        NS_TEST_ASSERT_MSG_EQ(WIFSIGNALED(status),
+                              1,
+                              "SendControlFrame should abort when called with a data packet");
+        NS_TEST_ASSERT_MSG_EQ(WTERMSIG(status),
+                              SIGABRT,
+                              "SendControlFrame misuse should fail with SIGABRT");
+    }
+};
+#endif
+
+class UbQueueManagerStickyHeadroomAccountingTest : public TestCase
+{
+  public:
+    UbQueueManagerStickyHeadroomAccountingTest()
+        : TestCase("UnifiedBus - sticky headroom accounts whole packets consistently")
+    {
+    }
+
+    void DoRun() override
+    {
+        Config::Reset();
+        Ptr<UbQueueManager> queueManager = CreateQueueManagerFixture(/*ports*/ 1,
+                                                                    /*vlNum*/ 2,
+                                                                    /*reserveBytes*/ 100,
+                                                                    /*sharedPoolBytes*/ 50,
+                                                                    /*headroomPerPortBytes*/ 256,
+                                                                    /*resumeOffsetBytes*/ 16,
+                                                                    /*alphaShift*/ 0);
+
+        queueManager->PushToVoq(0, 0, 1, 180);
+        NS_TEST_ASSERT_MSG_EQ(queueManager->GetQueueIngressNonHeadroomBytes(0, 1),
+                              0u,
+                              "A crossing packet should enter headroom as a whole in the non-splitting model");
+        NS_TEST_ASSERT_MSG_EQ(queueManager->GetQueueIngressHeadroomBytes(0, 1),
+                              180u,
+                              "A crossing packet should be fully charged to headroom");
+
+        queueManager->PushToVoq(0, 0, 1, 20);
+        NS_TEST_ASSERT_MSG_EQ(queueManager->GetQueueIngressHeadroomBytes(0, 1),
+                              200u,
+                              "Once a queue enters headroom, subsequent packets should stay sticky in headroom");
+
+        queueManager->PopFromVoq(0, 0, 1, 20);
+        NS_TEST_ASSERT_MSG_EQ(queueManager->GetQueueIngressHeadroomBytes(0, 1),
+                              180u,
+                              "Dequeues should release sticky headroom bytes first in the chosen model");
+        NS_TEST_ASSERT_MSG_EQ(queueManager->GetQueueIngressNonHeadroomBytes(0, 1),
+                              0u,
+                              "Sticky headroom release should not fabricate non-headroom occupancy");
+
+        queueManager->PopFromVoq(0, 0, 1, 180);
+        NS_TEST_ASSERT_MSG_EQ(queueManager->GetQueueIngressTotalBytes(0, 1),
+                              0u,
+                              "Draining the queue should release both headroom and non-headroom accounting");
+        Config::Reset();
+    }
+};
+
+class UbPfcDynamicModeXoffZeroEmptyQueueTest : public TestCase
+{
+  public:
+    UbPfcDynamicModeXoffZeroEmptyQueueTest()
+        : TestCase("UnifiedBus - PFC_DYNAMIC keeps empty queues resumed when xoff collapses to zero")
+    {
+    }
+
+    void DoRun() override
+    {
+        Config::Reset();
+        auto fixture = CreateSinglePortPfcFixture(FcType::PFC_DYNAMIC,
+                                                  /*reserveBytes*/ 100,
+                                                  /*sharedPoolBytes*/ 1,
+                                                  /*headroomPerPortBytes*/ 32,
+                                                  /*resumeOffsetBytes*/ 16,
+                                                  /*alphaShift*/ 1,
+                                                  /*hiThresh*/ 1000,
+                                                  /*loThresh*/ 900);
+
+        NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetXoffThreshold(),
+                              0u,
+                              "This test requires xoff to collapse to zero");
+        Ptr<Packet> pfcPacket = fixture.pfc->CheckPfcThreshold(Create<Packet>(1), 0);
+        NS_TEST_ASSERT_MSG_EQ(pfcPacket,
+                              nullptr,
+                              "An empty queue must not send PFC when xoff is zero");
+        NS_TEST_ASSERT_MSG_EQ(fixture.port->GetCredits(1),
+                              UB_CREDIT_MAX_VALUE,
+                              "An empty queue must remain resumed when xoff is zero");
+        Simulator::Destroy();
+        Config::Reset();
+    }
+};
+
+class UbPfcForwardingUsesIngressPortConfigTest : public TestCase
+{
+  public:
+    UbPfcForwardingUsesIngressPortConfigTest()
+        : TestCase("UnifiedBus - forwarding path uses the ingress port's PFC configuration")
+    {
+    }
+
+    void DoRun() override
+    {
+        Config::Reset();
+        auto fixture = CreateMultiPortSwitchFixture(FcType::PFC_FIXED,
+                                                    /*portsNum*/ 2,
+                                                    /*reserveBytes*/ 256,
+                                                    /*sharedPoolBytes*/ 0,
+                                                    /*headroomPerPortBytes*/ 256,
+                                                    /*resumeOffsetBytes*/ 16,
+                                                    /*alphaShift*/ 0,
+                                                    {{100, 40}, {1000, 900}});
+
+        constexpr uint32_t kIngressPort = 0;
+        constexpr uint32_t kEgressPort = 1;
+        constexpr uint32_t kPriority = 1;
+        fixture.queueManager->PushToVoq(kIngressPort, kEgressPort, kPriority, 120);
+
+        Ptr<UbPfc> egressFlowControl = DynamicCast<UbPfc>(fixture.ports[kEgressPort]->GetFlowControl());
+        egressFlowControl->HandleReleaseOccupiedFlowControl(Create<Packet>(120), kIngressPort, kEgressPort);
+
+        NS_TEST_ASSERT_MSG_EQ(fixture.ports[kIngressPort]->GetCredits(kPriority),
+                              0u,
+                              "Forwarding-triggered PFC checks must use the congested ingress port's thresholds");
+        Simulator::Destroy();
+        Config::Reset();
+    }
+};
+
+#ifndef _WIN32
+class UbCbfcRejectsZeroCellGeometryTest : public TestCase
+{
+  public:
+    UbCbfcRejectsZeroCellGeometryTest()
+        : TestCase("UnifiedBus - CBFC rejects zero cell geometry at init")
+    {
+    }
+
+    void DoRun() override
+    {
+        int status = RunInChildProcess([]() {
+            Config::Reset();
+            Config::SetDefault("ns3::UbSwitch::FlowControl", EnumValue(FcType::CBFC));
+            Config::SetDefault("ns3::UbPort::CbfcFlitLenByte", UintegerValue(0));
+
+            Ptr<Node> node = CreateObject<Node>();
+            Ptr<UbSwitch> sw = CreateObject<UbSwitch>();
+            node->AggregateObject(sw);
+            node->AddDevice(CreateObject<UbPort>());
+            sw->Init();
+        });
+
+        NS_TEST_ASSERT_MSG_EQ(WIFSIGNALED(status),
+                              1,
+                              "Invalid CBFC cell geometry should abort during initialization");
+        NS_TEST_ASSERT_MSG_EQ(WTERMSIG(status),
+                              SIGABRT,
+                              "Invalid CBFC cell geometry should fail with SIGABRT");
+        Config::Reset();
+    }
+};
+
+class UbPfcFixedRejectsNegativeThresholdTest : public TestCase
+{
+  public:
+    UbPfcFixedRejectsNegativeThresholdTest()
+        : TestCase("UnifiedBus - PFC_FIXED rejects negative thresholds at init")
+    {
+    }
+
+    void DoRun() override
+    {
+        int status = RunInChildProcess([]() {
+            Config::Reset();
+            Config::SetDefault("ns3::UbSwitch::FlowControl", EnumValue(FcType::PFC_FIXED));
+            Config::SetDefault("ns3::UbPort::PfcUpThld", IntegerValue(-1));
+            Config::SetDefault("ns3::UbPort::PfcLowThld", IntegerValue(-2));
+
+            Ptr<Node> node = CreateObject<Node>();
+            Ptr<UbSwitch> sw = CreateObject<UbSwitch>();
+            node->AggregateObject(sw);
+            node->AddDevice(CreateObject<UbPort>());
+            sw->Init();
+        });
+
+        NS_TEST_ASSERT_MSG_EQ(WIFSIGNALED(status),
+                              1,
+                              "Negative PFC_FIXED thresholds should abort during initialization");
+        NS_TEST_ASSERT_MSG_EQ(WTERMSIG(status),
+                              SIGABRT,
+                              "Negative PFC_FIXED thresholds should fail with SIGABRT");
+        Config::Reset();
+    }
+};
+#endif
+
 #ifdef NS3_MPI
 class UbCreateTopoRemoteLinkTest : public TestCase
 {
@@ -1277,6 +1870,58 @@ class UbSystemOwnedByRankHelperTest : public TestCase
     }
 };
 
+class UbQueueManagerReserveOnlyAdmissionTest : public TestCase
+{
+  public:
+    UbQueueManagerReserveOnlyAdmissionTest()
+        : TestCase("UnifiedBus - reserve-only admission allows exact-fit enqueue and keeps shared state at zero")
+    {
+    }
+
+    void DoRun() override
+    {
+        Config::Reset();
+        constexpr uint32_t kReserveBytes = 100;
+        constexpr uint32_t kPriority = 1;
+        Ptr<UbQueueManager> queueManager = CreateQueueManagerFixture(/*ports*/ 1,
+                                                                    /*vlNum*/ 2,
+                                                                    kReserveBytes,
+                                                                    /*sharedPoolBytes*/ 0,
+                                                                    /*headroomPerPortBytes*/ 0,
+                                                                    /*resumeOffsetBytes*/ 16,
+                                                                    /*alphaShift*/ 1);
+
+        NS_TEST_ASSERT_MSG_EQ(queueManager->CheckInPortSpace(0, kPriority, kReserveBytes),
+                              true,
+                              "Reserve-only admission should accept a packet that exactly fills the reserved bytes");
+
+        queueManager->PushToVoq(0, 0, kPriority, kReserveBytes);
+
+        NS_TEST_ASSERT_MSG_EQ(queueManager->GetQueueIngressNonHeadroomBytes(0, kPriority),
+                              kReserveBytes,
+                              "Exact-fit enqueue should be reflected in ingress usage");
+        NS_TEST_ASSERT_MSG_EQ(queueManager->GetQueueIngressSharedBytes(0, kPriority),
+                              0u,
+                              "Reserve-only admission should not accumulate shared usage");
+        NS_TEST_ASSERT_MSG_EQ(queueManager->GetQueueIngressHeadroomBytes(0, kPriority),
+                              0u,
+                              "Reserve-only admission should not accumulate headroom usage");
+        NS_TEST_ASSERT_MSG_EQ(queueManager->CheckInPortSpace(0, kPriority, 1),
+                              false,
+                              "Reserve-only admission should reject packets once the reserved bytes are fully consumed");
+
+        queueManager->PopFromVoq(0, 0, kPriority, kReserveBytes);
+
+        NS_TEST_ASSERT_MSG_EQ(queueManager->GetQueueIngressNonHeadroomBytes(0, kPriority),
+                              0u,
+                              "PopFromVoq should release reserve-only ingress accounting");
+        NS_TEST_ASSERT_MSG_EQ(queueManager->GetGlobalSharedUsedBytes(),
+                              0u,
+                              "Reserve-only admission should keep shared-pool accounting at zero after drain");
+        Config::Reset();
+    }
+};
+
 /**
  * @brief Unified-bus test suite
  */
@@ -1300,6 +1945,20 @@ UbTestSuite::UbTestSuite()
     AddTestCase(new UbSameMpiRankHelperTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbSystemOwnedByRankHelperTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbCreateNodeSystemIdTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbSwitchFlowControlModeAttributeTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbControlFrameUsesDedicatedAccountingTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbPfcFixedModeCountsHeadroomTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbPfcDynamicModePauseResumeTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbPfcDynamicModeXoffZeroEmptyQueueTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbPfcForwardingUsesIngressPortConfigTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbQueueManagerReserveOnlyAdmissionTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbQueueManagerStickyHeadroomAccountingTest(), TestCase::Duration::QUICK);
+#ifndef _WIN32
+    AddTestCase(new UbDataPacketHeaderRejectsPriorityZeroTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbSendControlFrameRejectsDataPacketTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbCbfcRejectsZeroCellGeometryTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbPfcFixedRejectsNegativeThresholdTest(), TestCase::Duration::QUICK);
+#endif
 #ifdef NS3_MPI
     AddTestCase(new UbCreateTopoRemoteLinkTest(), TestCase::Duration::QUICK);
 #endif
@@ -1327,7 +1986,8 @@ RunQuickExampleCommand(const std::string& testFile,
 std::pair<int, std::string>
 RunNs3RunCommand(const std::string& testFile,
                  const std::string& programAndArgs,
-                 const std::string& commandPrefix = "");
+                 const std::string& commandPrefix = "",
+                 bool noBuild = true);
 
 } // namespace
 
@@ -1401,19 +2061,6 @@ HasQuickExampleBinary(const std::filesystem::path& repoRoot)
 }
 
 std::filesystem::path
-LocateQuickExampleBinary(const std::filesystem::path& repoRoot)
-{
-    const std::filesystem::path defaultBinary =
-        repoRoot / "build/src/unified-bus/examples/ns3.44-ub-quick-example-default";
-    if (std::filesystem::exists(defaultBinary))
-    {
-        return defaultBinary;
-    }
-
-    return repoRoot / "build/src/unified-bus/examples/ns3.44-ub-quick-example";
-}
-
-std::filesystem::path
 LocateRepoRoot()
 {
     std::filesystem::path repoRoot = PROJECT_SOURCE_PATH;
@@ -1432,6 +2079,44 @@ LocateRepoRoot()
         repoRoot = repoRoot.parent_path();
     }
     return repoRoot;
+}
+
+std::filesystem::path
+LocateQuickExampleBinary(const std::filesystem::path& repoRoot)
+{
+    const std::vector<std::filesystem::path> candidates = {
+        "build/src/unified-bus/examples/ns3.44-ub-quick-example",
+        "build/src/unified-bus/examples/ns3.44-ub-quick-example-default",
+    };
+
+    for (const auto& candidate : candidates)
+    {
+        const std::filesystem::path binaryPath = repoRoot / candidate;
+        if (std::filesystem::exists(binaryPath))
+        {
+            return binaryPath;
+        }
+    }
+
+    const std::filesystem::path examplesDir = repoRoot / "build/src/unified-bus/examples";
+    if (std::filesystem::exists(examplesDir))
+    {
+        for (const auto& entry : std::filesystem::directory_iterator(examplesDir))
+        {
+            if (!entry.is_regular_file())
+            {
+                continue;
+            }
+
+            const std::string filename = entry.path().filename().string();
+            if (filename.find("ub-quick-example") != std::string::npos)
+            {
+                return entry.path();
+            }
+        }
+    }
+
+    return repoRoot / candidates.front();
 }
 
 std::pair<int, std::string>
@@ -1471,17 +2156,24 @@ RunQuickExampleCommand(const std::string& testFile,
 std::pair<int, std::string>
 RunNs3RunCommand(const std::string& testFile,
                  const std::string& programAndArgs,
-                 const std::string& commandPrefix)
+                 const std::string& commandPrefix,
+                 bool noBuild)
 {
     const std::filesystem::path repoRoot = LocateRepoRoot();
+    const std::string pythonCommand =
+        std::system("command -v python3.12 >/dev/null 2>&1") == 0 ? "python3.12" : "python3";
 
     std::string command;
     if (!commandPrefix.empty())
     {
         command += commandPrefix + " ";
     }
-    command += "python3 \"" + (repoRoot / "ns3").string() + "\" run \"" + programAndArgs +
-               "\" --no-build";
+    command += pythonCommand + " \"" + (repoRoot / "ns3").string() + "\" run \"" + programAndArgs +
+               "\"";
+    if (noBuild)
+    {
+        command += " --no-build";
+    }
     command += " > \"" + testFile + "\" 2>&1";
 
     const int status = std::system(command.c_str());
@@ -1550,6 +2242,10 @@ CopyCaseDirWithTrafficFile(const std::string& sourceCasePathRelative, const std:
 
     return tempCaseDir;
 }
+
+// The old ub-local-hybrid-minimal fixture was removed as a non-core sample, so
+// local single-thread quick-example tests reuse the maintained 2-node case.
+constexpr const char* kLocalSingleThreadQuickExampleCase = "scratch/2nodes_single-tp";
 
 std::pair<int, std::string>
 RunQuickExampleAbsoluteCaseCommand(const std::string& testFile,
@@ -1738,7 +2434,9 @@ class UbQuickScratchLegacyAliasSystemTest : public TestCase
         auto [status, output] =
             RunNs3RunCommand(CreateTempDirFilename(GetName() + ".log"),
                              "scratch/ub-quick-example --case-path=" + casePath.string() +
-                                 " --test");
+                                 " --test",
+                             "",
+                             false);
 
         NS_TEST_ASSERT_MSG_EQ(status, 0, "legacy scratch quick-example should exit successfully");
         NS_TEST_ASSERT_MSG_NE(output.find("TEST : 00000 : PASSED"),
@@ -1845,9 +2543,9 @@ class UbQuickExampleLocalDependentDagSingleThreadSystemTest : public TestCase
         SetDataDir(NS_TEST_SOURCEDIR);
         const std::string trafficCsv =
             "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases\n"
-            "0,0,3,4096,URMA_WRITE,7,10ns,10,\n"
-            "1,3,0,4096,URMA_WRITE,7,10ns,20,\n"
-            "2,0,3,4096,URMA_WRITE,7,10ns,30,10 20\n";
+            "0,0,1,4096,URMA_WRITE,7,10ns,10,\n"
+            "1,1,0,4096,URMA_WRITE,7,10ns,20,\n"
+            "2,0,1,4096,URMA_WRITE,7,10ns,30,10 20\n";
         const std::filesystem::path caseDir =
             CopyCaseDirWithTrafficFile("scratch/2nodes_single-tp", trafficCsv);
 
@@ -1880,9 +2578,9 @@ class UbQuickExampleLocalSingleUrmaReadSystemTest : public TestCase
         SetDataDir(NS_TEST_SOURCEDIR);
         const std::string trafficCsv =
             "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases\n"
-            "0,0,3,4096,URMA_READ,7,10ns,10,\n";
+            "0,0,1,4096,URMA_READ,7,10ns,10,\n";
         const std::filesystem::path caseDir =
-            CopyCaseDirWithTrafficFile("scratch/ub-local-hybrid-minimal", trafficCsv);
+            CopyCaseDirWithTrafficFile(kLocalSingleThreadQuickExampleCase, trafficCsv);
 
         auto [status, output] =
             RunQuickExampleAbsoluteCaseCommand(CreateTempDirFilename(GetName() + ".log"),
@@ -1913,9 +2611,9 @@ class UbQuickExampleLocalSingleUrmaWriteSystemTest : public TestCase
         SetDataDir(NS_TEST_SOURCEDIR);
         const std::string trafficCsv =
             "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases\n"
-            "0,0,3,4096,URMA_WRITE,7,10ns,10,\n";
+            "0,0,1,4096,URMA_WRITE,7,10ns,10,\n";
         const std::filesystem::path caseDir =
-            CopyCaseDirWithTrafficFile("scratch/ub-local-hybrid-minimal", trafficCsv);
+            CopyCaseDirWithTrafficFile(kLocalSingleThreadQuickExampleCase, trafficCsv);
 
         auto [status, output] =
             RunQuickExampleAbsoluteCaseCommand(CreateTempDirFilename(GetName() + ".log"),
@@ -1946,10 +2644,10 @@ class UbQuickExampleLocalWriteThenReadSystemTest : public TestCase
         SetDataDir(NS_TEST_SOURCEDIR);
         const std::string trafficCsv =
             "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases\n"
-            "0,0,3,4096,URMA_WRITE,7,10ns,10,\n"
-            "1,0,3,4096,URMA_READ,7,10ns,20,10\n";
+            "0,0,1,4096,URMA_WRITE,7,10ns,10,\n"
+            "1,0,1,4096,URMA_READ,7,10ns,20,10\n";
         const std::filesystem::path caseDir =
-            CopyCaseDirWithTrafficFile("scratch/ub-local-hybrid-minimal", trafficCsv);
+            CopyCaseDirWithTrafficFile(kLocalSingleThreadQuickExampleCase, trafficCsv);
 
         auto [status, output] =
             RunQuickExampleAbsoluteCaseCommand(CreateTempDirFilename(GetName() + ".log"),
@@ -1980,12 +2678,12 @@ class UbQuickExampleLocalMixedUrmaReadWriteSystemTest : public TestCase
         SetDataDir(NS_TEST_SOURCEDIR);
         const std::string trafficCsv =
             "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,dependOnPhases\n"
-            "0,0,3,4096,URMA_WRITE,7,10ns,10,\n"
-            "1,0,3,8192,URMA_READ,7,10ns,20,\n"
-            "2,3,0,4096,URMA_WRITE,7,10ns,30,\n"
-            "3,3,0,8192,URMA_READ,7,10ns,40,\n";
+            "0,0,1,4096,URMA_WRITE,7,10ns,10,\n"
+            "1,0,1,8192,URMA_READ,7,10ns,20,\n"
+            "2,1,0,4096,URMA_WRITE,7,10ns,30,\n"
+            "3,1,0,8192,URMA_READ,7,10ns,40,\n";
         const std::filesystem::path caseDir =
-            CopyCaseDirWithTrafficFile("scratch/ub-local-hybrid-minimal", trafficCsv);
+            CopyCaseDirWithTrafficFile(kLocalSingleThreadQuickExampleCase, trafficCsv);
 
         auto [status, output] =
             RunQuickExampleAbsoluteCaseCommand(
@@ -2018,11 +2716,11 @@ class UbQuickExampleLocalDependentDagMtpRedSystemTest : public TestCase
         std::ostringstream traffic;
         traffic << "taskId,sourceNode,destNode,dataSize(Byte),opType,priority,delay,phaseId,"
                    "dependOnPhases\n";
-        traffic << "0,0,3,4096,URMA_WRITE,7,10ns,10,\n";
-        traffic << "1,3,0,4096,URMA_WRITE,7,10ns,20,\n";
+        traffic << "0,0,1,4096,URMA_WRITE,7,10ns,10,\n";
+        traffic << "1,1,0,4096,URMA_WRITE,7,10ns,20,\n";
         for (uint32_t taskId = 2; taskId <= 40; ++taskId)
         {
-            traffic << taskId << ",0,3,4096,URMA_WRITE,7,10ns," << (100 + taskId) << ",10 20\n";
+            traffic << taskId << ",0,1,4096,URMA_WRITE,7,10ns," << (100 + taskId) << ",10 20\n";
         }
         const std::filesystem::path caseDir =
             CopyCaseDirWithTrafficFile("scratch/2nodes_single-tp", traffic.str());

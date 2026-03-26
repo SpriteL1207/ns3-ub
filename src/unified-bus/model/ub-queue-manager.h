@@ -10,7 +10,11 @@
 
 namespace ns3 {
 
-constexpr long DEFAULT_INPORT_PRIORITY_BUFFER_SIZE = 1048576;  // 1MB
+constexpr uint32_t DEFAULT_RESERVE_PER_QUEUE_BYTES = 1048576;  // 1MB
+constexpr uint64_t DEFAULT_SHARED_POOL_BYTES       = 0;        // disabled
+constexpr uint32_t DEFAULT_HEADROOM_PER_PORT_BYTES = 0;        // disabled
+constexpr uint32_t DEFAULT_ALPHA_SHIFT             = 1;        // shared / 2
+constexpr uint32_t DEFAULT_RESUME_OFFSET           = 4 * 1024; // 1 MTU
 
 enum class IngressQueueType {
     VOQ,        // Virtual Output Queue - 转发数据包队列
@@ -81,7 +85,7 @@ public:
         }
         m_queue.push(p);
     }
-    IngressQueueType GetIngressQueueType();
+    IngressQueueType GetIngressQueueType() override;
     uint32_t GetNextPacketSize() override;
 
 private:
@@ -158,51 +162,65 @@ public:
     
     // ========== 查询接口：InPort视图（用于流控） ==========
     
-    /**
-     * @brief 获取入端口某优先级的buffer占用（InPort视图）
-     * @param inPort 入端口ID
-     * @param priority 优先级
-     * @return 字节数
-     */
-    uint64_t GetInPortBufferUsed(uint32_t inPort, uint32_t priority);
+    /** InPort视图：某(inPort, priority)的 reserve+shared 占用（不含headroom） */
+    uint64_t GetQueueIngressNonHeadroomBytes(uint32_t inPort, uint32_t priority) const;
     
-    /**
-     * @brief 获取入端口所有优先级的总buffer占用
-     */
-    uint64_t GetTotalInPortBufferUsed(uint32_t inPort);
+    /** InPort视图：某inPort所有优先级的总 reserve+shared 占用 */
+    uint64_t GetPortIngressNonHeadroomBytes(uint32_t inPort) const;
     
     // ========== 查询接口：OutPort视图（用于路由和拥塞控制） ==========
     
-    /**
-     * @brief 获取出端口某优先级的buffer占用（OutPort视图）
-     * @param outPort 出端口ID
-     * @param priority 优先级
-     * @return 字节数
-     */
+    /** OutPort视图：某(outPort, priority)的buffer占用 */
     uint64_t GetOutPortBufferUsed(uint32_t outPort, uint32_t priority);
     
-    /**
-     * @brief 获取出端口所有优先级的总buffer占用
-     */
+    /** OutPort视图：某outPort所有优先级的总buffer占用 */
     uint64_t GetTotalOutPortBufferUsed(uint32_t outPort);
     
-    /**
-     * @brief 获取每个(port, priority)队列的buffer大小限制（用于丢包判断）
-     */
-    uint32_t GetBufferSizePerQueue() const { return m_inPortPriorityBufferLimit; }
-    
-    void SetBufferSize(uint32_t size);
+    uint32_t GetReservePerQueueBytes() const { return m_reservePerQueueBytes; }
+    void SetReservePerQueueBytes(uint32_t size);
+
+    // ========== Three-Tier Buffer (reserve → shared → headroom) ==========
+
+    bool CheckIngressAdmission(uint32_t inPort, uint32_t priority, uint32_t pSize);
+
+    uint64_t GetXoffThreshold() const;
+    uint64_t GetXonThreshold() const;
+    uint64_t GetQueueIngressSharedBytes(uint32_t inPort, uint32_t priority) const;
+    uint64_t GetGlobalSharedUsedBytes() const { return m_sharedUsedBytes; }
+    uint64_t GetQueueIngressHeadroomBytes(uint32_t inPort, uint32_t priority) const;
+    uint64_t GetQueueIngressTotalBytes(uint32_t inPort, uint32_t priority) const;
+    uint64_t GetIngressControlBytes(uint32_t inPort, uint32_t priority) const;
+    uint64_t GetOutPortControlBytes(uint32_t outPort, uint32_t priority) const;
+    uint32_t GetResumeOffset() const { return m_resumeOffset; }
+    uint64_t GetSharedPoolBytes() const { return m_sharedPoolBytes; }
+    uint32_t GetHeadroomPerPortBytes() const { return m_headroomPerPortBytes; }
 
 private:
     using DarrayU64 = std::vector<std::vector<uint64_t>>;
+    bool IsLocallyGeneratedControlFrame(uint32_t inPort, uint32_t outPort, uint32_t priority) const;
+    void UpdateIngressAdmission(uint32_t inPort, uint32_t priority, uint32_t pSize);
+    void RemoveFromIngressAdmission(uint32_t inPort, uint32_t priority, uint32_t pSize);
+
     uint32_t m_vlNum = 0;
     uint32_t m_portsNum = 0;
-    uint32_t m_inPortPriorityBufferLimit;  // InPort buffer limit per (inPort, priority) queue (for drop decision)
-    
+    uint32_t m_reservePerQueueBytes {DEFAULT_RESERVE_PER_QUEUE_BYTES};
+
     // 双视图统计（同一个包在VOQ中，但从两个维度统计）
     DarrayU64 m_inPortBuffer;   // [inPort][priority] - 用于流控
     DarrayU64 m_outPortBuffer;  // [outPort][priority] - 用于路由和拥塞控制
+
+    // 三层 buffer 状态
+    uint64_t m_sharedPoolBytes {DEFAULT_SHARED_POOL_BYTES};
+    uint32_t m_alphaShift {DEFAULT_ALPHA_SHIFT};
+    uint32_t m_headroomPerPortBytes {DEFAULT_HEADROOM_PER_PORT_BYTES};
+    uint32_t m_resumeOffset {DEFAULT_RESUME_OFFSET};
+    uint64_t m_totalHeadroomBytes {0};
+    uint64_t m_totalReservedBytes {0};
+    uint64_t m_sharedUsedBytes {0};
+    DarrayU64 m_hdrmBytes;    // [inPort][priority] headroom usage
+    DarrayU64 m_ingressControlBytes; // [inPort][priority] control-frame occupancy outside data-plane admission
+    DarrayU64 m_outPortControlBytes; // [outPort][priority] control-frame occupancy outside data-plane admission
 };
 } // namespace ns3
 
-#endif /* UB_BUFFER_MANAGE_H */
+#endif /* UB_QUEUE_MANAGER_H */

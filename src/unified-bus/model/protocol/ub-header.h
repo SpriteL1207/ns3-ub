@@ -52,10 +52,6 @@ private:
 
     // 常量定义
     uint32_t totalHeaderSize = 2;        // 2 bytes total
-    uint8_t configControl = 0x00;        // Config value for control credit header
-    uint8_t configPacketIpV4 = 0x03;     // Config value for ipv4 packet header
-    uint8_t configPacketIpV6 = 0x04;     // Config value for ipv6 packet header
-    uint8_t configPacketUbMem = 0x09;    // Config value for UB memory packet header
 };
 
 /**
@@ -131,9 +127,6 @@ private:
     uint32_t usedBytes = 18;
     uint32_t reserveSize = totalHeaderSize - usedBytes;
     uint8_t reserveFillValue = 0;  // reserve字段填充值
-
-    // 添加一些便于理解的常量
-    uint8_t creditConfig = 0x00;  // 4 bits (fixed 0000 for link control header)
 };
 
 /**

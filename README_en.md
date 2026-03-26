@@ -125,7 +125,7 @@ The **typical simulation functionalities** supported by this project are shown i
     </tr>
     <tr>
       <td>Credit Flow Control</td>
-      <td>Credit exclusive mode, CBFC, PFC adaptation</td>
+      <td>CBFC (exclusive / shared-credit), PFC (fixed / dynamic thresholds)</td>
       <td>Control plane credit initialization behavior, credit sharing mode</td>
     </tr>
   </tbody>
@@ -206,7 +206,7 @@ The UB module is a simulation component implemented based on the UB Base Specifi
 - **Native Multipathing**: Implements native multipath support through TP/TP Group protocol mechanisms
 
 #### Protocol Algorithm Support
-- **Flow Control**: Implements a credit-based flow control mechanism framework, compliant with PFC
+- **Flow Control**: Implements credit-based flow control (CBFC exclusive / shared-credit) and priority-based flow control (PFC fixed / dynamic thresholds)
 - **Congestion Control**: Implements the framework of the well-known congestion control loop, including network-side marking, receiver response, sender response, and congestion control algorithms; supports the C-AQM algorithm
 - **Routing Policies**: Supports shortest-path routing and bypass strategies; supports packet spraying, ECMP, and other load balancing mechanisms
 - **QoS Support**: Provides end-to-end QoS support, currently supporting the SP traffic scheduling policy

@@ -45,9 +45,29 @@ void UbCbfc::Init(uint8_t flitLen, uint8_t nFlitPerCell, uint8_t retCellGrainDat
     m_crdToReturn.resize(ubVlNum, 0);
     m_nodeId = nodeId;
     m_portId = portId;
-    NS_LOG_DEBUG("NodeId: " << m_nodeId << "PortId: " << m_portId << "Init Cbfc");
+    NS_LOG_DEBUG("NodeId: " << m_nodeId
+                 << " PortId: " << m_portId
+                 << " Init Cbfc"
+                 << " flitLen=" << static_cast<uint32_t>(m_cbfcCfg->m_flitLen)
+                 << " flitsPerCell=" << static_cast<uint32_t>(m_cbfcCfg->m_nFlitPerCell)
+                 << " retCellGrainData=" << static_cast<uint32_t>(m_cbfcCfg->m_retCellGrainDataPacket)
+                 << " retCellGrainCtrl=" << static_cast<uint32_t>(m_cbfcCfg->m_retCellGrainControlPacket)
+                 << " initCreditPerVl=" << portTxfree);
 
-    NS_LOG_DEBUG("m_crdTxfree[*]: " << m_crdTxfree[0]);
+    NS_ABORT_MSG_IF(m_cbfcCfg->m_flitLen == 0 || m_cbfcCfg->m_nFlitPerCell == 0,
+                    "CBFC requires non-zero cell geometry (flitLen and nFlitPerCell)");
+    NS_ABORT_MSG_IF(m_cbfcCfg->m_retCellGrainDataPacket == 0 ||
+                        m_cbfcCfg->m_retCellGrainControlPacket == 0,
+                    "CBFC requires non-zero return grain for both data and control packets");
+    NS_ABORT_MSG_IF(portTxfree < 0,
+                    "CBFC requires non-negative initial transmit credit per VL");
+
+    if (portTxfree == 0)
+    {
+        NS_LOG_WARN("CBFC initial credit is zero on NodeId=" << m_nodeId
+                    << " PortId=" << m_portId
+                    << " initCreditPerVl=" << portTxfree);
+    }
 }
 
 void UbCbfc::DoDispose()
@@ -300,13 +320,25 @@ void UbCbfcSharedCredit::Init(uint8_t flitLen, uint8_t nFlitPerCell, uint8_t ret
     m_shareCrd = sharedInitCells;
     m_reservedPerVlCells = reservedPerVlCells;
 
-    NS_LOG_DEBUG("NodeId: " << m_nodeId << "PortId: " << m_portId << "Init CbfcSharedMode");
-    NS_LOG_DEBUG("m_shareCrd: " << m_shareCrd << " reservedPerVlCells: " << m_reservedPerVlCells);
+    NS_LOG_DEBUG("NodeId: " << m_nodeId
+                 << " PortId: " << m_portId
+                 << " Init CbfcSharedMode"
+                 << " reservedPerVlCells=" << m_reservedPerVlCells
+                 << " sharedInitCells=" << m_shareCrd);
+
+    NS_ABORT_MSG_IF(m_reservedPerVlCells < 0 || m_shareCrd < 0,
+                    "CBFC_SHARED requires non-negative reserved and shared initial credits");
+    if (m_reservedPerVlCells == 0 && m_shareCrd == 0)
+    {
+        NS_LOG_WARN("CBFC shared-credit configuration has zero total transmit credit on NodeId="
+                    << m_nodeId
+                    << " PortId=" << m_portId);
+    }
 }
 
 FcType UbCbfcSharedCredit::GetFcType()
 {
-    return FcType::CBFC_SHARED_CRD;
+    return FcType::CBFC_SHARED;
 }
 
 bool UbCbfcSharedCredit::IsFcLimited(Ptr<UbIngressQueue> ingressQ)
@@ -461,10 +493,11 @@ bool UbCbfcSharedCredit::CbfcSharedRestoreCrd(Ptr<Packet> p)
     return ret;
 }
 
-
 TypeId UbPfc::GetTypeId(void)
 {
-    static TypeId tid = TypeId("ns3::UbPfc").SetParent<UbFlowControl>().AddConstructor<UbPfc>();
+    static TypeId tid = TypeId("ns3::UbPfc")
+        .SetParent<UbFlowControl>()
+        .AddConstructor<UbPfc>();
     return tid;
 }
 
@@ -473,7 +506,11 @@ FcType UbPfc::GetFcType()
     return m_fcType;
 }
 
-void UbPfc::Init(int32_t portpfcUpThld, int32_t portpfcLowThld, uint32_t nodeId, uint32_t portId)
+void UbPfc::Init(FcType mode,
+                 int32_t portpfcUpThld,
+                 int32_t portpfcLowThld,
+                 uint32_t nodeId,
+                 uint32_t portId)
 {
     IntegerValue val;
     g_ub_vl_num.GetValue(val);
@@ -486,7 +523,42 @@ void UbPfc::Init(int32_t portpfcUpThld, int32_t portpfcLowThld, uint32_t nodeId,
 
     m_nodeId = nodeId;
     m_portId = portId;
-    NS_LOG_DEBUG("NodeId: " << m_nodeId << "PortId: " << m_portId << "Init Pfc");
+    m_fcType = mode;
+
+    Ptr<Node> node = NodeList::GetNode(m_nodeId);
+    Ptr<UbPort> port = DynamicCast<UbPort>(node->GetDevice(m_portId));
+    auto queueManager = port->GetNode()->GetObject<UbSwitch>()->GetQueueManager();
+
+    NS_LOG_DEBUG("NodeId: " << m_nodeId
+                 << " PortId: " << m_portId
+                 << " Init Pfc mode="
+                 << (m_fcType == FcType::PFC_FIXED ? "PFC_FIXED" : "PFC_DYNAMIC")
+                 << " hi=" << m_pfcCfg->m_portpfcUpThld
+                 << " lo=" << m_pfcCfg->m_portpfcLowThld);
+
+    NS_ABORT_MSG_IF(m_fcType != FcType::PFC_FIXED && m_fcType != FcType::PFC_DYNAMIC,
+                    "UbPfc must be initialized with PFC_FIXED or PFC_DYNAMIC mode");
+
+    if (m_fcType == FcType::PFC_FIXED) {
+        NS_ABORT_MSG_IF(m_pfcCfg->m_portpfcUpThld < 0 || m_pfcCfg->m_portpfcLowThld < 0,
+                        "PFC_FIXED requires non-negative hi/lo thresholds");
+        NS_ABORT_MSG_IF(m_pfcCfg->m_portpfcLowThld >= m_pfcCfg->m_portpfcUpThld,
+                        "PFC_FIXED requires PfcLowThld < PfcUpThld");
+    } else {
+        NS_ABORT_MSG_IF(queueManager->GetSharedPoolBytes() == 0,
+                        "PFC_DYNAMIC requires SharedPoolBytes > 0");
+        NS_ABORT_MSG_IF(queueManager->GetHeadroomPerPortBytes() == 0,
+                        "PFC_DYNAMIC requires HeadroomPerPortBytes > 0");
+
+        uint64_t xoffThresh = queueManager->GetXoffThreshold();
+        uint64_t xonThresh = queueManager->GetXonThreshold();
+        if (xonThresh == 0) {
+            NS_LOG_WARN("PFC_DYNAMIC xon collapsed to zero on NodeId=" << m_nodeId
+                        << " PortId=" << m_portId
+                        << " xoff=" << xoffThresh
+                        << " resumeOffset=" << queueManager->GetResumeOffset());
+        }
+    }
 }
 
 void UbPfc::DoDispose()
@@ -524,7 +596,6 @@ void UbPfc::HandleReleaseOccupiedFlowControl(Ptr<Packet> p, uint32_t inPortId, u
 
 void UbPfc::HandleSentPacket(Ptr<Packet> p, Ptr<UbIngressQueue> ingressQ)
 {
-    // do nothing
 }
 
 void UbPfc::HandleReceivedControlPacket(Ptr<Packet> p)
@@ -534,14 +605,10 @@ void UbPfc::HandleReceivedControlPacket(Ptr<Packet> p)
 
 void UbPfc::HandleReceivedPacket(Ptr<Packet> p)
 {
-    Ptr<Node> node = NodeList::GetNode(m_nodeId);
-    Ptr<UbPort> port = DynamicCast<UbPort>(node->GetDevice(m_portId));
-
     Ptr<Packet> pfcPkt = CheckPfcThreshold(p, m_portId);
     if (pfcPkt != nullptr) {
         SendPfc(pfcPkt, m_portId);
     }
-    return;
 }
 
 bool UbPfc::UpdatePfcStatus(Ptr<Packet> p)
@@ -603,30 +670,21 @@ Ptr<Packet> UbPfc::CheckPfcThreshold(Ptr<Packet> p, uint32_t portId)
 
     Ptr<UbPort> port = DynamicCast<UbPort>(node->GetDevice(portId));
     NS_LOG_DEBUG("NodeId: " << node->GetId() << " PortId: " << portId);
-
-    uint32_t hi_thresh = m_pfcCfg->m_portpfcUpThld;
-    uint32_t lo_thresh = m_pfcCfg->m_portpfcLowThld;
     auto flowControl = DynamicCast<UbPfc>(port->m_flowControl);
 
     IntegerValue val;
     g_ub_vl_num.GetValue(val);
     int ubVlNum = val.Get();
-    for (int pri = 0; pri < ubVlNum; pri++) {
-        auto queueManager = node->GetObject<UbSwitch>()->GetQueueManager();
-        // 使用InPort视图检查入端口拥塞状态
-        uint64_t inPortBufUsed = queueManager->GetInPortBufferUsed(portId, pri);
-        
-        if (inPortBufUsed < lo_thresh) {
-            NS_LOG_DEBUG("InPortBuf[" << pri << "]: " << inPortBufUsed
-                         << " < lo_thresh: " << lo_thresh << " m_pfcSndCredits: "
-                         << (uint32_t)flowControl->m_pfcStatus->m_pfcSndCredits[pri]);
-            flowControl->m_pfcStatus->m_pfcSndCredits[pri] = UB_CREDIT_MAX_VALUE;
-        }
-        if (inPortBufUsed >= hi_thresh) {
-            NS_LOG_DEBUG("InPortBuf[" << pri << "]: " << inPortBufUsed
-                         << " >= hi_thresh: " << hi_thresh << " m_pfcSndCredits = 0");
-            flowControl->m_pfcStatus->m_pfcSndCredits[pri] = 0;
-        }
+
+    switch (flowControl->m_fcType) {
+        case FcType::PFC_FIXED:
+            UpdatePfcFixedCredits(port, portId, ubVlNum);
+            break;
+        case FcType::PFC_DYNAMIC:
+            UpdatePfcDynamicCredits(port, portId, ubVlNum);
+            break;
+        default:
+            NS_ABORT_MSG("UbPfc::CheckPfcThreshold reached with non-PFC mode");
     }
 
     if (flowControl->m_pfcStatus->m_pfcSndCredits == flowControl->m_pfcStatus->m_pfcLastSndCredits) {
@@ -661,6 +719,70 @@ Ptr<Packet> UbPfc::CheckPfcThreshold(Ptr<Packet> p, uint32_t portId)
     NS_LOG_DEBUG("Create pfcpkt uid: " << pfcPkt->GetUid());
 
     return pfcPkt;
+}
+
+void UbPfc::UpdatePfcFixedCredits(Ptr<UbPort> port, uint32_t portId, int ubVlNum)
+{
+    auto flowControl = DynamicCast<UbPfc>(port->m_flowControl);
+    auto queueManager = port->GetNode()->GetObject<UbSwitch>()->GetQueueManager();
+    uint32_t hiThresh = flowControl->m_pfcCfg->m_portpfcUpThld;
+    uint32_t loThresh = flowControl->m_pfcCfg->m_portpfcLowThld;
+
+    for (int pri = 0; pri < ubVlNum; pri++) {
+        uint64_t ingressBytes = queueManager->GetQueueIngressTotalBytes(portId, pri);
+
+        if (ingressBytes < loThresh) {
+            NS_LOG_DEBUG("PFC-fixed RESUME: inPort=" << portId
+                         << " pri=" << pri
+                         << " ingress=" << ingressBytes
+                         << " lo=" << loThresh);
+            flowControl->m_pfcStatus->m_pfcSndCredits[pri] = UB_CREDIT_MAX_VALUE;
+        }
+        if (ingressBytes >= hiThresh) {
+            NS_LOG_DEBUG("PFC-fixed PAUSE: inPort=" << portId
+                         << " pri=" << pri
+                         << " ingress=" << ingressBytes
+                         << " hi=" << hiThresh);
+            flowControl->m_pfcStatus->m_pfcSndCredits[pri] = 0;
+        }
+    }
+}
+
+void UbPfc::UpdatePfcDynamicCredits(Ptr<UbPort> port, uint32_t portId, int ubVlNum)
+{
+    auto flowControl = DynamicCast<UbPfc>(port->m_flowControl);
+    auto queueManager = port->GetNode()->GetObject<UbSwitch>()->GetQueueManager();
+
+    uint64_t xoffThresh = queueManager->GetXoffThreshold();
+    uint64_t xonThresh = queueManager->GetXonThreshold();
+
+    for (int pri = 0; pri < ubVlNum; pri++) {
+        uint64_t hdrmUsed = queueManager->GetQueueIngressHeadroomBytes(portId, pri);
+        uint64_t sharedUsed = queueManager->GetQueueIngressSharedBytes(portId, pri);
+
+        bool inHeadroom = hdrmUsed > 0;
+        bool overXoff = sharedUsed >= xoffThresh && sharedUsed > 0;
+        bool shouldPause = inHeadroom || overXoff;
+        bool shouldResume = !shouldPause && sharedUsed <= xonThresh;
+
+        if (shouldPause) {
+            NS_LOG_DEBUG("PFC-dynamic PAUSE: inPort=" << portId
+                         << " pri=" << pri
+                         << " hdrm=" << hdrmUsed
+                         << " shared=" << sharedUsed
+                         << " xon=" << xonThresh
+                         << " xoff=" << xoffThresh);
+            flowControl->m_pfcStatus->m_pfcSndCredits[pri] = 0;
+        } else if (shouldResume) {
+            NS_LOG_DEBUG("PFC-dynamic RESUME: inPort=" << portId
+                         << " pri=" << pri
+                         << " hdrm=" << hdrmUsed
+                         << " shared=" << sharedUsed
+                         << " xon=" << xonThresh
+                         << " xoff=" << xoffThresh);
+            flowControl->m_pfcStatus->m_pfcSndCredits[pri] = UB_CREDIT_MAX_VALUE;
+        }
+    }
 }
 
 }  // namespace ns3

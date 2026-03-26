@@ -128,8 +128,6 @@ private:
     bool PortTraceEnable = true;
     bool RecordTraceEnabled = false;
 
-    bool isTest = false;
-
     // 设置Trace全局变量
     ns3::GlobalValue g_trace_enable = ns3::GlobalValue("UB_TRACE_ENABLE",
                                                        "Master switch for all traces",
