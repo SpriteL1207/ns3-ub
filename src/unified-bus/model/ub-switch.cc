@@ -237,7 +237,6 @@ void UbSwitch::SwitchHandlePacket(Ptr<UbPort> port, Ptr<Packet> packet)
         default:
             NS_ASSERT_MSG(0, "Invalid Packet Type!");
     }
-    return;
 }
 
 /**
@@ -255,8 +254,6 @@ void UbSwitch::SinkControlFrame(Ptr<UbPort> port, Ptr<Packet> packet)
         auto flowControl = DynamicCast<UbPfc>(port->GetFlowControl());
         flowControl->UpdatePfcStatus(packet);
     }
-
-    return;
 }
 
 /**
@@ -416,6 +413,9 @@ void UbSwitch::ForwardDataPacket(Ptr<UbPort> port, Ptr<Packet> packet, const Par
     uint32_t inPort = port->GetIfIndex();
     uint8_t priority = headers.datalinkPacketHeader.GetPacketVL();
     uint32_t pSize = packet->GetSize();
+    NS_ABORT_MSG_IF(priority == 0,
+                    "Unified-bus reserves priority 0 for locally generated control frames in the "
+                    "simulator model. Data packets must use priority 1..15.");
 
     if (!m_queueManager->CheckInPortSpace(inPort, priority, pSize)) {
         NS_LOG_WARN("NodeId " << GetObject<Node>()->GetId() << " InPort " << inPort << " pri=" << (uint32_t)priority
@@ -452,6 +452,9 @@ void UbSwitch::ForwardDataPacket(Ptr<UbPort> port, Ptr<Packet> packet, const Par
     uint32_t inPort = port->GetIfIndex();
     uint8_t priority = headers.datalinkPacketHeader.GetPacketVL();
     uint32_t pSize = packet->GetSize();
+    NS_ABORT_MSG_IF(priority == 0,
+                    "Unified-bus reserves priority 0 for locally generated control frames in the "
+                    "simulator model. Data packets must use priority 1..15.");
 
     if (!m_queueManager->CheckInPortSpace(inPort, priority, pSize)) {
         NS_LOG_WARN("NodeId " << GetObject<Node>()->GetId() << " InPort " << inPort << " pri=" << (uint32_t)priority
@@ -540,12 +543,9 @@ void UbSwitch::SendPacket(Ptr<Packet> packet, uint32_t inPort, uint32_t outPort,
 
     m_voq[outPort][priority][inPort]->Push(packet);
 
-    // Update both InPort and OutPort view buffer statistics
     m_queueManager->PushToVoq(inPort, outPort, priority, packet->GetSize());
 
-    // Only data packets participate in ingress data-plane accounting/threshold reactions.
-    // Locally generated control frames still share the scheduler, but they are a modeling
-    // simplification and must not recursively trigger another round of data-packet handling.
+    // 只有数据报文参与 PFC 阈值检查；控制帧共享调度路径但跳过入口计量
     if (packetType != UB_CONTROL_FRAME && IsPFCEnable()) {
         recvPort->m_flowControl->HandleReceivedPacket(packet);
     }
@@ -554,33 +554,23 @@ void UbSwitch::SendPacket(Ptr<Packet> packet, uint32_t inPort, uint32_t outPort,
     port->TriggerTransmit();
 }
 
-/**
- * @brief Send control frame (PFC/CBFC) on specified port
- * Control frames use highest priority (0) and are locally generated (inPort = outPort).
- *
- * Modeling note:
- * Control frames share the VOQ/scheduler path so that link arbitration still sees them,
- * but they deliberately bypass data-plane ingress admission/accounting. We do not model
- * the full post-drop control-plane behavior, so pretending to run reserve/shared/headroom
- * admission here would only create inconsistent state.
- */
+// Control frames use priority 0 and inPort==outPort in this simulator model.
+// This is a performance-oriented modeling tradeoff, not a UB protocol requirement.
+// The switch peeks once here, then the VOQ path relies on queue identity instead of re-parsing
+// packet headers at every scheduling/accounting step.
 void UbSwitch::SendControlFrame(Ptr<Packet> packet, uint32_t portId)
 {
+    NS_ASSERT_MSG(GetPacketType(packet) == UB_CONTROL_FRAME,
+                  "SendControlFrame expects a real UB control-credit packet");
     uint32_t priority = 0;
     SendPacket(packet, portId, portId, priority);
 }
 
-/**
- * @brief Packet dequeued from VOQ and moved to EgressQueue
- * Called by allocator when packet is selected from VOQ and placed into EgressQueue.
- * Updates buffer statistics to reflect packet leaving VOQ.
- */
 void UbSwitch::NotifySwitchDequeue(uint16_t inPortId, uint32_t outPort, uint32_t priority, Ptr<Packet> packet)
 {
-    // Update buffer statistics for all packets (including control frames)
     m_queueManager->PopFromVoq(inPortId, outPort, priority, packet->GetSize());
 
-    // Only data packets trigger congestion control
+    // 只有数据报文触发拥塞控制
     UbPacketType_t packetType = GetPacketType(packet);
     if (packetType != UB_CONTROL_FRAME) {
         NS_LOG_DEBUG("[QMU] Node:" << GetObject<Node>()->GetId()

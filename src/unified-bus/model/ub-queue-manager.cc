@@ -97,7 +97,7 @@ IngressQueueType UbPacketQueue::GetIngressQueueType()
 
 uint32_t UbPacketQueue::GetNextPacketSize()
 {
-    if (GetInPortId() == GetOutPortId()) { // crd报文等控制报文
+    if (IsControlFrame()) { // crd报文等控制报文
         NS_LOG_DEBUG("[UbPacketQueue GetNextPacketSize] is ctrl pkt");
         UbDatalinkControlCreditHeader  DatalinkControlCreditHeader;
         uint32_t UbDataLinkCtrlSize = DatalinkControlCreditHeader.GetSerializedSize();
@@ -111,7 +111,7 @@ uint32_t UbPacketQueue::GetNextPacketSize()
 }
 
 /*-----------------------------------------UbQueueManager----------------------------------------------*/
-UbQueueManager::UbQueueManager(void)
+UbQueueManager::UbQueueManager()
 {
 }
 
@@ -157,6 +157,8 @@ void UbQueueManager::Init()
     m_inPortBuffer.assign(m_portsNum, std::vector<uint64_t>(m_vlNum, 0));
     m_outPortBuffer.assign(m_portsNum, std::vector<uint64_t>(m_vlNum, 0));
     m_hdrmBytes.assign(m_portsNum, std::vector<uint64_t>(m_vlNum, 0));
+    m_ingressControlBytes.assign(m_portsNum, std::vector<uint64_t>(m_vlNum, 0));
+    m_outPortControlBytes.assign(m_portsNum, std::vector<uint64_t>(m_vlNum, 0));
 
     m_sharedUsedBytes = 0;
     m_totalHeadroomBytes = static_cast<uint64_t>(m_headroomPerPortBytes) * m_portsNum;
@@ -192,25 +194,25 @@ void UbQueueManager::Init()
 
 // ========== VOQ Dual-View Operations ==========
 
-bool UbQueueManager::IsBypassedControlFrame(uint32_t inPort, uint32_t outPort, uint32_t priority) const
+bool UbQueueManager::IsLocallyGeneratedControlFrame(uint32_t inPort,
+                                                    uint32_t outPort,
+                                                    uint32_t priority) const
 {
-    // Unified-bus models locally generated control frames as (inPort == outPort, priority == 0).
-    // They share the VOQ scheduler, but intentionally bypass data-plane ingress accounting:
-    // no reserve/shared/headroom bookkeeping and no out-port occupancy contribution.
+    // Unified-bus reserves (inPort == outPort, priority == 0) for locally generated control
+    // frames. This is a simulator tradeoff, not a UB protocol rule: it lets the switch/VOQ hot
+    // path classify control traffic without repeatedly parsing packet headers after enqueue.
     return priority == 0 && inPort == outPort;
 }
 
 bool UbQueueManager::CheckVoqSpace(uint32_t inPort, uint32_t outPort, 
                                     uint32_t priority, uint32_t pSize)
 {
-    if (IsBypassedControlFrame(inPort, outPort, priority)) {
+    if (IsLocallyGeneratedControlFrame(inPort, outPort, priority)) {
         return true;
     }
 
-    // Check if both views have space
     bool inPortOk = CheckInPortSpace(inPort, priority, pSize);
     bool outPortOk = CheckOutPortSpace(outPort, priority, pSize);
-    
     return inPortOk && outPortOk;
 }
 
@@ -221,22 +223,20 @@ bool UbQueueManager::CheckInPortSpace(uint32_t inPort, uint32_t priority, uint32
 
 bool UbQueueManager::CheckOutPortSpace(uint32_t outPort, uint32_t priority, uint32_t pSize)
 {
-    // OutPort视图纯用于统计，无物理缓冲区限制，不用于丢包决策
-    uint64_t newUsage = m_outPortBuffer[outPort][priority] + pSize;
-    
     NS_LOG_DEBUG("CheckOutPortSpace: outPort=" << outPort 
                  << " pri=" << priority
                  << " currentUsed=" << m_outPortBuffer[outPort][priority]
-                 << " newUsage=" << newUsage);
-    
-    return true;  // Always return true, OutPort view has no hard limit
+                 << " newUsage=" << m_outPortBuffer[outPort][priority] + pSize);
+    return true;  // OutPort视图无物理限制，不用于丢包决策
 }
 
 void UbQueueManager::PushToVoq(uint32_t inPort, uint32_t outPort,
                                 uint32_t priority, uint32_t pSize)
 {
-    if (IsBypassedControlFrame(inPort, outPort, priority)) {
-        NS_LOG_DEBUG("PushToVoq bypassed data-plane accounting for local control frame: inPort="
+    if (IsLocallyGeneratedControlFrame(inPort, outPort, priority)) {
+        m_ingressControlBytes[inPort][priority] += pSize;
+        m_outPortControlBytes[outPort][priority] += pSize;
+        NS_LOG_DEBUG("PushToVoq recorded local control frame outside data-plane admission: inPort="
                      << inPort << " outPort=" << outPort << " pri=" << priority
                      << " size=" << pSize);
         return;
@@ -254,8 +254,14 @@ void UbQueueManager::PushToVoq(uint32_t inPort, uint32_t outPort,
 void UbQueueManager::PopFromVoq(uint32_t inPort, uint32_t outPort,
                                  uint32_t priority, uint32_t pSize)
 {
-    if (IsBypassedControlFrame(inPort, outPort, priority)) {
-        NS_LOG_DEBUG("PopFromVoq bypassed data-plane accounting for local control frame: inPort="
+    if (IsLocallyGeneratedControlFrame(inPort, outPort, priority)) {
+        NS_ASSERT_MSG(m_ingressControlBytes[inPort][priority] >= pSize,
+                      "Ingress control accounting underflow");
+        NS_ASSERT_MSG(m_outPortControlBytes[outPort][priority] >= pSize,
+                      "Out-port control accounting underflow");
+        m_ingressControlBytes[inPort][priority] -= pSize;
+        m_outPortControlBytes[outPort][priority] -= pSize;
+        NS_LOG_DEBUG("PopFromVoq drained local control-frame accounting: inPort="
                      << inPort << " outPort=" << outPort << " pri=" << priority
                      << " size=" << pSize);
         return;
@@ -307,7 +313,7 @@ void UbQueueManager::SetReservePerQueueBytes(uint32_t size)
     m_reservePerQueueBytes = size;
 }
 
-// ========== Three-Tier Buffer: Admission Control ==========
+// ========== Three-Tier Buffer ==========
 
 bool UbQueueManager::CheckIngressAdmission(uint32_t inPort, uint32_t priority, uint32_t pSize)
 {
@@ -390,7 +396,6 @@ void UbQueueManager::RemoveFromIngressAdmission(uint32_t inPort, uint32_t priori
     m_sharedUsedBytes -= std::min(freedShared, m_sharedUsedBytes);
 }
 
-// ========== Three-Tier Buffer: Queries ==========
 
 uint64_t UbQueueManager::GetXoffThreshold() const
 {
@@ -418,6 +423,16 @@ uint64_t UbQueueManager::GetQueueIngressHeadroomBytes(uint32_t inPort, uint32_t 
 uint64_t UbQueueManager::GetQueueIngressTotalBytes(uint32_t inPort, uint32_t priority) const
 {
     return GetQueueIngressNonHeadroomBytes(inPort, priority) + GetQueueIngressHeadroomBytes(inPort, priority);
+}
+
+uint64_t UbQueueManager::GetIngressControlBytes(uint32_t inPort, uint32_t priority) const
+{
+    return m_ingressControlBytes[inPort][priority];
+}
+
+uint64_t UbQueueManager::GetOutPortControlBytes(uint32_t outPort, uint32_t priority) const
+{
+    return m_outPortControlBytes[outPort][priority];
 }
 
 } // namespace ns3

@@ -27,6 +27,7 @@
 #include "ns3/ub-switch.h"
 #include "ns3/ub-tag.h"
 #include "ns3/ub-transaction.h"
+#include "ns3/ub-datalink.h"
 
 #include <chrono>
 #include <csignal>
@@ -1236,11 +1237,11 @@ class UbPfcDynamicModePauseResumeTest : public TestCase
     }
 };
 
-class UbControlFrameBypassesIngressAccountingTest : public TestCase
+class UbControlFrameUsesDedicatedAccountingTest : public TestCase
 {
   public:
-    UbControlFrameBypassesIngressAccountingTest()
-        : TestCase("UnifiedBus - control frames bypass data ingress accounting")
+    UbControlFrameUsesDedicatedAccountingTest()
+        : TestCase("UnifiedBus - control frames keep dedicated occupancy accounting")
     {
     }
 
@@ -1256,24 +1257,114 @@ class UbControlFrameBypassesIngressAccountingTest : public TestCase
                                                     /*alphaShift*/ 1,
                                                     {});
 
-        fixture.sw->SendControlFrame(Create<Packet>(128), 0);
+        uint8_t credits[16] = {};
+        credits[0] = 1;
+        Ptr<Packet> controlPacket = UbDataLink::GenControlCreditPacket(credits);
+        uint32_t controlBytes = controlPacket->GetSize();
+        fixture.sw->SendControlFrame(controlPacket, 0);
 
         NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetQueueIngressNonHeadroomBytes(0, 0),
                               0u,
-                              "Control frames should not consume data ingress reserve/shared accounting");
+                              "Control frames must not consume data ingress reserve/shared accounting");
         NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetQueueIngressSharedBytes(0, 0),
                               0u,
-                              "Control frames should not consume shared-pool accounting");
+                              "Control frames must not consume shared-pool accounting");
         NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetQueueIngressHeadroomBytes(0, 0),
                               0u,
-                              "Control frames should not consume headroom accounting");
-        NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetOutPortBufferUsed(0, 0),
+                              "Control frames must not consume headroom accounting");
+        NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetIngressControlBytes(0, 0),
+                              controlBytes,
+                              "Control frames should remain observable through dedicated ingress control accounting");
+        NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetOutPortControlBytes(0, 0),
+                              controlBytes,
+                              "Control frames should remain observable through dedicated out-port control accounting");
+
+        fixture.queueManager->PopFromVoq(0, 0, 0, controlBytes);
+        NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetIngressControlBytes(0, 0),
                               0u,
-                              "Control frames should not affect data out-port occupancy statistics");
+                              "Control accounting should drain when the queued control frame departs");
+        NS_TEST_ASSERT_MSG_EQ(fixture.queueManager->GetOutPortControlBytes(0, 0),
+                              0u,
+                              "Out-port control accounting should drain when the queued control frame departs");
         Simulator::Destroy();
         Config::Reset();
     }
 };
+
+#ifndef _WIN32
+class UbDataPacketHeaderRejectsPriorityZeroTest : public TestCase
+{
+  public:
+    UbDataPacketHeaderRejectsPriorityZeroTest()
+        : TestCase("UnifiedBus - data packet headers reject priority 0 in this simulator model")
+    {
+    }
+
+    void DoRun() override
+    {
+        int status = RunInChildProcess([]() {
+            Ptr<Packet> packet = Create<Packet>(0);
+            UbDataLink::GenPacketHeader(packet,
+                                        false,
+                                        false,
+                                        0,
+                                        0,
+                                        false,
+                                        false,
+                                        UbDatalinkHeaderConfig::PACKET_IPV4);
+        });
+
+        NS_TEST_ASSERT_MSG_EQ(WIFSIGNALED(status),
+                              1,
+                              "Generating a data packet on priority 0 should abort");
+        NS_TEST_ASSERT_MSG_EQ(WTERMSIG(status),
+                              SIGABRT,
+                              "Generating a data packet on priority 0 should fail with SIGABRT");
+    }
+};
+
+class UbSendControlFrameRejectsDataPacketTest : public TestCase
+{
+  public:
+    UbSendControlFrameRejectsDataPacketTest()
+        : TestCase("UnifiedBus - SendControlFrame rejects non-control packets")
+    {
+    }
+
+    void DoRun() override
+    {
+        int status = RunInChildProcess([]() {
+            Config::Reset();
+            auto fixture = CreateMultiPortSwitchFixture(FcType::NONE,
+                                                        /*portsNum*/ 1,
+                                                        /*reserveBytes*/ 0,
+                                                        /*sharedPoolBytes*/ 0,
+                                                        /*headroomPerPortBytes*/ 0,
+                                                        /*resumeOffsetBytes*/ 16,
+                                                        /*alphaShift*/ 1,
+                                                        {});
+
+            Ptr<Packet> dataPacket = Create<Packet>(0);
+            UbDataLink::GenPacketHeader(dataPacket,
+                                        false,
+                                        false,
+                                        1,
+                                        1,
+                                        false,
+                                        false,
+                                        UbDatalinkHeaderConfig::PACKET_IPV4);
+            fixture.sw->SendControlFrame(dataPacket, 0);
+        });
+
+        NS_TEST_ASSERT_MSG_EQ(WIFSIGNALED(status),
+                              1,
+                              "SendControlFrame should abort when called with a data packet");
+        NS_TEST_ASSERT_MSG_EQ(WTERMSIG(status),
+                              SIGABRT,
+                              "SendControlFrame misuse should fail with SIGABRT");
+    }
+};
+#endif
 
 class UbQueueManagerStickyHeadroomAccountingTest : public TestCase
 {
@@ -1855,7 +1946,7 @@ UbTestSuite::UbTestSuite()
     AddTestCase(new UbSystemOwnedByRankHelperTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbCreateNodeSystemIdTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbSwitchFlowControlModeAttributeTest(), TestCase::Duration::QUICK);
-    AddTestCase(new UbControlFrameBypassesIngressAccountingTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbControlFrameUsesDedicatedAccountingTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbPfcFixedModeCountsHeadroomTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbPfcDynamicModePauseResumeTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbPfcDynamicModeXoffZeroEmptyQueueTest(), TestCase::Duration::QUICK);
@@ -1863,6 +1954,8 @@ UbTestSuite::UbTestSuite()
     AddTestCase(new UbQueueManagerReserveOnlyAdmissionTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbQueueManagerStickyHeadroomAccountingTest(), TestCase::Duration::QUICK);
 #ifndef _WIN32
+    AddTestCase(new UbDataPacketHeaderRejectsPriorityZeroTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbSendControlFrameRejectsDataPacketTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbCbfcRejectsZeroCellGeometryTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbPfcFixedRejectsNegativeThresholdTest(), TestCase::Duration::QUICK);
 #endif
