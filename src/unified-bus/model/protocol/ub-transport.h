@@ -250,6 +250,15 @@ private:
         uint32_t bytesReceived{0};
     };
 
+    struct BufferedInboundPacket
+    {
+        UbTransportHeader tpHeader;
+        UbTransactionHeader taHeader;
+        uint32_t logicalBytes{0};
+        uint32_t payloadBytes{0};
+        uint32_t taskId{0};
+    };
+
     void DoDispose() override;
 
     Ptr<UbTransaction> GetTransaction();
@@ -300,6 +309,7 @@ private:
 
     std::vector<Ptr<UbWqeSegment>> m_remoteRequest; // FIFO
     std::map<std::pair<uint32_t, uint32_t>, InboundTaUnitState> m_inboundTaUnits;
+    std::map<uint64_t, BufferedInboundPacket> m_bufferedInboundPackets;
 
     // Queue parameters
     uint32_t m_maxQueueSize;

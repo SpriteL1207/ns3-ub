@@ -928,6 +928,103 @@ class UbUrmaReadMultiSliceRequestPacketSemanticsTest : public TestCase
     uint32_t m_expectedDst{UINT32_MAX};
 };
 
+class UbUrmaWriteOutOfOrderRequestSliceCompletionTest : public TestCase
+{
+  public:
+    UbUrmaWriteOutOfOrderRequestSliceCompletionTest()
+        : TestCase("UnifiedBus - out-of-order URMA_WRITE request slice still completes at TA")
+    {
+    }
+
+    void DoRun() override
+    {
+        LocalTpTopology topo = BuildLocalTpTopology();
+        InstallStaticTpPair(topo);
+
+        Ptr<UbController> senderCtrl = topo.sender->GetObject<UbController>();
+        Ptr<UbController> receiverCtrl = topo.receiver->GetObject<UbController>();
+        Ptr<UbTransportChannel> senderTp = senderCtrl->GetTpByTpn(kUrmaWriteRegressionSenderTpn);
+        Ptr<UbTransportChannel> receiverTp = receiverCtrl->GetTpByTpn(kUrmaWriteRegressionReceiverTpn);
+        NS_TEST_ASSERT_MSG_NE(senderTp, nullptr, "Sender TP should exist");
+        NS_TEST_ASSERT_MSG_NE(receiverTp, nullptr, "Receiver TP should exist");
+
+        receiverTp->TraceConnectWithoutContext(
+            "WqeSegmentCompletesNotify",
+            MakeCallback(
+                &UbUrmaWriteOutOfOrderRequestSliceCompletionTest::ObserveTargetRequestSliceComplete,
+                this));
+
+        Ptr<UbWqeSegment> request = CreateOutOfOrderWriteRequestSegment(topo, senderTp);
+        senderTp->UpdatePsnCnt(request->GetPsnSize());
+        senderTp->UpDateMsnCnt(1);
+        senderTp->PushWqeSegment(request);
+
+        Ptr<Packet> firstPacket = senderTp->GetNextPacket();
+        Ptr<Packet> lastPacket = senderTp->GetNextPacket();
+        NS_TEST_ASSERT_MSG_NE(firstPacket, nullptr, "First request packet should exist");
+        NS_TEST_ASSERT_MSG_NE(lastPacket, nullptr, "Last request packet should exist");
+
+        receiverTp->RecvDataPacket(lastPacket->Copy());
+        NS_TEST_ASSERT_MSG_EQ(m_targetRequestSliceCompleteCount,
+                              0u,
+                              "Out-of-order last packet alone must not complete the TA slice");
+
+        receiverTp->RecvDataPacket(firstPacket->Copy());
+        Simulator::Stop(MilliSeconds(1));
+        Simulator::Run();
+
+        NS_TEST_ASSERT_MSG_EQ(m_targetRequestSliceCompleteCount,
+                              1u,
+                              "Completing the PSN gap should complete the write request slice");
+
+        Simulator::Destroy();
+    }
+
+  private:
+    Ptr<UbWqeSegment> CreateOutOfOrderWriteRequestSegment(const LocalTpTopology& topo,
+                                                          const Ptr<UbTransportChannel>& senderTp)
+    {
+        constexpr uint32_t requestBytes = UB_MTU_BYTE + 512;
+        Ptr<UbWqeSegment> segment = CreateObject<UbWqeSegment>();
+        segment->SetSrc(topo.sender->GetId());
+        segment->SetDest(topo.receiver->GetId());
+        segment->SetSport(topo.senderPort->GetIfIndex());
+        segment->SetDport(topo.receiverPort->GetIfIndex());
+        segment->SetType(TaOpcode::TA_OPCODE_WRITE);
+        segment->SetSize(requestBytes);
+        segment->SetPriority(kUrmaWriteRegressionPriority);
+        segment->SetTaskId(kUrmaWriteRegressionTaskId);
+        segment->SetWqeSize(requestBytes);
+        segment->SetJettyNum(kUrmaWriteRegressionJettyNum);
+        segment->SetTaMsn(0);
+        segment->SetTaSsn(0);
+        segment->SetOrderType(OrderType::ORDER_NO);
+        segment->SetTpn(kUrmaWriteRegressionSenderTpn);
+        segment->SetTpMsn(senderTp->GetMsnCnt());
+        segment->SetPsnStart(senderTp->GetPsnCnt());
+        segment->SetSegmentKind(UbTransactionSegmentKind::REQUEST);
+        segment->SetOriginJettyNum(kUrmaWriteRegressionJettyNum);
+        segment->SetRequestTassn(0);
+        segment->SetRequestOpcode(TaOpcode::TA_OPCODE_WRITE);
+        segment->SetResponseBytes(0);
+        segment->SetNeedsTransactionResponse(true);
+        segment->SetLogicalBytes(requestBytes);
+        segment->SetPayloadBytes(requestBytes);
+        segment->SetCarrierBytes(requestBytes);
+        return segment;
+    }
+
+    void ObserveTargetRequestSliceComplete(uint32_t, uint32_t taskId, uint32_t)
+    {
+        if (taskId == kUrmaWriteRegressionTaskId)
+        {
+            ++m_targetRequestSliceCompleteCount;
+        }
+    }
+
+    uint32_t m_targetRequestSliceCompleteCount{0};
+};
+
 class UbCreateNodeSystemIdTest : public TestCase
 {
   public:
@@ -1970,6 +2067,19 @@ UbTestSuite::UbTestSuite()
 
 // Register the test suite
 static UbTestSuite g_ubTestSuite;
+
+class UbOutOfOrderRegressionTestSuite : public TestSuite
+{
+  public:
+    UbOutOfOrderRegressionTestSuite()
+        : TestSuite("unified-bus-transport-ooo-regression", Type::UNIT)
+    {
+        AddTestCase(new UbUrmaWriteOutOfOrderRequestSliceCompletionTest(),
+                    TestCase::Duration::QUICK);
+    }
+};
+
+static UbOutOfOrderRegressionTestSuite g_ubOutOfOrderRegressionTestSuite;
 
 namespace
 {
