@@ -55,6 +55,7 @@ build_lib(
 	model/protocol/ub-header.h
 	model/ub-link.h
 	model/ub-port.h
+	model/ub-sliding-bitmap-window.h
 	model/ub-switch.h
 	model/protocol/ub-transaction.h
 	model/protocol/ub-function.h

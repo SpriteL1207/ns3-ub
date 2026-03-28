@@ -85,10 +85,18 @@ public:
     void InitFaultMoudle(const std::string &FaultConfigFile);
 
 private:
+    struct TraceFileState
+    {
+        std::ofstream stream;
+        std::string pending;
+    };
+
+    static constexpr std::size_t TRACE_FLUSH_THRESHOLD_BYTES = 16 * 1024;
+
     // Runtime trace state shared by current process.
     inline static std::string trace_path;
 
-    inline static std::map<std::string, std::ofstream *> files;  // 存储文件名和对应的文件句柄
+    inline static std::map<std::string, TraceFileState> files;  // 存储文件名和对应的文件句柄/缓冲
 
     ns3::GlobalValue g_fault_enable =
     ns3::GlobalValue("UB_FAULT_ENABLE", "Enable the fault injection module.", ns3::BooleanValue(false), ns3::MakeBooleanChecker());
@@ -169,9 +177,13 @@ private:
 
     void SetRecord(int fieldCount, std::string field, TrafficRecord &record);
 
-    static void PrintTraceInfo(std::string fileName, std::string info);
+    static void PrintTraceInfo(const std::string& fileName, const std::string& info);
 
-    static void PrintTraceInfoNoTs(std::string fileName, std::string info);
+    static void PrintTraceInfoNoTs(const std::string& fileName, const std::string& info);
+
+    static TraceFileState& GetTraceFile(const std::string& fileName);
+
+    static void FlushTraceFile(TraceFileState& fileState);
 
     static void TpFirstPacketSendsNotify(uint32_t nodeId, uint32_t taskId, uint32_t tpn, uint32_t dstTpn,
                                          uint32_t tpMsn, uint32_t psnSndNxt, uint32_t sPort);

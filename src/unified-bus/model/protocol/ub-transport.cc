@@ -164,8 +164,9 @@ void UbTransportChannel::DoDispose()
     m_ackQ = queue<Ptr<Packet>>();
     m_wqeSegmentVector.clear();
     m_inboundTaUnits.clear();
+    m_bufferedInboundPackets.clear();
     m_congestionCtrl = nullptr;
-    m_recvPsnBitset.clear();
+    m_recvPsnWindow.Resize(0);
 }
 
 /**
@@ -587,7 +588,8 @@ void UbTransportChannel::SetUbTransport(uint32_t nodeId,
     m_retransAttemptsLeft = m_maxRetransAttempts;
     m_maxQueueSize = m_defaultMaxWqeSegNum;
     m_maxInflightPacketSize = m_defaultMaxInflightPacketSize;
-    m_recvPsnBitset.resize(m_psnOooThreshold, false);
+    m_recvPsnWindow.Resize(m_psnOooThreshold);
+    m_recvPsnWindow.Reset(m_psnRecvNxt);
 }
 
 /**
@@ -632,7 +634,7 @@ void UbTransportChannel::RecvDataPacket(Ptr<Packet> p)
                   << " PacketSize: " << p->GetSize());
     UbFlowTag flowTag;
     p->PeekPacketTag(flowTag);
-    Ptr<UbWqeSegment> completedTaUnit = nullptr;
+    std::vector<Ptr<UbWqeSegment>> completedTaUnits;
     if (m_pktTraceEnabled) {
         UbPacketTraceTag traceTag;
         p->PeekPacketTag(traceTag);
@@ -693,17 +695,37 @@ void UbTransportChannel::RecvDataPacket(Ptr<Packet> p)
         }
         // 记录包号和size
         m_congestionCtrl->RecverRecordPacketData(psn, payloadBytes, NetworkHeader);
+        m_bufferedInboundPackets[psn] = {TpHeader,
+                                         TaHeader,
+                                         logicalBytes,
+                                         payloadBytes,
+                                         flowTag.GetFlowId()};
         if (psn > m_psnRecvNxt) {
             NS_LOG_DEBUG("Out-of-Order Packet,tpn:{" << m_tpn << "} psn:{" << psn
                         << "} expectedPsn:{" << m_psnRecvNxt << "}");
             return; // 未开启sack的情况下乱序包不用回复ack，只用记录了bitmap
         }
-        completedTaUnit =
-            TrackInboundTaPacket(TpHeader, TaHeader, logicalBytes, payloadBytes, flowTag.GetFlowId());
         uint32_t oldRecvNxt = m_psnRecvNxt;
         while (m_psnRecvNxt < oldRecvNxt + m_psnOooThreshold) {
             uint32_t currentBitIndex = m_psnRecvNxt - oldRecvNxt;
-            if (currentBitIndex < m_recvPsnBitset.size() && m_recvPsnBitset[currentBitIndex]) {
+            if (currentBitIndex < m_recvPsnWindow.GetWindowSize() &&
+                m_recvPsnWindow.Contains(m_psnRecvNxt)) {
+                auto bufferedIt = m_bufferedInboundPackets.find(m_psnRecvNxt);
+                if (bufferedIt == m_bufferedInboundPackets.end()) {
+                    NS_LOG_WARN("Missing buffered inbound packet for contiguous psn " << m_psnRecvNxt
+                                << " on tpn " << m_tpn);
+                    break;
+                }
+                Ptr<UbWqeSegment> completedTaUnit =
+                    TrackInboundTaPacket(bufferedIt->second.tpHeader,
+                                         bufferedIt->second.taHeader,
+                                         bufferedIt->second.logicalBytes,
+                                         bufferedIt->second.payloadBytes,
+                                         bufferedIt->second.taskId);
+                if (completedTaUnit != nullptr) {
+                    completedTaUnits.push_back(completedTaUnit);
+                }
+                m_bufferedInboundPackets.erase(bufferedIt);
                 m_psnRecvNxt++;
             } else if (currentBitIndex) {
                 break; // 遇到未确认的分段，停止
@@ -751,8 +773,11 @@ void UbTransportChannel::RecvDataPacket(Ptr<Packet> p)
                   << " PacketSize: " << ackp->GetSize());
     Ptr<UbPort> port = DynamicCast<UbPort>(NodeList::GetNode(m_nodeId)->GetDevice(m_sport));
     port->TriggerTransmit(); // 触发发送
-    if (completedTaUnit != nullptr)
+    for (const Ptr<UbWqeSegment>& completedTaUnit : completedTaUnits)
     {
+        if (completedTaUnit == nullptr) {
+            continue;
+        }
         GetTransaction()->HandleInboundTaUnit(m_tpn, completedTaUnit);
         WqeSegmentCompletesNotify(m_nodeId, completedTaUnit->GetTaskId(), completedTaUnit->GetTaSsn());
     }
@@ -820,20 +845,8 @@ bool UbTransportChannel::IsInflightLimited() const
 */
 void UbTransportChannel::RightShiftBitset(uint32_t shiftCount)
 {
-    if (shiftCount >= m_recvPsnBitset.size()) {
-        std::fill(m_recvPsnBitset.begin(), m_recvPsnBitset.end(), false); // 清空所有位
-        return;
-    }
-
-    // 手动实现右移
-    for (size_t i = 0; i + shiftCount < m_recvPsnBitset.size(); ++i) {
-        m_recvPsnBitset[i] = m_recvPsnBitset[i + shiftCount];
-    }
-
-    // 清空右移后的高位
-    for (size_t i = m_recvPsnBitset.size() - shiftCount; i < m_recvPsnBitset.size(); ++i) {
-        m_recvPsnBitset[i] = 0;
-    }
+    (void)shiftCount;
+    m_recvPsnWindow.AdvanceContiguous();
 }
 
 /**
@@ -842,11 +855,7 @@ void UbTransportChannel::RightShiftBitset(uint32_t shiftCount)
 */
 bool UbTransportChannel::SetBitmap(uint64_t psn)
 {
-    if (psn >= m_recvPsnBitset.size() + m_psnRecvNxt) {
-        return false;
-    }
-    m_recvPsnBitset[psn - m_psnRecvNxt] = true;
-    return true;
+    return m_recvPsnWindow.Mark(psn);
 }
 
 /**
@@ -858,10 +867,10 @@ bool UbTransportChannel::IsRepeatPacket(uint64_t psn)
     if (psn < m_psnRecvNxt) {
         return true;
     }
-    if (psn >= m_recvPsnBitset.size() + m_psnRecvNxt) {
+    if (psn >= m_recvPsnWindow.GetBase() + m_recvPsnWindow.GetWindowSize()) {
         return false;
     }
-    return m_recvPsnBitset[static_cast<int64_t>(psn) - static_cast<int64_t>(m_psnRecvNxt)];
+    return m_recvPsnWindow.Contains(psn);
 }
 
 void UbTransportChannel::WqeSegmentTriggerPortTransmit(Ptr<UbWqeSegment> segment)

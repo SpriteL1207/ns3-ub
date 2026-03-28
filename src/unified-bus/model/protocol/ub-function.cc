@@ -389,14 +389,15 @@ bool UbJetty::ProcessWqeSegmentComplete(uint32_t taSsnAck)
     uint32_t bitIndex = taSsnAck - m_taSsnSndUna;
 
     // 检查是否超出 bitset 范围
-    if (bitIndex >= m_ssnAckBitset.size()) {
+    if (bitIndex >= m_ssnAckWindow.GetWindowSize()) {
         NS_LOG_ERROR("SSN " << std::to_string(taSsnAck)
                             << " exceeds bitset capacity, bitIndex=" << std::to_string(bitIndex));
         return false;
     }
 
     // 设置对应的 bit
-    m_ssnAckBitset[bitIndex] = true;
+    const bool marked = m_ssnAckWindow.Mark(taSsnAck);
+    NS_ASSERT_MSG(marked, "Valid SSN ACK should always fit inside ACK window");
 
     NS_LOG_DEBUG("Set ACK bit for SSN " << std::to_string(taSsnAck) << " at bit index "
                                        << std::to_string(bitIndex));
@@ -405,7 +406,8 @@ bool UbJetty::ProcessWqeSegmentComplete(uint32_t taSsnAck)
     uint32_t oldSndUna = m_taSsnSndUna;
     while (m_taSsnSndUna < m_taSsnSndNxt) {
         uint32_t currentBitIndex = m_taSsnSndUna - oldSndUna;
-        if (currentBitIndex < m_ssnAckBitset.size() && m_ssnAckBitset[currentBitIndex]) {
+        if (currentBitIndex < m_ssnAckWindow.GetWindowSize() &&
+            m_ssnAckWindow.Contains(m_taSsnSndUna)) {
             m_taSsnSndUna++;
         } else {
             break; // 遇到未确认的分段，停止
@@ -429,20 +431,8 @@ bool UbJetty::ProcessWqeSegmentComplete(uint32_t taSsnAck)
 
 void UbJetty::RightShiftBitset(uint32_t shiftCount)
 {
-    if (shiftCount >= m_ssnAckBitset.size()) {
-        std::fill(m_ssnAckBitset.begin(), m_ssnAckBitset.end(), false); // 清空所有位
-        return;
-    }
-
-    // 手动实现右移
-    for (size_t i = 0; i + shiftCount < m_ssnAckBitset.size(); ++i) {
-        m_ssnAckBitset[i] = m_ssnAckBitset[i + shiftCount];
-    }
-
-    // 清空右移后的高位
-    for (size_t i = m_ssnAckBitset.size() - shiftCount; i < m_ssnAckBitset.size(); ++i) {
-        m_ssnAckBitset[i] = 0;
-    }
+    (void)shiftCount;
+    m_ssnAckWindow.AdvanceContiguous();
 }
 
 void UbJetty::CheckAndRemoveCompletedWqe()
@@ -492,7 +482,7 @@ void UbJetty::DoDispose()
 {
     NS_LOG_FUNCTION(this);
     m_wqeVector.clear();
-    m_ssnAckBitset.clear();
+    m_ssnAckWindow.Resize(0);
     Object::DoDispose();
 }
 
