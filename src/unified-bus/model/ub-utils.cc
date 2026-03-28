@@ -89,6 +89,31 @@ CreateUbChannelBetween(Ptr<UbPort> p1, Ptr<UbPort> p2, const string& delay)
 
 namespace utils {
 
+UbUtils::TraceFileState&
+UbUtils::GetTraceFile(const std::string& fileName)
+{
+    auto [it, inserted] = files.try_emplace(fileName);
+    if (inserted)
+    {
+        it->second.stream.open(fileName.c_str(), std::ios::out | std::ios::app);
+        NS_ASSERT_MSG(it->second.stream.is_open(), "Can not open File: " << fileName);
+        it->second.pending.reserve(TRACE_FLUSH_THRESHOLD_BYTES);
+    }
+    return it->second;
+}
+
+void
+UbUtils::FlushTraceFile(TraceFileState& fileState)
+{
+    if (fileState.pending.empty())
+    {
+        return;
+    }
+    fileState.stream.write(fileState.pending.data(),
+                           static_cast<std::streamsize>(fileState.pending.size()));
+    fileState.pending.clear();
+}
+
 uint32_t
 UbUtils::ExtractMpiRank(uint32_t systemId)
 {
@@ -156,11 +181,11 @@ void UbUtils::ParseTrace(bool isTest)
 
 void UbUtils::Destroy()
 {
-    for (auto &pair : files) {
-        if (pair.second->is_open()) {
-            pair.second->close();
+    for (auto& pair : files) {
+        FlushTraceFile(pair.second);
+        if (pair.second.stream.is_open()) {
+            pair.second.stream.close();
         }
-        delete pair.second;  // 释放资源
     }
     files.clear();
 }
@@ -205,38 +230,27 @@ void UbUtils::CreateTraceDir()
     PrintTimestamp("[setup] Prepare runlog directory: " + trace_path + "runlog");
 }
 
-inline void UbUtils::PrintTraceInfo(string fileName, string info)
+inline void UbUtils::PrintTraceInfo(const string& fileName, const string& info)
 {
-    // 检查文件是否已经打开
-    if (files.find(fileName) == files.end()) {
-        // 尝试打开文件
-        std::ofstream *file = new std::ofstream(fileName.c_str(), std::ios::out | std::ios::app);
-        if (!file->is_open()) {
-            delete file;  // 清理资源
-            NS_ASSERT_MSG(0, "Can not open File: " << fileName);
-        }
-        // 将文件句柄存储在map中
-        files[fileName] = file;
+    auto& fileState = GetTraceFile(fileName);
+    fileState.pending += "[";
+    fileState.pending += std::to_string(Simulator::Now().GetSeconds() * 1e6);
+    fileState.pending += "us] ";
+    fileState.pending += info;
+    fileState.pending.push_back('\n');
+    if (fileState.pending.size() >= TRACE_FLUSH_THRESHOLD_BYTES) {
+        FlushTraceFile(fileState);
     }
-
-    *files[fileName] << "[" << Simulator::Now().GetSeconds() * 1e6 << "us] " << info << "\n";
 }
 
-inline void UbUtils::PrintTraceInfoNoTs(string fileName, string info)
+inline void UbUtils::PrintTraceInfoNoTs(const string& fileName, const string& info)
 {
-    // 检查文件是否已经打开
-    if (files.find(fileName) == files.end()) {
-        // 尝试打开文件
-        std::ofstream *file = new std::ofstream(fileName.c_str(), std::ios::out | std::ios::app);
-        if (!file->is_open()) {
-            delete file;  // 清理资源
-            NS_ASSERT_MSG(0, "Can not open File: " << fileName);
-        }
-        // 将文件句柄存储在map中
-        files[fileName] = file;
+    auto& fileState = GetTraceFile(fileName);
+    fileState.pending += info;
+    fileState.pending.push_back('\n');
+    if (fileState.pending.size() >= TRACE_FLUSH_THRESHOLD_BYTES) {
+        FlushTraceFile(fileState);
     }
-
-    *files[fileName] << info << "\n";
 }
 
 inline void UbUtils::TpFirstPacketSendsNotify(
@@ -319,13 +333,21 @@ inline string UbUtils::Among(string s, string ts)
 void UbUtils::TpRecvNotify(uint32_t packetUid, uint32_t psn, uint32_t src, uint32_t dst, uint32_t srcTpn,
                            uint32_t dstTpn, PacketType type, uint32_t size, uint32_t taskId, UbPacketTraceTag traceTag)
 {
-    std::map<PacketType, std::string> typeMap = {
-    {PacketType::PACKET, "PKT"}, {PacketType::ACK, "ACK"}, {PacketType::CONTROL_FRAME, "CONTROL"}};
+    const char* pktType = "CONTROL";
+    switch (type) {
+    case PacketType::PACKET:
+        pktType = "PKT";
+        break;
+    case PacketType::ACK:
+        pktType = "ACK";
+        break;
+    case PacketType::CONTROL_FRAME:
+        break;
+    }
 
     std::ostringstream oss;
     oss << "Uid:" << packetUid << " Psn:" << psn << " Src:" << src << " Dst:" << dst << " SrcTpn:" << srcTpn
-        << " DstTpn:" << dstTpn << " Type:" << typeMap[type] << " Size:" << size << " TaskId:" << taskId;
-    oss << std::endl;
+        << " DstTpn:" << dstTpn << " Type:" << pktType << " Size:" << size << " TaskId:" << taskId << '\n';
     for (uint32_t i = 0; i < traceTag.GetTraceLenth(); i++) {
         uint32_t node = traceTag.GetNodeTrace(i);
         PortTrace trace = traceTag.GetPortTrace(node);
@@ -334,7 +356,7 @@ void UbUtils::TpRecvNotify(uint32_t packetUid, uint32_t psn, uint32_t src, uint3
                 << "--->";
         } else if (i == traceTag.GetTraceLenth() - 1) {
             oss << "[" << Among(std::to_string(trace.recvPort), std::to_string(trace.recvTime)) << "][" << node << "]"
-                << std::endl;
+                << '\n';
         } else {
             oss << "[" << Among(std::to_string(trace.recvPort), std::to_string(trace.recvTime)) << "]"
                 << "[" << node << "]"
@@ -349,7 +371,7 @@ void UbUtils::TpRecvNotify(uint32_t packetUid, uint32_t psn, uint32_t src, uint3
             oss << std::string(std::to_string(node).size() + 2, ' ') << "["
                 << Among(std::to_string(trace.sendTime), std::to_string(trace.sendTime)) << "]" << std::string(4, ' ');
         } else if (i == traceTag.GetTraceLenth() - 1) {
-            oss << "[" << Among(std::to_string(trace.recvTime), std::to_string(trace.recvTime)) << "]" << std::endl;
+            oss << "[" << Among(std::to_string(trace.recvTime), std::to_string(trace.recvTime)) << "]" << '\n';
         } else {
             oss << "[" << Among(std::to_string(trace.recvTime), std::to_string(trace.recvTime)) << "]"
                 << std::string(std::to_string(node).size() + 2, ' ') << "["
@@ -357,7 +379,6 @@ void UbUtils::TpRecvNotify(uint32_t packetUid, uint32_t psn, uint32_t src, uint3
         }
     }
     string info = oss.str();
-    string pktType = typeMap[type];
     string fileName = trace_path + "runlog/AllPacketTrace_" + pktType + "_node_" + to_string(src) + ".tr";
     PrintTraceInfoNoTs(fileName, info);
 }
@@ -365,13 +386,21 @@ void UbUtils::TpRecvNotify(uint32_t packetUid, uint32_t psn, uint32_t src, uint3
 void UbUtils::LdstRecvNotify(uint32_t packetUid, uint32_t src, uint32_t dst, PacketType type,
                              uint32_t size, uint32_t taskId, UbPacketTraceTag traceTag)
 {
-    std::map<PacketType, std::string> typeMap = {
-    {PacketType::PACKET, "PKT"}, {PacketType::ACK, "ACK"}, {PacketType::CONTROL_FRAME, "CONTROL"}};
+    const char* pktType = "CONTROL";
+    switch (type) {
+    case PacketType::PACKET:
+        pktType = "PKT";
+        break;
+    case PacketType::ACK:
+        pktType = "ACK";
+        break;
+    case PacketType::CONTROL_FRAME:
+        break;
+    }
 
     std::ostringstream oss;
     oss << "Uid:" << packetUid << " Src:" << src << " Dst:" << dst
-        << " Type:" << typeMap[type] << " Size:" << size << " TaskId:" << taskId;
-    oss << std::endl;
+        << " Type:" << pktType << " Size:" << size << " TaskId:" << taskId << '\n';
     for (uint32_t i = 0; i < traceTag.GetTraceLenth(); i++) {
         uint32_t node = traceTag.GetNodeTrace(i);
         PortTrace trace = traceTag.GetPortTrace(node);
@@ -380,7 +409,7 @@ void UbUtils::LdstRecvNotify(uint32_t packetUid, uint32_t src, uint32_t dst, Pac
                 << "--->";
         } else if (i == traceTag.GetTraceLenth() - 1) {
             oss << "[" << Among(std::to_string(trace.recvPort), std::to_string(trace.recvTime)) << "][" << node << "]"
-                << std::endl;
+                << '\n';
         } else {
             oss << "[" << Among(std::to_string(trace.recvPort), std::to_string(trace.recvTime)) << "]"
                 << "[" << node << "]"
@@ -395,7 +424,7 @@ void UbUtils::LdstRecvNotify(uint32_t packetUid, uint32_t src, uint32_t dst, Pac
             oss << std::string(std::to_string(node).size() + 2, ' ') << "["
                 << Among(std::to_string(trace.sendTime), std::to_string(trace.sendTime)) << "]" << std::string(4, ' ');
         } else if (i == traceTag.GetTraceLenth() - 1) {
-            oss << "[" << Among(std::to_string(trace.recvTime), std::to_string(trace.recvTime)) << "]" << std::endl;
+            oss << "[" << Among(std::to_string(trace.recvTime), std::to_string(trace.recvTime)) << "]" << '\n';
         } else {
             oss << "[" << Among(std::to_string(trace.recvTime), std::to_string(trace.recvTime)) << "]"
                 << std::string(std::to_string(node).size() + 2, ' ') << "["
@@ -403,7 +432,6 @@ void UbUtils::LdstRecvNotify(uint32_t packetUid, uint32_t src, uint32_t dst, Pac
         }
     }
     string info = oss.str();
-    string pktType = typeMap[type];
     string fileName = trace_path + "runlog/AllPacketTrace_" + pktType + "_node_" + to_string(src) + ".tr";
     PrintTraceInfoNoTs(fileName, info);
 }

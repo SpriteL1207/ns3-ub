@@ -9,6 +9,7 @@
 #include "ns3/packet.h"
 #include "ns3/ipv4-address.h"
 #include "ns3/callback.h"
+#include "ns3/ub-sliding-bitmap-window.h"
 #include "ub-header.h"
 #include "ns3/timer.h"
 #include "ns3/ub-congestion-control.h"
@@ -327,7 +328,7 @@ private:
     uint64_t        m_tpPsnCnt {0};       // TP层总计获取的数据包个数计数
     static constexpr uint32_t DEFAULT_OOO_THRESHOLD = 2048;
     uint32_t m_psnOooThreshold = DEFAULT_OOO_THRESHOLD;
-    std::vector<bool> m_recvPsnBitset{std::vector<bool>(DEFAULT_OOO_THRESHOLD, false)};
+    UbSlidingBitmapWindow m_recvPsnWindow{DEFAULT_OOO_THRESHOLD};
 
     // Status flags
     bool m_isActive = true;

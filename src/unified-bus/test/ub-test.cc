@@ -24,6 +24,7 @@
 #include "ns3/ub-port.h"
 #include "ns3/ub-queue-manager.h"
 #include "ns3/ub-routing-process.h"
+#include "ns3/ub-sliding-bitmap-window.h"
 #include "ns3/ub-switch.h"
 #include "ns3/ub-tag.h"
 #include "ns3/ub-transaction.h"
@@ -2019,6 +2020,76 @@ class UbQueueManagerReserveOnlyAdmissionTest : public TestCase
     }
 };
 
+class UbSlidingBitmapWindowAdvancesWithoutLosingOutOfOrderMarksTest : public TestCase
+{
+  public:
+    UbSlidingBitmapWindowAdvancesWithoutLosingOutOfOrderMarksTest()
+        : TestCase("UnifiedBus - sliding bitmap window preserves out-of-order marks while advancing")
+    {
+    }
+
+    void DoRun() override
+    {
+        UbSlidingBitmapWindow window(8);
+        window.Reset(100);
+
+        NS_TEST_ASSERT_MSG_EQ(window.Mark(102),
+                              true,
+                              "Marking an in-window out-of-order sequence should succeed");
+        NS_TEST_ASSERT_MSG_EQ(window.AdvanceContiguous(),
+                              0u,
+                              "Window must not advance before the gap closes");
+        NS_TEST_ASSERT_MSG_EQ(window.GetBase(), 100u, "Base should stay at the first missing sequence");
+
+        NS_TEST_ASSERT_MSG_EQ(window.Mark(100),
+                              true,
+                              "Marking the base sequence should succeed");
+        NS_TEST_ASSERT_MSG_EQ(window.AdvanceContiguous(),
+                              1u,
+                              "Closing the base gap should advance exactly one slot");
+        NS_TEST_ASSERT_MSG_EQ(window.GetBase(), 101u, "Base should move to the next missing sequence");
+
+        NS_TEST_ASSERT_MSG_EQ(window.Mark(101),
+                              true,
+                              "Marking the next gap should succeed");
+        NS_TEST_ASSERT_MSG_EQ(window.AdvanceContiguous(),
+                              2u,
+                              "Advance should consume both the newly filled gap and the preserved out-of-order mark");
+        NS_TEST_ASSERT_MSG_EQ(window.GetBase(), 103u, "Base should now point past the contiguous run");
+    }
+};
+
+class UbSlidingBitmapWindowReusesSlotsWithoutGhostMarksTest : public TestCase
+{
+  public:
+    UbSlidingBitmapWindowReusesSlotsWithoutGhostMarksTest()
+        : TestCase("UnifiedBus - sliding bitmap window reuses slots without reviving stale marks")
+    {
+    }
+
+    void DoRun() override
+    {
+        UbSlidingBitmapWindow window(4);
+        window.Reset(10);
+
+        NS_TEST_ASSERT_MSG_EQ(window.Mark(10), true, "Base mark should succeed");
+        NS_TEST_ASSERT_MSG_EQ(window.Mark(11), true, "Second mark should succeed");
+        NS_TEST_ASSERT_MSG_EQ(window.AdvanceContiguous(), 2u, "Two contiguous marks should advance by two");
+        NS_TEST_ASSERT_MSG_EQ(window.GetBase(), 12u, "Base should move forward after consuming two marks");
+
+        NS_TEST_ASSERT_MSG_EQ(window.Contains(10),
+                              false,
+                              "Consumed sequences must not remain marked after their slots are reused");
+        NS_TEST_ASSERT_MSG_EQ(window.Mark(14), true, "Reused slot should accept a new in-window sequence");
+        NS_TEST_ASSERT_MSG_EQ(window.Mark(12), true, "New base should still be markable after slot reuse");
+        NS_TEST_ASSERT_MSG_EQ(window.AdvanceContiguous(), 1u, "Only the rebuilt contiguous prefix should advance");
+        NS_TEST_ASSERT_MSG_EQ(window.GetBase(), 13u, "Base should stop at the next missing sequence");
+        NS_TEST_ASSERT_MSG_EQ(window.Contains(14),
+                              true,
+                              "Future out-of-order marks should remain visible after partial advance");
+    }
+};
+
 /**
  * @brief Unified-bus test suite
  */
@@ -2050,6 +2121,10 @@ UbTestSuite::UbTestSuite()
     AddTestCase(new UbPfcForwardingUsesIngressPortConfigTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbQueueManagerReserveOnlyAdmissionTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbQueueManagerStickyHeadroomAccountingTest(), TestCase::Duration::QUICK);
+    AddTestCase(new UbSlidingBitmapWindowAdvancesWithoutLosingOutOfOrderMarksTest(),
+                TestCase::Duration::QUICK);
+    AddTestCase(new UbSlidingBitmapWindowReusesSlotsWithoutGhostMarksTest(),
+                TestCase::Duration::QUICK);
 #ifndef _WIN32
     AddTestCase(new UbDataPacketHeaderRejectsPriorityZeroTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbSendControlFrameRejectsDataPacketTest(), TestCase::Duration::QUICK);
