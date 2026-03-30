@@ -31,6 +31,7 @@
 #include "ns3/ub-datalink.h"
 
 #include <chrono>
+#include <atomic>
 #include <csignal>
 #include <cstdlib>
 #include <filesystem>
@@ -38,6 +39,7 @@
 #include <functional>
 #include <iostream>
 #include <sstream>
+#include <thread>
 #include <vector>
 #ifndef _WIN32
 #include <sys/wait.h>
@@ -1868,6 +1870,98 @@ class UbTraceDirSetupTest : public TestCase
     }
 };
 
+namespace utils
+{
+
+class UbTraceFileConcurrencyTest : public TestCase
+{
+  public:
+    UbTraceFileConcurrencyTest()
+        : TestCase("UnifiedBus - trace batching keeps file contents intact under concurrent writers")
+    {
+    }
+
+    void DoRun() override
+    {
+        namespace fs = std::filesystem;
+
+        constexpr uint32_t kThreadCount = 8;
+        constexpr uint32_t kLinesPerThread = 4000;
+        const auto uniqueSuffix =
+            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+        const fs::path caseDir =
+            fs::temp_directory_path() / ("ub-trace-concurrency-test-" + uniqueSuffix);
+        const fs::path runlogDir = caseDir / "runlog";
+        const fs::path traceFile = runlogDir / "concurrent.tr";
+
+        std::error_code ec;
+        fs::remove_all(caseDir, ec);
+        ec.clear();
+        fs::create_directories(runlogDir, ec);
+        NS_TEST_ASSERT_MSG_EQ(ec.value(), 0, "Temporary runlog directory creation should succeed");
+
+        UbUtils::Get()->Destroy();
+        UbUtils::trace_path = caseDir.string();
+        if (!UbUtils::trace_path.empty() &&
+            UbUtils::trace_path.back() != fs::path::preferred_separator)
+        {
+            UbUtils::trace_path.push_back(fs::path::preferred_separator);
+        }
+
+        std::atomic<bool> start{false};
+        std::vector<std::thread> writers;
+        writers.reserve(kThreadCount);
+
+        for (uint32_t tid = 0; tid < kThreadCount; ++tid)
+        {
+            writers.emplace_back([&, tid]() {
+                while (!start.load(std::memory_order_acquire))
+                {
+                    std::this_thread::yield();
+                }
+
+                const std::string payload(96, static_cast<char>('A' + (tid % 26)));
+                for (uint32_t line = 0; line < kLinesPerThread; ++line)
+                {
+                    std::ostringstream oss;
+                    oss << "thread=" << tid << " line=" << line << " payload=" << payload;
+                    UbUtils::PrintTraceInfoNoTs(traceFile.string(), oss.str());
+                    if ((line & 0x3f) == 0)
+                    {
+                        std::this_thread::yield();
+                    }
+                }
+            });
+        }
+
+        start.store(true, std::memory_order_release);
+        for (auto& writer : writers)
+        {
+            writer.join();
+        }
+
+        UbUtils::Get()->Destroy();
+
+        std::ifstream input(traceFile);
+        NS_TEST_ASSERT_MSG_EQ(input.is_open(), true, "Concurrent trace file should be created");
+
+        uint64_t lineCount = 0;
+        std::string line;
+        while (std::getline(input, line))
+        {
+            ++lineCount;
+        }
+
+        NS_TEST_ASSERT_MSG_EQ(lineCount,
+                              static_cast<uint64_t>(kThreadCount) * kLinesPerThread,
+                              "Concurrent trace writes should preserve every line");
+
+        fs::remove_all(caseDir, ec);
+    }
+};
+
+} // namespace utils
+
 class UbMpiRankExtractionHelperTest : public TestCase
 {
   public:
@@ -2109,6 +2203,7 @@ UbTestSuite::UbTestSuite()
     AddTestCase(new UbUrmaReadMultiPacketResponseCountTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbUrmaReadMultiSliceRequestPacketSemanticsTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbTraceDirSetupTest(), TestCase::Duration::QUICK);
+    AddTestCase(new utils::UbTraceFileConcurrencyTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbMpiRankExtractionHelperTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbSameMpiRankHelperTest(), TestCase::Duration::QUICK);
     AddTestCase(new UbSystemOwnedByRankHelperTest(), TestCase::Duration::QUICK);
