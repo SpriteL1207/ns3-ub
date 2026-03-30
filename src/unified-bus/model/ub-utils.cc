@@ -92,6 +92,7 @@ namespace utils {
 UbUtils::TraceFileState&
 UbUtils::GetTraceFile(const std::string& fileName)
 {
+    std::lock_guard<std::mutex> filesGuard(files_mutex);
     auto [it, inserted] = files.try_emplace(fileName);
     if (inserted)
     {
@@ -105,6 +106,7 @@ UbUtils::GetTraceFile(const std::string& fileName)
 void
 UbUtils::FlushTraceFile(TraceFileState& fileState)
 {
+    std::lock_guard<std::mutex> fileGuard(fileState.mutex);
     if (fileState.pending.empty())
     {
         return;
@@ -181,8 +183,15 @@ void UbUtils::ParseTrace(bool isTest)
 
 void UbUtils::Destroy()
 {
+    std::lock_guard<std::mutex> filesGuard(files_mutex);
     for (auto& pair : files) {
-        FlushTraceFile(pair.second);
+        std::lock_guard<std::mutex> fileGuard(pair.second.mutex);
+        if (!pair.second.pending.empty())
+        {
+            pair.second.stream.write(pair.second.pending.data(),
+                                     static_cast<std::streamsize>(pair.second.pending.size()));
+            pair.second.pending.clear();
+        }
         if (pair.second.stream.is_open()) {
             pair.second.stream.close();
         }
@@ -230,26 +239,32 @@ void UbUtils::CreateTraceDir()
     PrintTimestamp("[setup] Prepare runlog directory: " + trace_path + "runlog");
 }
 
-inline void UbUtils::PrintTraceInfo(const string& fileName, const string& info)
+void UbUtils::PrintTraceInfo(const string& fileName, const string& info)
 {
     auto& fileState = GetTraceFile(fileName);
+    std::lock_guard<std::mutex> fileGuard(fileState.mutex);
     fileState.pending += "[";
     fileState.pending += std::to_string(Simulator::Now().GetSeconds() * 1e6);
     fileState.pending += "us] ";
     fileState.pending += info;
     fileState.pending.push_back('\n');
     if (fileState.pending.size() >= TRACE_FLUSH_THRESHOLD_BYTES) {
-        FlushTraceFile(fileState);
+        fileState.stream.write(fileState.pending.data(),
+                               static_cast<std::streamsize>(fileState.pending.size()));
+        fileState.pending.clear();
     }
 }
 
-inline void UbUtils::PrintTraceInfoNoTs(const string& fileName, const string& info)
+void UbUtils::PrintTraceInfoNoTs(const string& fileName, const string& info)
 {
     auto& fileState = GetTraceFile(fileName);
+    std::lock_guard<std::mutex> fileGuard(fileState.mutex);
     fileState.pending += info;
     fileState.pending.push_back('\n');
     if (fileState.pending.size() >= TRACE_FLUSH_THRESHOLD_BYTES) {
-        FlushTraceFile(fileState);
+        fileState.stream.write(fileState.pending.data(),
+                               static_cast<std::streamsize>(fileState.pending.size()));
+        fileState.pending.clear();
     }
 }
 

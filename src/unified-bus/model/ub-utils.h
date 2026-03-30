@@ -7,6 +7,7 @@
 #include <chrono>
 #include <map>
 #include <fstream>
+#include <mutex>
 #include <tuple>
 #include "ns3/core-module.h"
 #include "ns3/singleton.h"
@@ -34,6 +35,7 @@
 #include "ns3/ub-fault.h"
 
 namespace utils {
+class UbTraceFileConcurrencyTest;
 /**
  *  @brief UbUtils单例类
  */
@@ -85,10 +87,13 @@ public:
     void InitFaultMoudle(const std::string &FaultConfigFile);
 
 private:
+    friend class ::utils::UbTraceFileConcurrencyTest;
+
     struct TraceFileState
     {
         std::ofstream stream;
         std::string pending;
+        std::mutex mutex;
     };
 
     static constexpr std::size_t TRACE_FLUSH_THRESHOLD_BYTES = 16 * 1024;
@@ -97,6 +102,7 @@ private:
     inline static std::string trace_path;
 
     inline static std::map<std::string, TraceFileState> files;  // 存储文件名和对应的文件句柄/缓冲
+    inline static std::mutex files_mutex;
 
     ns3::GlobalValue g_fault_enable =
     ns3::GlobalValue("UB_FAULT_ENABLE", "Enable the fault injection module.", ns3::BooleanValue(false), ns3::MakeBooleanChecker());
