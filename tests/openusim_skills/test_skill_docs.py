@@ -1,5 +1,6 @@
 import unittest
 from pathlib import Path
+import re
 
 
 class OpenUSimStageSkillDocsTest(unittest.TestCase):
@@ -9,6 +10,9 @@ class OpenUSimStageSkillDocsTest(unittest.TestCase):
     def read_text(self, relative_path):
         return (self.repo_root() / relative_path).read_text(encoding="utf-8")
 
+    def reference_files(self):
+        return sorted((self.repo_root() / ".codex/skills/openusim-references").glob("*.md"))
+
     def test_stage_skill_bundle_exists(self):
         repo_root = self.repo_root()
         for relative_path in (
@@ -16,6 +20,7 @@ class OpenUSimStageSkillDocsTest(unittest.TestCase):
             ".codex/skills/openusim-plan-experiment/SKILL.md",
             ".codex/skills/openusim-run-experiment/SKILL.md",
             ".codex/skills/openusim-analyze-results/SKILL.md",
+            ".codex/skills/openusim-capture-insights/SKILL.md",
         ):
             self.assertTrue((repo_root / relative_path).is_file(), msg=relative_path)
 
@@ -24,10 +29,11 @@ class OpenUSimStageSkillDocsTest(unittest.TestCase):
         plan_text = self.read_text(".codex/skills/openusim-plan-experiment/SKILL.md")
         run_text = self.read_text(".codex/skills/openusim-run-experiment/SKILL.md")
         analyze_text = self.read_text(".codex/skills/openusim-analyze-results/SKILL.md")
+        capture_text = self.read_text(".codex/skills/openusim-capture-insights/SKILL.md")
         topology_text = self.read_text(".codex/skills/openusim-references/topology-options.md")
         spec_rules_text = self.read_text(".codex/skills/openusim-references/spec-rules.md")
 
-        for text in (welcome_text, plan_text, run_text, analyze_text):
+        for text in (welcome_text, plan_text, run_text, analyze_text, capture_text):
             self.assertIn("## Overview", text)
             self.assertIn("## When to Use", text)
             self.assertIn("## Handover", text)
@@ -49,15 +55,66 @@ class OpenUSimStageSkillDocsTest(unittest.TestCase):
         self.assertIn("graph.output_dir", run_text)
         self.assertIn("validate", run_text)
         self.assertIn("transport_channel_mode", run_text)
-        self.assertIn("../openusim-references/trace-observability.md", analyze_text)
-        self.assertIn("../openusim-references/throughput-evidence.md", analyze_text)
-        self.assertIn("../openusim-references/transport-channel-modes.md", analyze_text)
-        self.assertIn("../openusim-references/queue-backpressure-vs-topology.md", analyze_text)
+        self.assertIn("../openusim-references/", analyze_text)
+        self.assertIn("<HARD-GATE>", analyze_text)
+        self.assertIn("do not read full cards first", analyze_text)
+        self.assertIn("<reference-hint>...</reference-hint>", analyze_text)
+        self.assertIn("prefer `rg -U -o`", analyze_text)
+        self.assertIn("fallback to `perl -0ne`", analyze_text)
+        self.assertIn("fallback to `python3`", analyze_text)
+        self.assertIn("Python regex is the fallback", analyze_text)
+        self.assertIn("re.search", analyze_text)
+        self.assertIn("perl", analyze_text)
+        self.assertIn("rg -U -o", analyze_text)
+        self.assertIn("do not `cat` every card in the directory just to choose", analyze_text)
+        self.assertIn("do not hardcode a fixed card list as the only valid source", analyze_text)
+        self.assertIn("within about 160 characters", analyze_text)
         self.assertIn("## Failure Interpretation Checklist", analyze_text)
         self.assertIn("Hand off to `openusim-plan-experiment` when:", analyze_text)
+        self.assertIn("Hand off to `openusim-capture-insights` when:", analyze_text)
+        self.assertIn("ask the user whether they want to preserve it as a knowledge card", analyze_text)
+        self.assertIn("conclusion summary", analyze_text)
+        self.assertIn("candidate existing card", analyze_text)
+        self.assertIn("<HARD-GATE>", capture_text)
+        self.assertIn("Do not create or modify a knowledge card unless the user has clearly agreed", capture_text)
+        self.assertIn("write the judgment or insight, not the chat transcript", capture_text)
+        self.assertIn("examples or evidence", capture_text)
+        self.assertIn("future reader who does not know this conversation", capture_text)
+        self.assertIn("future reader who does not know this case or chat", capture_text)
+        self.assertIn("main-repo PR", capture_text)
+        self.assertIn("Called by: `openusim-analyze-results`", capture_text)
         self.assertIn("### `custom-graph`", topology_text)
         self.assertIn("## Routing Intent", spec_rules_text)
         self.assertIn("## Transport Channel Mode", spec_rules_text)
+
+    def test_reference_cards_expose_reference_hint_block(self):
+        for path in self.reference_files():
+            text = path.read_text(encoding="utf-8")
+            lines = text.splitlines()
+            self.assertTrue(lines, msg=path.name)
+            self.assertTrue(lines[0].startswith("# "), msg=path.name)
+            hint = re.search(r"<reference-hint>(.*?)</reference-hint>", text, re.S)
+            self.assertIsNotNone(hint, msg=f"{path.name}: missing <reference-hint> block")
+
+            hint_text = hint.group(1)
+            use_when = re.search(r"<use-when>(.*?)</use-when>", hint_text, re.S)
+            focus = re.search(r"<focus>(.*?)</focus>", hint_text, re.S)
+            keywords = re.search(r"<keywords>(.*?)</keywords>", hint_text, re.S)
+
+            self.assertIsNotNone(use_when, msg=f"{path.name}: missing <use-when>")
+            self.assertIsNotNone(focus, msg=f"{path.name}: missing <focus>")
+            self.assertIsNotNone(keywords, msg=f"{path.name}: missing <keywords>")
+
+            use_when_text = use_when.group(1).strip()
+            self.assertTrue(
+                use_when_text.startswith("Use this reference when "),
+                msg=f"{path.name}: <use-when> must start with 'Use this reference when '",
+            )
+            self.assertLessEqual(
+                len(use_when_text),
+                160,
+                msg=f"{path.name}: <use-when> should stay within 160 characters",
+            )
 
     def test_welcome_skill_spells_out_startup_gate(self):
         welcome_text = self.read_text(".codex/skills/openusim-welcome/SKILL.md")

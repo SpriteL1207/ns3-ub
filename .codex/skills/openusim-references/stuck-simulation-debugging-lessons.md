@@ -1,6 +1,10 @@
 # Lessons for Debugging "Stuck" Simulations
 
-Use this reference when the user reports `跑不完`、`卡住`、`ACK 不回来`、`CPU 99%`、`completion 不增长`、`需要人工停止`, and the real question is whether the simulation is truly stuck, merely slow, or blocked in one specific completion dependency.
+<reference-hint>
+<use-when>Use this reference when the user reports `跑不完`, `卡住`, `ACK 不回来`, or `completion 不增长` and you need to separate stuck, slow, and dependency-blocked cases.</use-when>
+<focus>Distinguishing event progress, transport progress, completion progress, and observability overhead.</focus>
+<keywords>卡住, 跑不完, ACK 不回来, completion, trace overhead, slow</keywords>
+</reference-hint>
 
 ## Core Experience
 

@@ -1,6 +1,10 @@
 # Trace Observability
 
-Use this reference when discussing `trace/debug` choices, especially `minimal`, `balanced`, and `detailed`.
+<reference-hint>
+<use-when>Use this reference when discussing `trace/debug` choices, especially `minimal`, `balanced`, and `detailed`.</use-when>
+<focus>Observability tiers, produced evidence, and runtime-overhead tradeoffs.</focus>
+<keywords>trace, debug, minimal, balanced, detailed, observability</keywords>
+</reference-hint>
 
 ## Tier Definitions
 

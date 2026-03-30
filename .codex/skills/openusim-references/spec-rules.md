@@ -1,6 +1,10 @@
 # Spec Rules
 
-Use this reference when writing or updating `experiment-spec.md`.
+<reference-hint>
+<use-when>Use this reference when writing or updating `experiment-spec.md`.</use-when>
+<focus>The shared experiment artifact, required slots, and handoff-safe spec structure.</focus>
+<keywords>experiment-spec.md, planning, handoff, slots, validation</keywords>
+</reference-hint>
 
 ## Core rule
 

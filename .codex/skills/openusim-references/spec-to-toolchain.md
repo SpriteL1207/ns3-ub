@@ -1,6 +1,10 @@
 # Spec to Toolchain Mapping
 
-Use this reference when translating a stable `experiment-spec.md` into concrete tool invocations during the run stage.
+<reference-hint>
+<use-when>Use this reference when translating a stable `experiment-spec.md` into concrete tool invocations during the run stage.</use-when>
+<focus>How spec fields map into topology scripts, workload generation, and simulator execution.</focus>
+<keywords>spec, toolchain, net_sim_builder.py, build_traffic.py, run stage</keywords>
+</reference-hint>
 
 ## Core Principle
 

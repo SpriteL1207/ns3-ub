@@ -1,6 +1,10 @@
 # Queue Backpressure vs Topology Capacity
 
-Use this reference when the user asks why a `Clos` or other non-oversubscribed fabric still shows packet drop, hang, or `Potential Deadlock`.
+<reference-hint>
+<use-when>Use this reference when the user asks why a fabric with enough graph capacity still shows drop, hang, or `Potential Deadlock`.</use-when>
+<focus>Queue buildup, local buffer pressure, path realization, and transport recovery semantics.</focus>
+<keywords>Clos, oversubscription, queue, buffer full, Potential Deadlock, drop</keywords>
+</reference-hint>
 
 ## First-Principles Model
 

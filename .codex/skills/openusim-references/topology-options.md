@@ -1,6 +1,10 @@
 # Topology Options
 
-Use this reference when the user needs a bounded topology choice for one planned OpenUSim experiment.
+<reference-hint>
+<use-when>Use this reference when the user needs a bounded topology choice for one planned OpenUSim experiment.</use-when>
+<focus>Planning-time topology options and generation-pattern selection.</focus>
+<keywords>topology, ring, clos, fat-tree, custom-graph, planning</keywords>
+</reference-hint>
 
 ## Core Principle
 

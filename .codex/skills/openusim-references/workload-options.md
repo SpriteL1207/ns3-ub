@@ -1,6 +1,10 @@
 # Workload Options
 
-Use this reference when the user needs a bounded workload choice for one planned OpenUSim experiment.
+<reference-hint>
+<use-when>Use this reference when the user needs a bounded workload choice for one planned OpenUSim experiment.</use-when>
+<focus>Planning-time workload options and `traffic.csv` schema expectations.</focus>
+<keywords>workload, traffic.csv, allreduce, p2p, schema, planning</keywords>
+</reference-hint>
 
 ## Recommended choice format
 

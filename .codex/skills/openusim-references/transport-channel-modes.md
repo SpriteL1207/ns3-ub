@@ -1,6 +1,10 @@
 # Transport Channel Modes
 
-Use this reference when discussing `transport_channel.csv`, especially explicit pre-instantiated transport channels versus on-demand TP generation.
+<reference-hint>
+<use-when>Use this reference when discussing `transport_channel.csv`, especially pre-instantiated transport channels versus on-demand TP generation.</use-when>
+<focus>When the file is required, optional, precomputed, or on-demand.</focus>
+<keywords>transport_channel.csv, on-demand, precomputed, TP, execution path</keywords>
+</reference-hint>
 
 ## Hard Facts
 

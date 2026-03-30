@@ -1,6 +1,10 @@
 # Throughput Evidence
 
-Use this reference when discussing throughput results, line-rate questions, or how to interpret `throughput.csv` and `task_statistics.csv`.
+<reference-hint>
+<use-when>Use this reference when discussing throughput results, line-rate questions, or how to interpret `throughput.csv` and `task_statistics.csv`.</use-when>
+<focus>Metric meaning, evidence boundaries, and safe wording for line-rate claims.</focus>
+<keywords>throughput.csv, task_statistics.csv, line rate, Rx, Tx, utilization</keywords>
+</reference-hint>
 
 ## Hard Facts
 
