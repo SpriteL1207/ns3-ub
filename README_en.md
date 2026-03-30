@@ -225,10 +225,11 @@ Provides the complete network simulation workflow to support:
 
 This repository maintains a set of OpenUSim Skills under `.codex/skills/`, providing stage-by-stage agent assistance for the `ns-3-ub` experiment workflow:
 
-- `openusim-welcome`: verifies the repository environment against [README_en.md](README_en.md) and [QUICK_START_en.md](QUICK_START_en.md), then assists with quick-start validation
-- `openusim-plan-experiment`: refines a natural-language experiment goal into a structured `experiment-spec.md` covering topology, traffic patterns, and key parameters
-- `openusim-run-experiment`: leverages `./ns3`, `scratch/ub-quick-example`, and `scratch/ns-3-ub-tools/` to generate cases, complete configuration files, execute simulations, and capture runtime errors
-- `openusim-analyze-results`: correlates simulation outputs with case configurations and code semantics, assessing whether results meet expectations and suggesting next-step adjustments
+- `openusim-welcome`: focuses on repository readiness and startup-state verification, giving the agent a grounded view of whether the current working tree, build outputs, and toolchain are usable
+- `openusim-plan-experiment`: focuses on experiment definition and specification convergence, turning a natural-language goal into an executable experiment description
+- `openusim-run-experiment`: focuses on case generation, configuration completion, execution, and explicit runtime-error handling for an actual simulation run
+- `openusim-analyze-results`: focuses on result interpretation, anomaly analysis, and next-step recommendations so simulation outputs become usable conclusions
+- `openusim-capture-insights`: focuses on preserving stable root causes, reusable insights, and durable interpretation rules as knowledge cards after the user agrees
 
 These skills are tightly coupled with the main repository and the `ns-3-ub-tools` submodule, and are maintained in-tree accordingly.
 

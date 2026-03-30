@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OpenUSim Agent Skills — 让 AI 更懂 OpenUSim 仓库</title>
+<title>OpenUSim Agent Skills — 专为网络仿真定制的 AI 工具配套规则</title>
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -352,9 +352,9 @@ svg.ico { display: block; fill: none; stroke: currentColor; stroke-width: 2; str
 <main id="main">
 <section class="hero">
     <div class="w">
-        <div class="pill"><i></i>OpenUSim 配套 AI 工作流</div>
-        <h1>让 AI 更懂<br><b>OpenUSim 仓库</b></h1>
-        <p>Agent Skills 是随仓库分发的项目规则与知识入口，让 Cursor、Claude Code、Codex 等工具在这个项目里更准确地理解场景、代码、规范、命令和结果文件。</p>
+        <div class="pill"><i></i>OpenUSim 配套 Agent Skills</div>
+        <h1>网络仿真专项<br><b>Agent Skills</b></h1>
+        <p>Agent Skills 是随代码迭代演进的规则文件，让 Cursor、Claude Code、Codex 等工具在这个项目里更准确地理解实验场景、协议规范、仿真参数和结果文件 — 每次沉淀都让 AI 工具更贴合仿真实践。</p>
         <div class="btns">
             <a href="openusim-landing.html" class="btn btn-p">返回平台首页</a>
             <a href="#start" class="btn btn-o">看看怎么用</a>
@@ -367,7 +367,7 @@ svg.ico { display: block; fill: none; stroke: currentColor; stroke-width: 2; str
     <div class="w">
         <div style="text-align:center; margin-bottom:40px;">
             <div class="stag">能加速什么</div>
-            <h2 class="sh" style="max-width:560px;margin:0 auto 12px;">定位入口、组织实验、解释结果</h2>
+            <h2 class="sh" style="margin:0 auto 12px;">定位入口、组织实验、解释结果</h2>
         </div>
         <div class="demo-grid">
             <div class="demo">
@@ -465,8 +465,8 @@ svg.ico { display: block; fill: none; stroke: currentColor; stroke-width: 2; str
 <section>
     <div class="w">
         <div class="stag">为什么更准</div>
-        <h2 class="sh">比通用 AI 多的是项目上下文</h2>
-        <p class="sp">Agent Skills 会把仓库规则、项目文档、实验入口和本地结果文件纳入上下文，基于项目事实回答问题。</p>
+        <h2 class="sh">基于实际上下文，而不是通用答案</h2>
+        <p class="sp">Agent Skills 把规范文档、实验入口、协议参数和结果文件纳入 AI 工具的理解范围，让回答更贴合你手头的具体实验。</p>
         <div class="feat-grid">
             <div class="feat">
                 <div class="fi"><svg class="ico"><use href="#i-book"/></svg></div>
@@ -502,42 +502,86 @@ svg.ico { display: block; fill: none; stroke: currentColor; stroke-width: 2; str
     </div>
 </section>
 
+<!-- ═══ 研究记忆 ═══ -->
+<section class="alt">
+    <div class="w">
+        <div class="stag">研究记忆</div>
+        <h2 class="sh">让每次实验的发现都留下来</h2>
+        <p class="sp">仿真研究的价值在于不断积累。Agent Skills 能让 AI 工具把每次对话里重要的判断和发现保存下来，让下一次实验从这次的结论出发，而不是每次都从零开始。这种 insight capture 机制正是 Agent Skills "越用越准"的核心：每次有价值的判断都沉淀成下一次实验的起点。</p>
+        <div class="feat-grid" style="margin-bottom:32px;">
+            <div class="feat">
+                <div class="fi"><svg class="ico"><use href="#i-book"/></svg></div>
+                <h3>重要发现可以留存</h3>
+                <p>每次实验里和 AI 达成的关键结论 — 配置的边界、现象的规律 — 都可以被记录下来，以后随时调出来用，不会随着对话窗口关闭而消失。</p>
+            </div>
+            <div class="feat">
+                <div class="fi"><svg class="ico"><use href="#i-compare"/></svg></div>
+                <h3>新实验关联旧经验</h3>
+                <p>下一轮实验开始时，Agent Skills 让工具能把当前问题和已有记录对上，主动关联之前注意到的关键线索，不需要你重新交代背景。</p>
+            </div>
+            <div class="feat">
+                <div class="fi"><svg class="ico"><use href="#i-scope"/></svg></div>
+                <h3>研究越做越有方向</h3>
+                <p>随着记录积累，Agent Skills 的上下文越来越贴合你的研究方向，工具给出的建议也越来越有针对性，而不是每次给出相同的泛化回答。</p>
+            </div>
+        </div>
+        <div class="skill-demo">
+            <div class="msg">
+                <div class="av u"><svg class="ico"><use href="#i-user"/></svg></div>
+                <div class="bbl ut">我想继续看 CBFC 满负载下的时延问题</div>
+            </div>
+            <div class="msg">
+                <div class="av a"><svg class="ico"><use href="#i-bot"/></svg></div>
+                <div class="bbl at">上一轮实验记录了：满负载下 P99 偏高，初步判断和流控水线设置有关。你想从这个结论继续推进，还是先换一组参数对比确认？</div>
+            </div>
+            <div class="msg">
+                <div class="av u"><svg class="ico"><use href="#i-user"/></svg></div>
+                <div class="bbl ut">先换参数对比确认</div>
+            </div>
+            <div class="msg">
+                <div class="av a"><svg class="ico"><use href="#i-bot"/></svg></div>
+                <div class="bbl at">好，我把上次的水线配置和新参数并排列出来，结果出来之后可以直接对比，看差异是否和水线有关。</div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- ═══ 深入探索 ═══ -->
-<section id="explore" class="alt">
+<section id="explore" class="alt" style="background:var(--bg);">
     <div class="w">
         <div class="stag">能做什么</div>
         <h2 class="sh">覆盖从上手到深入的常见任务</h2>
-        <p class="sp">Agent 能大幅缩短上下文切换时间。以下是它能协助的典型场景。</p>
+        <p class="sp">Agent Skills 补足了 AI 工具缺少的项目上下文。以下是它让 AI 工具能做到而通用对话做不到的典型场景。</p>
         <div class="scene-grid">
             <div class="scene">
-                <h4>解释协议栈实现</h4>
-                <p>当你想弄清某一层的行为时，Agent 可以把规范、数据面路径和代码入口拼起来解释。</p>
+                <h4>解释规范与代码的对应关系</h4>
+                <p>Agent Skills 内置了 UB Spec 条款与代码实现路径的映射，让 AI 工具能直接把规范语义和代码入口对上，不用你手动翻文档。</p>
                 <div class="prompt">UB 的流量控制是怎么实现的？信用机制和 PFC 有什么区别？</div>
             </div>
             <div class="scene">
-                <h4>组织算法改动</h4>
-                <p>如果你准备尝试新路由或新拥塞控制，Agent 可以先帮你定位插入点、理清验证路径和风险边界。</p>
-                <div class="prompt">实现一个基于端口负载差异的加权路由算法，在多路径场景下测试效果</div>
+                <h4>定位代码插入点</h4>
+                <p>Agent Skills 知道路由、拥塞控制、流量调度的代码结构，让 AI 工具能直接告诉你在哪里改、改什么会影响什么，而不是让你自己搜文件树。</p>
+                <div class="prompt">实现一个基于端口负载差异的加权路由，入口在哪？影响哪些模块？</div>
             </div>
             <div class="scene">
-                <h4>扩展自定义拓扑</h4>
-                <p>当预置场景不够时，Agent 可以先帮你识别拓扑脚本入口、所需 CSV 输出以及和现有 case 的差异。</p>
+                <h4>生成仿真 case 配置</h4>
+                <p>Agent Skills 知道 case 目录结构、traffic.csv 和 node.csv 的格式约束，让 AI 工具能直接生成符合规范的新实验 case，而不是让你对照示例手动调。</p>
                 <div class="prompt">参考 user_topo_2layer_clos.py，帮我生成一个更大规模的 Clos 拓扑</div>
             </div>
             <div class="scene">
-                <h4>阅读结果文件</h4>
-                <p>当结果不符合预期时，Agent 能先帮你把输出结构、关键指标和潜在线索串起来。</p>
+                <h4>解读结果文件</h4>
+                <p>Agent Skills 知道 trace 文件格式、throughput.csv 的字段含义和典型异常模式，让 AI 工具能直接把数字对应到协议行为，而不是只给通用的排查建议。</p>
                 <div class="prompt">哪些端口的吞吐远低于链路带宽？帮我从 throughput.csv 里找出来</div>
             </div>
             <div class="scene">
-                <h4>排查异常行为</h4>
-                <p>仿真卡住、结果异常或实现不一致时，Agent 可以按复现、定位、验证的顺序协助排查。</p>
-                <div class="prompt">仿真跑到一半就卡住了，感觉像是死锁，帮我查一下</div>
+                <h4>核查参数配置</h4>
+                <p>Agent Skills 知道规范默认值和参数间的约束关系，能帮你检查 network_attribute.txt 里哪些设置有冲突或偏离规范基线，而不是让你逐条比对。</p>
+                <div class="prompt">我的 PFC 水线设置合理吗？和缓存大小之间有没有冲突？</div>
             </div>
             <div class="scene">
-                <h4>整理提交材料</h4>
-                <p>当改动已经成形后，Agent 可以继续帮你整理验证记录、变更说明和提交所需材料。</p>
-                <div class="prompt">我的自适应路由改动测试通过了，帮我整理成一个 PR</div>
+                <h4>识别现有 case 入口</h4>
+                <p>Agent Skills 知道每个 scratch case 对应的场景和用途，让 AI 工具能直接告诉你从哪个 case 出发、哪些参数需要调整，而不是让你自己浏览目录。</p>
+                <div class="prompt">我想测试多路径下的拥塞行为，从哪个现有 case 开始最合适？</div>
             </div>
         </div>
     </div>
@@ -590,7 +634,7 @@ svg.ico { display: block; fill: none; stroke: currentColor; stroke-width: 2; str
             </div>
             <div class="faq-item">
                 <h4>Agent Skills 和普通的 AI 对话有什么区别？</h4>
-                <p>它会先读取这个仓库的规则、场景入口、文档和结果文件，再据此回答问题和组织步骤。核心优势是精准的项目上下文。</p>
+                <p>Agent Skills 是规则文件，让 Cursor、Claude Code 等工具理解规范条款、实验入口、参数语义和结果文件，给出更贴合项目的建议，而不是通用回答。规则本身随仿真实践持续沉淀，越用越准。</p>
             </div>
             <div class="faq-item">
                 <h4>支持哪些 AI 工具？</h4>
@@ -611,8 +655,8 @@ svg.ico { display: block; fill: none; stroke: currentColor; stroke-width: 2; str
 <!-- ═══ CTA ═══ -->
 <section class="cta-section">
     <div class="w">
-        <h2 class="sh" style="margin-bottom:12px;">用更准确的项目上下文开始实验</h2>
-        <p class="sp" style="max-width:420px;margin:0 auto 32px;">Agent Skills 能显著缩短你在仓库里找入口、对参数和读结果的时间。</p>
+        <h2 class="sh" style="margin-bottom:12px;">开始你的仿真研究</h2>
+        <p class="sp" style="max-width:420px;margin:0 auto 32px;">Agent Skills 能显著缩短你找入口、对参数和读结果的时间，每次实验的发现都会沉淀下来供下次使用。</p>
         <div class="btns">
             <a href="openusim-landing.html" class="btn btn-p">回到平台首页</a>
             <a href="https://gitcode.com/open-usim/ns-3-ub" class="btn btn-o">获取源码</a>
@@ -624,7 +668,7 @@ svg.ico { display: block; fill: none; stroke: currentColor; stroke-width: 2; str
 
 <footer>
     <div class="w">
-        <div class="c">&copy; 2025–2026 OpenUSim &middot; AI 加速工作流专题 &middot; GPL v2</div>
+        <div class="c">&copy; 2025–2026 OpenUSim &middot; Agent Skills 专题 &middot; GPL v2</div>
         <ul>
             <li><a href="https://gitcode.com/open-usim/ns-3-ub">GitCode</a></li>
             <li><a href="https://www.unifiedbus.com/zh">灵衢规范</a></li>

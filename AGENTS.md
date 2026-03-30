@@ -9,6 +9,12 @@ This repository standardizes on four repo-local OpenUSim stage skills:
 
 All four ship inside this repository under `.codex/skills/` and are maintained with the main repo.
 
+The repository also contains one optional post-analysis companion skill:
+
+- `openusim-capture-insights`
+
+It is not a fifth stage in the normal experiment flow. Use it only after analysis has already produced a stable reusable conclusion and the user agrees to preserve it as a knowledge card.
+
 ## Skill Routing
 
 When the user wants help with Unified Bus / OpenUSim work in this repository, route by stage:

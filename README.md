@@ -233,10 +233,11 @@ UB 模块是基于灵衢基础规范实现的仿真组件：
 
 本仓库在 `.codex/skills/` 目录下维护一组 OpenUSim Skills，为基于 `ns-3-ub` 的实验工作流提供分阶段的 Agent 辅助能力：
 
-- `openusim-welcome`：基于 [README.md](README.md) 与 [QUICK_START.md](QUICK_START.md) 检查仓库环境状态，并辅助完成快速启动验证
-- `openusim-plan-experiment`：根据自然语言描述的实验目标，逐步明确拓扑、流量模式与关键参数，生成结构化的 `experiment-spec.md`
-- `openusim-run-experiment`：基于仓库中的 `./ns3`、`scratch/ub-quick-example` 与 `scratch/ns-3-ub-tools/` 生成用例、补全配置文件、执行仿真并捕获运行时错误
-- `openusim-analyze-results`：综合仿真输出、用例配置与代码逻辑，判断结果是否符合预期并提出后续调整建议
+- `openusim-welcome`：面向仓库可用性确认与启动状态判断，帮助 Agent 先建立当前工作树、构建产物与工具链是否就绪的事实基础
+- `openusim-plan-experiment`：面向实验定义与规格收敛，帮助 Agent 把自然语言目标整理成可执行的实验描述
+- `openusim-run-experiment`：面向 case 生成、配置补全、执行与显式运行错误处理，帮助 Agent 落地一次实际仿真
+- `openusim-analyze-results`：面向结果解释、异常现象分析与后续迭代建议，帮助 Agent 将仿真输出转化为可判断的结论
+- `openusim-capture-insights`：面向稳定根因、通用 insight 与解释口径沉淀，帮助 Agent 在用户同意后将高价值结论写成知识卡并复用
 
 上述 Skills 与主仓代码及 `ns-3-ub-tools` 子模块紧密耦合，随仓库统一维护。
 

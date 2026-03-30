@@ -184,7 +184,20 @@ class OpenUSimStageSkillDocsTest(unittest.TestCase):
             self.assertIn("openusim-plan-experiment", text)
             self.assertIn("openusim-run-experiment", text)
             self.assertIn("openusim-analyze-results", text)
+            self.assertIn("openusim-capture-insights", text)
             self.assertNotIn("openusim-helper", text)
+
+    def test_skills_readme_and_repo_agents_document_capture_insights(self):
+        skills_readme_text = self.read_text(".codex/skills/README.md")
+        agents_text = self.read_text("AGENTS.md")
+
+        self.assertIn("openusim-capture-insights", skills_readme_text)
+        self.assertIn("Optional after analyze", skills_readme_text)
+        self.assertIn("<reference-hint>", skills_readme_text)
+
+        self.assertIn("openusim-capture-insights", agents_text)
+        self.assertIn("optional post-analysis companion skill", agents_text)
+        self.assertIn("not a fifth stage", agents_text)
 
     def test_old_openusim_helper_surface_is_gone(self):
         repo_root = self.repo_root()

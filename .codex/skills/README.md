@@ -10,6 +10,7 @@ This directory contains repo-local Claude Code skills for the ns-3-ub project.
 | `openusim-plan-experiment` | Experiment definition, custom topology clarification, and routing-intent capture | After welcome |
 | `openusim-run-experiment` | Case generation, validation, execution, and explicit run errors | After plan |
 | `openusim-analyze-results` | Result interpretation and likely-cause analysis | After run |
+| `openusim-capture-insights` | User-approved knowledge-card capture for verified root causes and reusable insights | Optional after analyze |
 
 ## Usage Flow
 
@@ -21,6 +22,8 @@ openusim-plan-experiment (define experiment)
 openusim-run-experiment (generate & run)
     ↓
 openusim-analyze-results (interpret results)
+    ↓
+openusim-capture-insights (optional, preserve reusable insight)
 ```
 
 ## References
@@ -35,6 +38,8 @@ Shared knowledge cards in `openusim-references/`:
 - `workload-options.md` - Workload modes
 - `spec-rules.md` - Experiment spec format rules
 - `queue-backpressure-vs-topology.md` - Queue backpressure concepts
+
+Each knowledge card exposes a structured `<reference-hint>` block near the top so skills can route by `<use-when>`, `<focus>`, and `<keywords>` before reading the full card.
 
 ## Skill Discovery
 

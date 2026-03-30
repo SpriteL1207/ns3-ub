@@ -672,7 +672,7 @@ svg.ico { display: block; fill: none; stroke: currentColor; stroke-width: 2; str
             <li><a href="#arch">协议栈</a></li>
             <li><a href="#cap">核心能力</a></li>
             <li><a href="#start">快速开始</a></li>
-            <li><a href="#agent">AI 辅助</a></li>
+            <li><a href="#agent">Agent Skills</a></li>
         </ul>
         <button class="ham" aria-label="菜单" aria-expanded="false" onclick="var m=document.getElementById('nav-menu');var o=m.classList.toggle('open');this.setAttribute('aria-expanded',o);this.querySelector('use').setAttribute('href',o?'#i-x':'#i-menu')"><svg class="ico"><use href="#i-menu"/></svg></button>
     </div>
@@ -684,7 +684,7 @@ svg.ico { display: block; fill: none; stroke: currentColor; stroke-width: 2; str
     <div class="w">
         <div class="hero-split">
             <div class="hero-left">
-                <div class="pill"><i></i>v1.2.0 · 基于 ns-3.44</div>
+                <div class="pill"><i></i>v1.3.0 · 基于 ns-3.44</div>
                 <h1>高性能互连协议研究的<br><b>开源仿真平台</b></h1>
                 <p>基于 ns-3.44，仿真灵衢协议栈的核心能力。模块化架构让协议各层独立替换，适用于算法研究、性能对比等多类高性能互连实验场景。</p>
                 <div class="btns">
@@ -2089,14 +2089,14 @@ svg.ico { display: block; fill: none; stroke: currentColor; stroke-width: 2; str
     </div>
 </section>
 
-<div class="sec-bridge">仓库还附带 AI 工作流，帮你更快地定位入口和组织实验 ↓</div>
+<div class="sec-bridge">Agent Skills 把项目上下文带给 AI 工具，让建议更贴合实验场景 ↓</div>
 
-<!-- ═══ AI 辅助 ═══ -->
+<!-- ═══ Agent Skills 辅助 ═══ -->
 <section id="agent">
     <div class="w">
-        <div class="stag">AI 辅助</div>
-        <h2 class="sh">仓库内置 AI 辅助工作流</h2>
-        <p class="sp">仓库内置 4 个 Agent Skills，覆盖环境检查、实验规格设计、脚本生成执行到结果解读的完整流程，让 Cursor、Claude Code、Codex 等工具在这个项目里精准执行每一步。</p>
+        <div class="stag">Agent Skills 辅助</div>
+        <h2 class="sh">专为网络仿真定制的 Agent Skills</h2>
+        <p class="sp">Agent Skills 覆盖环境检查、实验规格设计、脚本生成执行到结果解读的完整流程，让 Cursor、Claude Code、Codex 等工具在这个项目里更准确地执行每一步。</p>
 
         <div class="ai-split">
             <!-- 左侧可点击列表 -->
@@ -2198,8 +2198,9 @@ svg.ico { display: block; fill: none; stroke: currentColor; stroke-width: 2; str
                     </div>
                     <!-- 对话 -->
                     <div class="skill-demo" style="padding:0;border:none;box-shadow:none;background:transparent;">
-                        <div class="msg"><div class="av a"><svg class="ico"><use href="#i-bot"/></svg></div><div class="bbl at">读取 experiment-spec.md，开始生成拓扑脚本 <code style="font-size:11px;background:var(--bg-alt);padding:1px 5px;border-radius:3px;">generate_topology.py</code>，输出到 scratch/20260328-cbfc-pfc/…</div></div>
-                        <div class="msg"><div class="av a"><svg class="ico"><use href="#i-bot"/></svg></div><div class="bbl at">已生成 node.csv、topology.csv、routing_table.csv。校验参数 FlowControl=CBFC_Exclusive 通过。执行 <code style="font-size:11px;background:var(--bg-alt);padding:1px 5px;border-radius:3px;">./ns3 run</code> 中…</div></div>
+                        <div class="msg"><div class="av a"><svg class="ico"><use href="#i-bot"/></svg></div><div class="bbl at">读取 experiment-spec.md，生成拓扑 CSV。写入 network_attribute.txt：FlowControl=CBFC（规范基线），CbfcFlitsPerCell=8，CbfcInitCreditCell=6553（Spec §4 默认值），Trace 默认开启。</div></div>
+                        <div class="msg"><div class="av u"><svg class="ico"><use href="#i-user"/></svg></div><div class="bbl ut">这些参数是你自己定的还是规范里的？</div></div>
+                        <div class="msg"><div class="av a"><svg class="ico"><use href="#i-bot"/></svg></div><div class="bbl at">来自代码（ub-port.cc）和 UB Base Spec 2.0 §4，有据可查。执行 <code style="font-size:11px;background:var(--bg-alt);padding:1px 5px;border-radius:3px;">./ns3 run</code> 中…</div></div>
                         <div class="msg"><div class="av a"><svg class="ico"><use href="#i-bot"/></svg></div><div class="bbl at">仿真完成，输出 task_statistics.csv 和 throughput.csv。</div></div>
                     </div>
                 </div>
@@ -2265,7 +2266,7 @@ svg.ico { display: block; fill: none; stroke: currentColor; stroke-width: 2; str
 
             </div>
         </div>
-        <p style="margin-top:14px;font-size:13px;color:var(--text-third);">4 个 skill 串联成一条闭环流程，从环境检查到结果分析全程有据可查。<a href="agent-skills-landing.html" style="color:var(--blue);text-decoration:none;font-weight:600;">查看 AI 专题页 →</a></p>
+        <p style="margin-top:14px;font-size:13px;color:var(--text-third);">4 个 skill 串联成闭环流程，从环境检查到结果分析全程有据可查；规范参数对齐之后，工具的建议也更贴合实验场景。<a href="agent-skills-landing.html" style="color:var(--blue);text-decoration:none;font-weight:600;">查看 Agent Skills 专题页 →</a></p>
     </div>
 </section>
 
@@ -2302,11 +2303,11 @@ svg.ico { display: block; fill: none; stroke: currentColor; stroke-width: 2; str
 <!-- ═══ CTA ═══ -->
 <section class="cta-section">
     <div class="w">
-        <h2 class="sh" style="margin-bottom:12px;">开始一组可复现的实验</h2>
+        <h2 class="sh" style="margin-bottom:12px;">从这里开始你的仿真研究</h2>
         <p class="sp" style="max-width:460px;margin:0 auto 32px;">先跑通预置场景确认环境，再按需深入协议细节或扩展至其他研究方向。</p>
         <div class="btns">
             <a href="https://gitcode.com/open-usim/ns-3-ub" class="btn btn-p">获取源码</a>
-            <a href="agent-skills-landing.html" class="btn btn-o">查看 AI 加速专题</a>
+            <a href="agent-skills-landing.html" class="btn btn-o">查看 Agent Skills 专题</a>
         </div>
     </div>
 </section>
