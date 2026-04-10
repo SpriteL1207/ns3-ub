@@ -1,81 +1,27 @@
-*.diff
-*.orig
-*.patch
-*.rej
+# 构建目录
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
 
-*.o
+# Python 缓存
+__pycache__/
 *.pyc
 *.pyo
+*.pyd
 
-*.cwnd
-*.dat
+# 日志 & 输出
+runlog/
+output/
 *.log
-*.mob
-*.pcap
-*.plt
-*.routes
 *.tr
-[D|U]l[A-Z][a-z]*Stats.txt
+*.dat
 
-\#*#
-*~
-
-testpy-output
-
-bindings/python/pybindgen/
-
-.venv/
-venv/
-
-ms_print.*
-massif.*
-coverity
-TAGS
-
-.lock-ns3_*
-.ns3rc
-
-build-dir/
-build/
-/.cproject
-/.project
-
-version.cache
-
-.gitlab-ci-local/
-.idea/
-cmake-*/
-vcpkg/
-
-.vs/
-
-# Ignore local cache used by e.g. clangd
-.cache/
-
-# Additional build and cache directories
-cmake-cache/
-__pycache__/
-testpy-output/
-
-# Simulation outputs
-**/runlog/
-**/output/
-.openusim/
-scratch/openusim-generated/
-
-# Temporary and backup files
-*.tmp
-*.temp
-*.bak
-*.backup
-
-# OS specific files
+# 系统文件
 .DS_Store
-Thumbs.db
+*.swp
+*.swo
 
-# IDE files
-.vscode/
-*.sublime-*
-
-# Project-local git worktrees
-.worktrees/
+# 第三方库 / 不需要上传
+contrib/
+tmp/
